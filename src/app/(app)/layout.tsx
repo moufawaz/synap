@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileNav from '@/components/dashboard/MobileNav'
 import AdaptationChecker from '@/components/dashboard/AdaptationChecker'
+import OneSignalInit from '@/components/OneSignalInit'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createServerClient()
@@ -35,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
       <MobileNav />
       <AdaptationChecker />
+      <OneSignalInit userId={user.id} />
     </div>
   )
 }
