@@ -2,15 +2,25 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AuthCard from '@/components/auth/AuthCard'
 import { createBrowserClient } from '@/lib/supabase'
 import { Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={<div style={{ background: '#050505', minHeight: '100vh' }} />}>
+      <SignupForm />
+    </Suspense>
+  )
+}
+
+function SignupForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const nextUrl = searchParams.get('next') || '/onboarding'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -35,7 +45,7 @@ export default function SignupPage() {
     setLoading(true)
     const supabase = createBrowserClient()
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -51,20 +61,31 @@ export default function SignupPage() {
 
     setSuccess(true)
     setLoading(false)
-    // Redirect to onboarding after brief success state
-    setTimeout(() => router.push('/onboarding'), 1500)
+
+    if (data.session) {
+      // Email auto-confirm is on — user is immediately logged in
+      setTimeout(() => router.push(nextUrl), 1200)
+    }
+    // If no session, email confirmation is required — show "check your email" (no redirect)
   }
 
   if (success) {
     return (
-      <AuthCard title="YOU'RE IN." subtitle="Setting up Ion for you now.">
+      <AuthCard title="YOU'RE IN." subtitle="Ion is ready for you.">
         <div className="flex flex-col items-center gap-4 py-6">
-          <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'rgba(16,137,129,0.2)', border: '1px solid rgba(16,137,129,0.4)' }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'rgba(187,92,246,0.15)', border: '1px solid rgba(187,92,246,0.35)' }}>
             <span className="text-3xl">⚡</span>
           </div>
           <p className="font-heading text-sm tracking-wider text-center" style={{ color: '#94A3B8' }}>
-            Redirecting to Ion onboarding...
+            Check your email to confirm, then come back here to start with Ion.
           </p>
+          <Link
+            href={nextUrl}
+            className="font-heading text-xs font-bold tracking-widest uppercase transition-colors"
+            style={{ color: '#BB5CF6', letterSpacing: '0.1em' }}
+          >
+            Already confirmed? Continue →
+          </Link>
         </div>
       </AuthCard>
     )

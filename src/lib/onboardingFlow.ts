@@ -84,6 +84,18 @@ export interface OnboardingData {
 
 export type OnboardingContext = Partial<OnboardingData>
 
+// ── Goal display helpers ──────────────────────────────────
+function goalLabel(goal: string | undefined): string {
+  const map: Record<string, string> = {
+    lose_fat: 'losing fat',
+    build_muscle: 'building muscle',
+    recomposition: 'body recomposition',
+    improve_fitness: 'improving your fitness',
+    be_healthier: 'living healthier',
+  }
+  return goal ? (map[goal] || goal) : 'your goal'
+}
+
 // ── The full flow ─────────────────────────────────────────
 export const ONBOARDING_STEPS: OnboardingStep[] = [
 
@@ -91,32 +103,32 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'greeting',
     phase: 1,
-    ionMessage: () => "Hey — I'm Ion, your AI personal trainer. I'm going to ask you everything I need to build a plan that actually fits your life. No templates. No guessing.\n\nLet's start. What's your name?",
-    ionMessageAr: () => 'مرحباً — أنا Ion، مدرّبك الشخصي بالذكاء الاصطناعي. سأسألك عن كل ما أحتاجه لبناء خطة تناسب حياتك حقاً. لا قوالب جاهزة. لا تخمين.\n\nلنبدأ. ما اسمك؟',
+    ionMessage: () => "Hey — I'm Ion, your AI personal trainer.\n\nI'm not going to hand you a template. I'm going to ask you real questions — your body, your schedule, your food, your life — and build you something that actually works.\n\nLet's start simple. What's your name?",
+    ionMessageAr: () => 'مرحباً — أنا Ion، مدرّبك الشخصي بالذكاء الاصطناعي.\n\nلن أعطيك قالباً جاهزاً. سأسألك أسئلة حقيقية — جسمك، جدولك، طعامك، حياتك — وأبني لك شيئاً يناسبك فعلاً.\n\nنبدأ ببساطة. ما اسمك؟',
     responseType: 'text',
     field: 'name',
   },
   {
     id: 'age',
     phase: 1,
-    ionMessage: (ctx) => `Good to meet you, ${ctx.name}. How old are you?`,
-    ionMessageAr: (ctx) => `يسعدني معرفتك، ${ctx.name}. كم عمرك؟`,
+    ionMessage: (ctx) => `${ctx.name} — good name. How old are you?`,
+    ionMessageAr: (ctx) => `${ctx.name} — اسم جميل. كم عمرك؟`,
     responseType: 'number',
     field: 'age',
   },
   {
     id: 'weight_height',
     phase: 1,
-    ionMessage: () => "What's your current weight and height? Just where you are right now — no judgment.",
-    ionMessageAr: () => 'ما وزنك وطولك الحاليان؟ فقط وضعك الآن — بدون أي حكم.',
+    ionMessage: (ctx) => `Alright${ctx.name ? `, ${ctx.name}` : ''}. I need two numbers — your current weight in kg, and your height in cm.\n\nJust where you are right now. No pressure, this is your starting point.`,
+    ionMessageAr: (ctx) => `حسناً${ctx.name ? `، ${ctx.name}` : ''}. أحتاج رقمين — وزنك الحالي بالكيلو، وطولك بالسنتيمتر.\n\nوضعك الآن فقط. لا ضغط، هذه نقطة البداية.`,
     responseType: 'text',
     field: null,
   },
   {
     id: 'gender',
     phase: 1,
-    ionMessage: () => 'Are you male or female?',
-    ionMessageAr: () => 'هل أنت ذكر أم أنثى؟',
+    ionMessage: () => 'Male or female? This affects how I calculate your targets.',
+    ionMessageAr: () => 'ذكر أم أنثى؟ هذا يؤثر على كيفية حساب أهدافك.',
     responseType: 'quickreply',
     quickReplies: [
       { label: '♂ Male', labelAr: '♂ ذكر', value: 'male' },
@@ -127,8 +139,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'ion_gender',
     phase: 1,
-    ionMessage: () => 'Do you want me to show up as male or female? Completely your call.',
-    ionMessageAr: () => 'هل تريدني أن أظهر كذكر أم أنثى؟ اختارك تماماً.',
+    ionMessage: () => 'One more thing — do you want me to show up as male or female? Completely up to you.',
+    ionMessageAr: () => 'شيء أخير — هل تريدني أن أظهر كذكر أم أنثى؟ الخيار لك تماماً.',
     responseType: 'quickreply',
     quickReplies: [
       { label: '♂ Male Ion', labelAr: '♂ Ion ذكر', value: 'male' },
@@ -141,8 +153,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'measurements_intro',
     phase: 2,
-    ionMessage: (ctx) => `Got it${ctx.name ? `, ${ctx.name}` : ''}. Now I need your starting measurements. These are your baseline — we track changes so you can see exactly what's transforming.\n\nGet a tape measure and fill in what you can. You can always add the rest later.`,
-    ionMessageAr: (ctx) => `حسناً${ctx.name ? `، ${ctx.name}` : ''}. الآن أحتاج قياساتك الأولية. هذه هي نقطة البداية — نتتبع التغييرات حتى ترى بالضبط ما الذي يتغير.\n\nخذ شريط القياس وأدخل ما تستطيع. يمكنك دائماً إضافة الباقي لاحقاً.`,
+    ionMessage: (ctx) => `Perfect${ctx.name ? `, ${ctx.name}` : ''}. Now I want your body measurements — chest, waist, arms, legs. These are your baseline.\n\nWhen you see them change, that's where the motivation comes from. Grab a tape measure and fill in what you have. You can add the rest later.`,
+    ionMessageAr: (ctx) => `ممتاز${ctx.name ? `، ${ctx.name}` : ''}. الآن أريد قياسات جسمك — صدر، خصر، ذراعين، أرجل. هذه نقطة البداية.\n\nعندما ترى التغييرات، من هنا تأتي الحافز. خذ شريط القياس وأدخل ما لديك. يمكنك إضافة الباقي لاحقاً.`,
     responseType: 'measurement_card',
     field: 'measurements',
   },
@@ -151,8 +163,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'goal',
     phase: 3,
-    ionMessage: () => "What do you actually want? Don't overthink it.",
-    ionMessageAr: () => 'ماذا تريد فعلاً؟ لا تفكر كثيراً.',
+    ionMessage: (ctx) => `Good. Now the real question, ${ctx.name || 'tell me'} — what do you actually want from this? Be honest.`,
+    ionMessageAr: (ctx) => `جيد. الآن السؤال الحقيقي، ${ctx.name || 'أخبرني'} — ماذا تريد فعلاً من هذا؟ كن صادقاً.`,
     responseType: 'quickreply',
     quickReplies: [
       { label: '🔥 Lose Fat', labelAr: '🔥 خسارة الدهون', value: 'lose_fat' },
@@ -166,8 +178,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'goal_speed',
     phase: 3,
-    ionMessage: () => 'How fast do you want to move toward it?',
-    ionMessageAr: () => 'ما السرعة التي تريد التقدم بها نحو هدفك؟',
+    ionMessage: (ctx) => `${goalLabel(ctx.goal)} — I respect that. How aggressive do you want the approach to be?`,
+    ionMessageAr: (ctx) => `${ctx.goal === 'lose_fat' ? 'خسارة الدهون' : ctx.goal === 'build_muscle' ? 'بناء العضلات' : 'هدفك'} — أحترم ذلك. كم تريد أن يكون النهج مكثفاً؟`,
     responseType: 'quickreply',
     quickReplies: [
       { label: '🐢 Slow & Sustainable', labelAr: '🐢 بطيء ومستدام', value: 'slow' },
@@ -179,8 +191,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'goal_target',
     phase: 3,
-    ionMessage: () => 'Do you have a specific target — a weight, a body fat %, an event, a date? Or just a feeling you want to reach?',
-    ionMessageAr: () => 'هل لديك هدف محدد — وزن، نسبة دهون، حدث قادم، أو تاريخ معين؟ أم مجرد شعور تريد الوصول إليه؟',
+    ionMessage: () => 'Do you have something specific in mind — a weight, a size, an event, a date? Or just a general direction?',
+    ionMessageAr: () => 'هل لديك شيء محدد في ذهنك — وزن، مقاس، حدث، تاريخ؟ أم مجرد اتجاه عام؟',
     responseType: 'text',
     field: 'goal_target',
     optional: true,
@@ -188,8 +200,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'goal_date',
     phase: 3,
-    ionMessage: () => 'When do you want to reach this? Give me a timeframe — a month, 3 months, a specific date.',
-    ionMessageAr: () => 'متى تريد الوصول إلى هذا؟ أعطني إطاراً زمنياً — شهر، 3 أشهر، تاريخ محدد.',
+    ionMessage: () => 'When do you want to hit this? Give me a rough timeframe.',
+    ionMessageAr: () => 'متى تريد الوصول إلى هذا؟ أعطني إطاراً زمنياً تقريبياً.',
     responseType: 'text',
     field: 'goal_date',
     optional: true,
@@ -199,8 +211,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'work_schedule',
     phase: 4,
-    ionMessage: () => "This is where most plans fail — they ignore real life. Do you work or study?",
-    ionMessageAr: () => 'هنا تفشل معظم الخطط — تتجاهل الحياة الحقيقية. هل تعمل أم تدرس؟',
+    ionMessage: (ctx) => `Here's where most plans break down — they don't account for real life. I'm not going to let that happen.\n\n${ctx.name ? `${ctx.name}, do` : 'Do'} you work or study?`,
+    ionMessageAr: (ctx) => `هنا تنهار معظم الخطط — لا تأخذ الحياة الحقيقية بعين الاعتبار. لن أدع ذلك يحدث.\n\n${ctx.name ? `${ctx.name}, هل` : 'هل'} تعمل أم تدرس؟`,
     responseType: 'quickreply',
     quickReplies: [
       { label: '💼 Work', labelAr: '💼 أعمل', value: 'work' },
@@ -213,8 +225,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'work_hours',
     phase: 4,
-    ionMessage: (ctx) => `What are your hours roughly? For example: "9am to 5pm", "shifts", "flexible".`,
-    ionMessageAr: () => 'ما هي ساعاتك تقريباً؟ مثلاً: "9 صباحاً إلى 5 مساءً"، "مناوبات"، "مرنة".',
+    ionMessage: () => `What are your hours like? For example: "9 to 5", "rotating shifts", "flexible remote".`,
+    ionMessageAr: () => 'كيف ساعاتك؟ مثلاً: "9 إلى 5"، "مناوبات متغيرة"، "عن بُعد مرن".',
     responseType: 'text',
     field: 'work_hours',
     condition: (ctx) => ctx.work_schedule !== 'neither',
@@ -237,8 +249,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'sleep_time',
     phase: 4,
-    ionMessage: () => 'What time do you usually sleep?',
-    ionMessageAr: () => 'في أي وقت تنام عادةً؟',
+    ionMessage: () => 'And what time do you usually go to sleep?',
+    ionMessageAr: () => 'وفي أي وقت تنام عادةً؟',
     responseType: 'quickreply',
     quickReplies: [
       { label: 'Before 10 PM', labelAr: 'قبل 10 مساءً', value: '22:00' },
@@ -251,8 +263,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'lunch_break',
     phase: 4,
-    ionMessage: () => 'Do you have a lunch break? What time and how long?',
-    ionMessageAr: () => 'هل لديك استراحة غداء؟ في أي وقت وكم مدتها؟',
+    ionMessage: () => 'Do you get a lunch break? I need to know when you can eat during the day.',
+    ionMessageAr: () => 'هل لديك استراحة غداء؟ أحتاج معرفة متى يمكنك الأكل خلال اليوم.',
     responseType: 'quickreply',
     quickReplies: [
       { label: '30 min around noon', labelAr: '30 دقيقة حول الظهر', value: '12:30-30min' },
@@ -265,26 +277,26 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'stress_level',
     phase: 4,
-    ionMessage: () => 'How stressful is daily life right now?',
-    ionMessageAr: () => 'ما مستوى التوتر في حياتك اليومية الآن؟',
+    ionMessage: () => 'Be honest — how stressed are you on a typical day?',
+    ionMessageAr: () => 'كن صادقاً — ما مستوى التوتر لديك في يوم عادي؟',
     responseType: 'quickreply',
     quickReplies: [
-      { label: '😌 Low', labelAr: '😌 منخفض', value: 'low' },
+      { label: '😌 Pretty calm', labelAr: '😌 هادئ نسبياً', value: 'low' },
       { label: '😐 Moderate', labelAr: '😐 معتدل', value: 'moderate' },
-      { label: '😓 High', labelAr: '😓 مرتفع', value: 'high' },
+      { label: '😓 High most days', labelAr: '😓 مرتفع معظم الأيام', value: 'high' },
     ],
     field: 'stress_level',
   },
   {
     id: 'sleep_quality',
     phase: 4,
-    ionMessage: () => 'And how is your sleep quality?',
-    ionMessageAr: () => 'وكيف جودة نومك؟',
+    ionMessage: () => 'How is your sleep quality? Recovery matters more than most people think.',
+    ionMessageAr: () => 'كيف جودة نومك؟ التعافي أهم مما يعتقد معظم الناس.',
     responseType: 'quickreply',
     quickReplies: [
-      { label: '✅ Solid', labelAr: '✅ جيد', value: 'solid' },
-      { label: '🔄 Average', labelAr: '🔄 متوسط', value: 'average' },
-      { label: '😴 Struggling', labelAr: '😴 صعب', value: 'struggling' },
+      { label: '✅ Sleep well', labelAr: '✅ أنام جيداً', value: 'solid' },
+      { label: '🔄 Hit or miss', labelAr: '🔄 أحياناً جيد وأحياناً لا', value: 'average' },
+      { label: '😴 Struggle to sleep', labelAr: '😴 أجد صعوبة في النوم', value: 'struggling' },
     ],
     field: 'sleep_quality',
   },
@@ -293,20 +305,20 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'currently_training',
     phase: 5,
-    ionMessage: () => 'Are you training currently, or starting fresh?',
-    ionMessageAr: () => 'هل تتدرب حالياً، أم تبدأ من الصفر؟',
+    ionMessage: (ctx) => `Let's talk training. ${ctx.name ? `${ctx.name}, are` : 'Are'} you currently working out, or are we starting from scratch?`,
+    ionMessageAr: (ctx) => `نتحدث عن التدريب. ${ctx.name ? `${ctx.name}، هل` : 'هل'} تتدرب حالياً، أم نبدأ من الصفر؟`,
     responseType: 'quickreply',
     quickReplies: [
-      { label: '🏋️ Training Already', labelAr: '🏋️ أتدرب بالفعل', value: 'already' },
-      { label: '🆕 Starting Fresh', labelAr: '🆕 أبدأ من الصفر', value: 'fresh' },
+      { label: '🏋️ Already training', labelAr: '🏋️ أتدرب بالفعل', value: 'already' },
+      { label: '🆕 Starting fresh', labelAr: '🆕 أبدأ من الصفر', value: 'fresh' },
     ],
     field: 'currently_training',
   },
   {
     id: 'current_training_desc',
     phase: 5,
-    ionMessage: () => "What are you doing right now — gym, home, sports, cardio? Walk me through your current week.",
-    ionMessageAr: () => 'ماذا تفعل الآن — صالة، منزل، رياضة، كارديو؟ أخبرني عن أسبوعك الحالي.',
+    ionMessage: () => "Good — what does your current week look like? Gym, home, sports, cardio? Walk me through it.",
+    ionMessageAr: () => 'جيد — كيف يبدو أسبوعك الحالي؟ صالة، منزل، رياضة، كارديو؟ أخبرني.',
     responseType: 'text',
     field: 'current_training_desc',
     condition: (ctx) => ctx.currently_training === 'already',
@@ -314,12 +326,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'gym_access',
     phase: 5,
-    ionMessage: () => 'Do you have access to a gym?',
-    ionMessageAr: () => 'هل لديك إمكانية الوصول إلى صالة رياضية؟',
+    ionMessage: () => 'Do you have gym access, or are we working with what you have at home?',
+    ionMessageAr: () => 'هل لديك إمكانية الوصول لصالة رياضية، أم نعمل بما لديك في المنزل؟',
     responseType: 'quickreply',
     quickReplies: [
-      { label: '🏋️ Yes — Gym', labelAr: '🏋️ نعم — صالة', value: 'gym' },
-      { label: '🏠 No — Home', labelAr: '🏠 لا — المنزل', value: 'home' },
+      { label: '🏋️ Gym', labelAr: '🏋️ صالة رياضية', value: 'gym' },
+      { label: '🏠 Home', labelAr: '🏠 المنزل', value: 'home' },
     ],
     field: 'gym_access',
     condition: (ctx) => ctx.currently_training === 'fresh',
@@ -327,8 +339,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'equipment',
     phase: 5,
-    ionMessage: () => 'What equipment do you have at home?',
-    ionMessageAr: () => 'ما المعدات المتوفرة لديك في المنزل؟',
+    ionMessage: () => "What equipment do you actually have? I'll build around what's available.",
+    ionMessageAr: () => 'ما المعدات المتوفرة لديك فعلاً؟ سأبني حول ما هو متاح.',
     responseType: 'multiselect',
     quickReplies: [
       { label: 'Bodyweight Only', labelAr: 'وزن الجسم فقط', value: 'bodyweight' },
@@ -343,8 +355,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'training_days',
     phase: 5,
-    ionMessage: () => 'How many days per week can you realistically commit to training?',
-    ionMessageAr: () => 'كم يوماً في الأسبوع يمكنك الالتزام بالتدريب بواقعية؟',
+    ionMessage: (ctx) => `How many days per week can you realistically commit? Be honest — ${ctx.goal === 'build_muscle' ? 'more is better but only if you show up' : ctx.goal === 'lose_fat' ? 'consistency beats intensity' : 'the best plan is one you actually follow'}.`,
+    ionMessageAr: (ctx) => `كم يوماً في الأسبوع يمكنك الالتزام بواقعية؟ كن صادقاً — ${ctx.goal === 'build_muscle' ? 'الأكثر أفضل لكن فقط إذا كنت ستلتزم' : 'الاستمرارية تتغلب على الشدة'}.`,
     responseType: 'quickreply',
     quickReplies: [
       { label: '2 days', labelAr: 'يومان', value: '2' },
@@ -358,8 +370,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'session_duration',
     phase: 5,
-    ionMessage: () => 'How long per session?',
-    ionMessageAr: () => 'كم مدة كل جلسة؟',
+    ionMessage: () => 'How much time per session? I need to know what I am actually working with.',
+    ionMessageAr: () => 'كم وقتاً لكل جلسة؟ أحتاج معرفة ما أعمل معه فعلاً.',
     responseType: 'quickreply',
     quickReplies: [
       { label: '30 min', labelAr: '30 دقيقة', value: '30' },
@@ -372,8 +384,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'training_time',
     phase: 5,
-    ionMessage: () => 'What time of day will you train?',
-    ionMessageAr: () => 'في أي وقت من اليوم ستتدرب؟',
+    ionMessage: (ctx) => `And when will you train? I'll time your meals around this${ctx.wake_time ? ` — you wake up around ${ctx.wake_time}` : ''}.`,
+    ionMessageAr: () => 'ومتى ستتدرب؟ سأضبط وجباتك حول ذلك.',
     responseType: 'quickreply',
     quickReplies: [
       { label: '🌅 Morning', labelAr: '🌅 صباحاً', value: 'morning' },
@@ -386,8 +398,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'training_style',
     phase: 5,
-    ionMessage: () => 'Any training style preference?',
-    ionMessageAr: () => 'هل لديك تفضيل لأسلوب التدريب؟',
+    ionMessage: () => 'Any preference on training style in the gym?',
+    ionMessageAr: () => 'هل لديك تفضيل لأسلوب التدريب في الصالة؟',
     responseType: 'quickreply',
     quickReplies: [
       { label: '🏋️ Heavy Compound', labelAr: '🏋️ مركب ثقيل', value: 'heavy_compound' },
@@ -401,8 +413,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'exercises_hated',
     phase: 5,
-    ionMessage: () => 'Any exercises you hate or physically cannot do?',
-    ionMessageAr: () => 'هل هناك تمارين تكرهها أو لا تستطيع فعلها جسدياً؟',
+    ionMessage: () => 'Any exercises you hate or have pain doing? I will remove them from your program.',
+    ionMessageAr: () => 'هل هناك تمارين تكرهها أو تشعر بألم أثناءها؟ سأزيلها من برنامجك.',
     responseType: 'text',
     field: 'exercises_hated',
     optional: true,
@@ -412,16 +424,16 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'foods_loved',
     phase: 6,
-    ionMessage: () => "Now food — real food. What do you genuinely enjoy eating? Tell me anything — cuisines, specific dishes, whatever you actually look forward to.",
-    ionMessageAr: () => 'الآن الطعام — الطعام الحقيقي. ما الذي تستمتع بأكله فعلاً؟ أخبرني بأي شيء — مأكولات، أطباق محددة، ما تشتاق إليه.',
+    ionMessage: (ctx) => `Now food — and I mean real food. ${ctx.name ? `${ctx.name}, what` : 'What'} do you actually enjoy eating? Don't hold back — the more specific you are, the better your meal plan will taste.`,
+    ionMessageAr: (ctx) => `الآن الطعام — أعني الطعام الحقيقي. ${ctx.name ? `${ctx.name}، ما` : 'ما'} الذي تستمتع بأكله فعلاً؟ لا تتردد — كلما كنت أكثر تحديداً، كانت خطة وجباتك أشهى.`,
     responseType: 'text',
     field: 'foods_loved',
   },
   {
     id: 'foods_hated',
     phase: 6,
-    ionMessage: () => 'Anything you absolutely hate or refuse to eat?',
-    ionMessageAr: () => 'هل هناك شيء تكرهه تماماً أو ترفض أكله؟',
+    ionMessage: () => "And what do you absolutely refuse to eat? I won't put it anywhere near your plan.",
+    ionMessageAr: () => 'وما الذي ترفض أكله تماماً؟ لن أضعه في خطتك على الإطلاق.',
     responseType: 'text',
     field: 'foods_hated',
     optional: true,
@@ -429,8 +441,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'dietary_preference',
     phase: 6,
-    ionMessage: () => 'Any dietary rules I must know?',
-    ionMessageAr: () => 'هل هناك قواعد غذائية يجب أن أعرفها؟',
+    ionMessage: () => 'Any dietary rules I must follow?',
+    ionMessageAr: () => 'هل هناك قواعد غذائية يجب أن أتبعها؟',
     responseType: 'multiselect',
     quickReplies: [
       { label: '✅ No Restrictions', labelAr: '✅ لا قيود', value: 'none' },
@@ -446,8 +458,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'allergies',
     phase: 6,
-    ionMessage: () => 'Any food allergies I must absolutely avoid?',
-    ionMessageAr: () => 'هل هناك حساسية غذائية يجب أن أتجنبها تماماً؟',
+    ionMessage: () => 'Any actual food allergies — things that could cause a real reaction? I need to know.',
+    ionMessageAr: () => 'هل هناك حساسية غذائية حقيقية — أشياء قد تسبب رد فعل؟ أحتاج معرفة ذلك.',
     responseType: 'text',
     field: 'allergies',
     optional: true,
@@ -455,8 +467,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'meals_per_day',
     phase: 6,
-    ionMessage: () => 'How many meals per day works for your lifestyle?',
-    ionMessageAr: () => 'كم وجبة في اليوم تناسب أسلوب حياتك؟',
+    ionMessage: (ctx) => `How many meals a day works for your schedule? ${ctx.work_schedule === 'neither' ? "You've got more flexibility, so think about what actually suits you." : "Keep in mind your work hours."}`,
+    ionMessageAr: () => 'كم وجبة في اليوم تناسب جدولك؟',
     responseType: 'quickreply',
     quickReplies: [
       { label: '2 meals', labelAr: 'وجبتان', value: '2' },
@@ -470,21 +482,21 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'cooking_ability',
     phase: 6,
-    ionMessage: () => 'Can you cook, or do you need quick simple meals?',
-    ionMessageAr: () => 'هل تستطيع الطهي، أم تحتاج وجبات سريعة وبسيطة؟',
+    ionMessage: () => 'Do you cook, or do you need meals that take under 10 minutes?',
+    ionMessageAr: () => 'هل تطهو، أم تحتاج وجبات تستغرق أقل من 10 دقائق؟',
     responseType: 'quickreply',
     quickReplies: [
-      { label: '👨‍🍳 I Cook', labelAr: '👨‍🍳 أطهو', value: 'cook' },
-      { label: '⚡ Quick & Simple', labelAr: '⚡ سريع وبسيط', value: 'quick' },
-      { label: '🍽️ I Eat Out Mostly', labelAr: '🍽️ آكل خارجاً غالباً', value: 'eat_out' },
+      { label: '👨‍🍳 I cook properly', labelAr: '👨‍🍳 أطهو بشكل صحيح', value: 'cook' },
+      { label: '⚡ Quick & simple', labelAr: '⚡ سريع وبسيط', value: 'quick' },
+      { label: '🍽️ Mostly eat out', labelAr: '🍽️ آكل خارجاً غالباً', value: 'eat_out' },
     ],
     field: 'cooking_ability',
   },
   {
     id: 'food_budget',
     phase: 6,
-    ionMessage: () => "What's your food budget like?",
-    ionMessageAr: () => 'كيف ميزانيتك للطعام؟',
+    ionMessage: () => "What's your food budget like? I'll keep the plan realistic.",
+    ionMessageAr: () => 'كيف ميزانيتك للطعام؟ سأجعل الخطة واقعية.',
     responseType: 'quickreply',
     quickReplies: [
       { label: '💰 Tight', labelAr: '💰 محدودة', value: 'tight' },
@@ -498,8 +510,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'injuries',
     phase: 7,
-    ionMessage: () => 'Any injuries, joint pain, or physical limitations I need to know about?',
-    ionMessageAr: () => 'هل هناك إصابات أو آلام في المفاصل أو قيود جسدية يجب أن أعرفها؟',
+    ionMessage: () => 'Any injuries, joint pain, or physical limitations I need to work around?',
+    ionMessageAr: () => 'هل هناك إصابات أو آلام في المفاصل أو قيود جسدية أحتاج للتعامل معها؟',
     responseType: 'text',
     field: 'injuries',
     optional: true,
@@ -507,8 +519,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'medical_conditions',
     phase: 7,
-    ionMessage: () => 'Any medical conditions — diabetes, blood pressure, heart issues, hormonal?',
-    ionMessageAr: () => 'هل هناك حالات طبية — سكري، ضغط، قلب، هرمونية؟',
+    ionMessage: () => 'Any medical conditions — diabetes, blood pressure, hormonal issues, heart? Nothing you say here leaves this plan.',
+    ionMessageAr: () => 'هل هناك حالات طبية — سكري، ضغط، مشاكل هرمونية، قلب؟ كل ما تقوله هنا يبقى في هذه الخطة.',
     responseType: 'text',
     field: 'medical_conditions',
     optional: true,
@@ -516,8 +528,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'supplements',
     phase: 7,
-    ionMessage: () => 'Are you taking any supplements right now?',
-    ionMessageAr: () => 'هل تتناول أي مكملات غذائية الآن؟',
+    ionMessage: () => "What supplements are you taking right now, if any? I'll factor this into your nutrition.",
+    ionMessageAr: () => 'ما المكملات الغذائية التي تتناولها الآن، إن وجدت؟ سأضع هذا في حسبان تغذيتك.',
     responseType: 'multiselect',
     quickReplies: [
       { label: '❌ None', labelAr: '❌ لا شيء', value: 'none' },
@@ -533,8 +545,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'generating',
     phase: 8,
-    ionMessage: (ctx) => `That's everything I need, ${ctx.name || 'you'}. I know your body, your life, your food, your schedule, and your goals.\n\nGive me a moment — I'm building your complete plan now.`,
-    ionMessageAr: (ctx) => `هذا كل ما أحتاجه، ${ctx.name || 'أنت'}. أعرف جسمك وحياتك وطعامك وجدولك وأهدافك.\n\nأعطني لحظة — أبني خطتك الكاملة الآن.`,
+    ionMessage: (ctx) => `That's everything I need, ${ctx.name || 'you'}.\n\nI know your body, your schedule, your food, your lifestyle, and your goal. I'm not going to give you something generic — this is yours.\n\nGive me a moment.`,
+    ionMessageAr: (ctx) => `هذا كل ما أحتاجه، ${ctx.name || 'أنت'}.\n\nأعرف جسمك وجدولك وطعامك وأسلوب حياتك وهدفك. لن أعطيك شيئاً عاماً — هذا خاصٌّ بك.\n\nأعطني لحظة.`,
     responseType: 'done',
     field: null,
   },

@@ -8,6 +8,7 @@ import IonAvatar from '@/components/ui/IonAvatar'
 import SynapLogo from '@/components/ui/SynapLogo'
 import MeasurementCard from '@/components/onboarding/MeasurementCard'
 import PlanGenerating from '@/components/onboarding/PlanGenerating'
+import { createBrowserClient } from '@/lib/supabase'
 import {
   ONBOARDING_STEPS,
   getActiveSteps,
@@ -27,9 +28,59 @@ type Message = {
   stepId?: string
 }
 
+// ── Parse weight/height from free text ────────────────────
+function parseWeightHeight(text: string): { weight: string | null; height: string | null } {
+  // Explicit unit matches
+  const kgMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|كيلو)/i)
+  const cmMatch = text.match(/(\d{2,3}(?:\.\d+)?)\s*(?:cm|سم)/i)
+
+  let weight = kgMatch ? kgMatch[1] : null
+  let height = cmMatch ? cmMatch[1] : null
+
+  // If no explicit units, try to infer from the numbers themselves
+  if (!weight && !height) {
+    const nums = [...text.matchAll(/\d+(?:\.\d+)?/g)].map(m => parseFloat(m[0]))
+    if (nums.length >= 2) {
+      // Sort: smaller = weight (40–200), larger = height (140–220)
+      const sorted = [...nums].sort((a, b) => a - b)
+      // The two most likely candidates
+      const candidate1 = sorted[sorted.length - 1] // largest
+      const candidate2 = sorted[sorted.length - 2] // second largest
+
+      if (candidate1 >= 140 && candidate1 <= 230) {
+        height = String(candidate1)
+        weight = String(candidate2)
+      } else {
+        weight = String(candidate2)
+        height = String(candidate1)
+      }
+    } else if (nums.length === 1) {
+      const n = nums[0]
+      if (n >= 140 && n <= 230) height = String(n)
+      else if (n >= 30 && n <= 300) weight = String(n)
+    }
+  } else if (weight && !height) {
+    // Got weight with units — look for a bare number that could be height
+    const bare = text.replace(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|كيلو)/gi, '')
+    const bareNums = [...bare.matchAll(/(\d{2,3}(?:\.\d+)?)/g)].map(m => parseFloat(m[0]))
+    const heightCandidate = bareNums.find(n => n >= 140 && n <= 230)
+    if (heightCandidate) height = String(heightCandidate)
+  } else if (!weight && height) {
+    // Got height with units — look for a bare number that could be weight
+    const bare = text.replace(/(\d{2,3}(?:\.\d+)?)\s*(?:cm|سم)/gi, '')
+    const bareNums = [...bare.matchAll(/(\d+(?:\.\d+)?)/g)].map(m => parseFloat(m[0]))
+    const weightCandidate = bareNums.find(n => n >= 30 && n <= 300)
+    if (weightCandidate) weight = String(weightCandidate)
+  }
+
+  return { weight, height }
+}
+
 // ── Component ──────────────────────────────────────────────
 export default function OnboardingPage() {
   const router = useRouter()
+  const [authChecked, setAuthChecked] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [lang, setLang] = useState<'en' | 'ar'>('en')
   const [ionGender, setIonGender] = useState<'male' | 'female'>('male')
   const [messages, setMessages] = useState<Message[]>([])
@@ -40,6 +91,8 @@ export default function OnboardingPage() {
   const [selectedMulti, setSelectedMulti] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
   const [started, setStarted] = useState(false)
+  // Stores partial weight/height if only one was captured
+  const [partialWH, setPartialWH] = useState<{ weight?: string; height?: string }>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const isRTL = lang === 'ar'
@@ -49,6 +102,20 @@ export default function OnboardingPage() {
   const currentStep = activeSteps[currentStepIndex]
   const totalPhases = 8
   const progress = Math.round(((currentStepIndex) / activeSteps.length) * 100)
+
+  // ── Auth check on mount ──────────────────────────────────
+  useEffect(() => {
+    const supabase = createBrowserClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        // Redirect to sign up, return here afterwards
+        router.replace('/auth/signup?next=/onboarding')
+      } else {
+        setIsAuthenticated(true)
+        setAuthChecked(true)
+      }
+    })
+  }, [])
 
   // ── Auto scroll ─────────────────────────────────────────
   useEffect(() => {
@@ -75,6 +142,15 @@ export default function OnboardingPage() {
     }, delay)
   }
 
+  // ── Show Ion follow-up (not advancing step) ─────────────
+  function showIonFollowUp(content: string, contentAr: string) {
+    setIsTyping(true)
+    setTimeout(() => {
+      setIsTyping(false)
+      addMessage({ role: 'ion', content: isRTL ? contentAr : content })
+    }, 700)
+  }
+
   // ── Add message ─────────────────────────────────────────
   function addMessage(msg: Omit<Message, 'id'>) {
     setMessages(prev => [...prev, { ...msg, id: Date.now().toString() + Math.random() }])
@@ -91,7 +167,6 @@ export default function OnboardingPage() {
     const nextIndex = currentStepIndex + 1
 
     if (nextIndex >= newActiveSteps.length) {
-      // Done — show generating screen
       setTimeout(() => setGenerating(true), 500)
       return
     }
@@ -99,13 +174,11 @@ export default function OnboardingPage() {
     const nextStep = newActiveSteps[nextIndex]
     setCurrentStepIndex(nextIndex)
 
-    // Handle generating step
     if (nextStep.responseType === 'done') {
       setTimeout(() => setGenerating(true), 500)
       return
     }
 
-    // Show next Ion message
     setTimeout(() => showIonMessage(nextStep, newData as OnboardingContext), 300)
   }
 
@@ -114,7 +187,6 @@ export default function OnboardingPage() {
     if (!currentStep) return
     addMessage({ role: 'user', content: label })
 
-    // Special cases
     if (currentStep.id === 'ion_gender') {
       setIonGender(value as 'male' | 'female')
     }
@@ -139,7 +211,6 @@ export default function OnboardingPage() {
   function handleTextSubmit(e?: React.FormEvent) {
     e?.preventDefault()
     if (!currentStep || !textInput.trim()) {
-      // Optional — skip
       if (currentStep?.optional) {
         addMessage({ role: 'user', content: isRTL ? 'تخطي' : 'Skip' })
         advance({})
@@ -147,16 +218,44 @@ export default function OnboardingPage() {
       return
     }
 
-    // Parse weight_kg / height_cm from combined message
+    // ── Smart weight + height parsing ──────────────────────
     if (currentStep.id === 'weight_height') {
-      const text = textInput
-      const weightMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kg|كيلو)?/i)
-      const heightMatch = text.match(/(\d{2,3})\s*(?:cm|سم)?/i)
-      const updates: Partial<OnboardingData> = {}
-      if (weightMatch) updates.weight_kg = weightMatch[1]
-      if (heightMatch) updates.height_cm = heightMatch[1]
-      addMessage({ role: 'user', content: textInput })
-      advance(updates)
+      const text = textInput.trim()
+      addMessage({ role: 'user', content: text })
+      setTextInput('')
+
+      const { weight: parsedWeight, height: parsedHeight } = parseWeightHeight(text)
+
+      // Merge with any previously captured partial
+      const combined = {
+        weight: parsedWeight || partialWH.weight,
+        height: parsedHeight || partialWH.height,
+      }
+
+      if (combined.weight && combined.height) {
+        // Both found — advance
+        setPartialWH({})
+        advance({ weight_kg: combined.weight, height_cm: combined.height })
+      } else if (combined.weight && !combined.height) {
+        setPartialWH({ weight: combined.weight })
+        showIonFollowUp(
+          `Got it — ${combined.weight} kg. Now what's your height in cm?`,
+          `حسناً — ${combined.weight} كيلو. ما طولك بالسنتيمتر؟`
+        )
+      } else if (!combined.weight && combined.height) {
+        setPartialWH({ height: combined.height })
+        showIonFollowUp(
+          `${combined.height} cm — noted. What's your weight in kg?`,
+          `${combined.height} سم — ممتاز. ما وزنك بالكيلوغرام؟`
+        )
+      } else {
+        // Neither found
+        setPartialWH({})
+        showIonFollowUp(
+          `I didn't catch that. Try something like "80 kg, 175 cm" or just "80 175".`,
+          `لم أفهم ذلك. جرّب مثلاً: "80 كيلو، 175 سم" أو فقط "80 175".`
+        )
+      }
       return
     }
 
@@ -183,7 +282,30 @@ export default function OnboardingPage() {
     )
   }
 
-  // ── Render ──────────────────────────────────────────────
+  // ── Auth loading state ───────────────────────────────────
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#050505' }}>
+        <div className="flex flex-col items-center gap-4">
+          <SynapLogo size="sm" />
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full"
+                style={{
+                  background: '#BB5CF6',
+                  animation: `bounce 1s ease-in-out ${i * 0.2}s infinite`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Render generating screen ────────────────────────────
   if (generating) {
     return (
       <PlanGenerating
@@ -195,6 +317,7 @@ export default function OnboardingPage() {
     )
   }
 
+  // ── Render start screen ──────────────────────────────────
   if (!started) {
     return <StartScreen lang={lang} ionGender={ionGender} onStart={() => setStarted(true)} onLangChange={setLang} />
   }
@@ -210,11 +333,9 @@ export default function OnboardingPage() {
         <SynapLogo size="sm" />
 
         <div className="flex flex-col items-center gap-1">
-          {/* Phase label */}
           <span className="font-heading text-xs tracking-widest uppercase" style={{ color: '#BB5CF6', letterSpacing: '0.12em', fontSize: '0.6rem' }}>
             {currentStep ? getPhaseLabel(currentStep.phase, lang) : ''}
           </span>
-          {/* Progress bar */}
           <div className="w-32 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
             <div
               className="h-full rounded-full transition-all duration-500"
@@ -243,14 +364,12 @@ export default function OnboardingPage() {
             key={msg.id}
             className={`flex items-end gap-3 chat-bubble ${msg.role === 'user' ? (isRTL ? 'justify-end' : 'flex-row-reverse') : ''}`}
           >
-            {/* Ion avatar */}
             {msg.role === 'ion' && (
               <div className="flex-shrink-0 mb-1">
                 <IonAvatar gender={ionGender} size="sm" />
               </div>
             )}
 
-            {/* Bubble */}
             <div
               className="max-w-[78%] sm:max-w-[65%] rounded-2xl px-4 py-3"
               style={msg.role === 'ion'
@@ -354,10 +473,14 @@ export default function OnboardingPage() {
             <form onSubmit={handleTextSubmit} className="flex items-center gap-2">
               <input
                 ref={inputRef}
-                type={currentStep.responseType === 'number' ? 'text' : 'text'}
+                type="text"
                 value={textInput}
                 onChange={e => setTextInput(e.target.value)}
-                placeholder={isRTL ? 'اكتب ردّك...' : 'Type your reply...'}
+                placeholder={
+                  currentStep.id === 'weight_height'
+                    ? (isRTL ? 'مثلاً: 80 كيلو، 175 سم' : 'e.g. 80 kg, 175 cm')
+                    : (isRTL ? 'اكتب ردّك...' : 'Type your reply...')
+                }
                 className="flex-1 rounded-xl px-4 py-3 text-sm font-heading outline-none transition-all"
                 style={{
                   background: '#111111',
@@ -442,7 +565,10 @@ function StartScreen({
               : "I'll ask you questions like a real trainer — your schedule, food, goals, health. Then I build your complete plan."}
           </p>
           <div className="flex flex-wrap gap-2 mt-3">
-            {['8 min', '100% free', 'No templates'].map(tag => (
+            {(isRTL
+              ? ['8 دقائق', 'مجاناً 100%', 'بدون قوالب']
+              : ['8 min', '100% free', 'No templates']
+            ).map(tag => (
               <span
                 key={tag}
                 className="font-heading text-[10px] font-semibold px-2.5 py-1 rounded-full tracking-wider"
@@ -479,7 +605,7 @@ function StartScreen({
           className="btn-primary w-full py-4 font-heading font-black text-sm group"
           style={{ letterSpacing: '0.12em' }}
         >
-          {isRTL ? 'ابدأ مع Ion' : "LET'S GO"}
+          {isRTL ? 'ابدأ مع Ion' : "LET'S BUILD YOUR PLAN"}
           <ChevronRight size={16} className="transition-transform group-hover:translate-x-1" />
         </button>
       </div>
