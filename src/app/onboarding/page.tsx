@@ -76,6 +76,30 @@ function parseWeightHeight(text: string): { weight: string | null; height: strin
   return { weight, height }
 }
 
+// ── localStorage key for saving progress ──────────────────
+const SAVE_KEY = 'synap_onboarding_v1'
+
+function saveProgress(data: Partial<OnboardingData>, stepIndex: number, lang: string, ionGender: string, messages: Message[]) {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ data, stepIndex, lang, ionGender, messages }))
+  } catch {}
+}
+
+function loadProgress(): { data: Partial<OnboardingData>; stepIndex: number; lang: 'en' | 'ar'; ionGender: 'male' | 'female'; messages: Message[] } | null {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    // Only resume if they got past the first step
+    if (!parsed.data || !parsed.data.name) return null
+    return parsed
+  } catch { return null }
+}
+
+function clearProgress() {
+  try { localStorage.removeItem(SAVE_KEY) } catch {}
+}
+
 // ── Component ──────────────────────────────────────────────
 export default function OnboardingPage() {
   const router = useRouter()
@@ -91,6 +115,7 @@ export default function OnboardingPage() {
   const [selectedMulti, setSelectedMulti] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
   const [started, setStarted] = useState(false)
+  const [savedProgress, setSavedProgress] = useState<ReturnType<typeof loadProgress>>(null)
   // Stores partial weight/height if only one was captured
   const [partialWH, setPartialWH] = useState<{ weight?: string; height?: string }>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -100,22 +125,30 @@ export default function OnboardingPage() {
   // Active steps depend on collected data (conditional steps)
   const activeSteps = getActiveSteps(data as OnboardingContext)
   const currentStep = activeSteps[currentStepIndex]
-  const totalPhases = 8
   const progress = Math.round(((currentStepIndex) / activeSteps.length) * 100)
 
-  // ── Auth check on mount ──────────────────────────────────
+  // ── Auth check + load saved progress on mount ────────────
   useEffect(() => {
     const supabase = createBrowserClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
-        // Redirect to sign up, return here afterwards
         router.replace('/auth/signup?next=/onboarding')
       } else {
         setIsAuthenticated(true)
         setAuthChecked(true)
+        // Check for saved progress
+        const saved = loadProgress()
+        if (saved) setSavedProgress(saved)
       }
     })
   }, [])
+
+  // ── Auto-save progress on every step ────────────────────
+  useEffect(() => {
+    if (started && data.name) {
+      saveProgress(data, currentStepIndex, lang, ionGender, messages)
+    }
+  }, [data, currentStepIndex, messages])
 
   // ── Auto scroll ─────────────────────────────────────────
   useEffect(() => {
@@ -271,8 +304,32 @@ export default function OnboardingPage() {
     advance({ measurements })
   }
 
+  // ── Resume saved progress ────────────────────────────────
+  function handleResume() {
+    if (!savedProgress) return
+    setData(savedProgress.data)
+    setCurrentStepIndex(savedProgress.stepIndex)
+    setLang(savedProgress.lang)
+    setIonGender(savedProgress.ionGender)
+    setMessages(savedProgress.messages)
+    setSavedProgress(null)
+    setStarted(true)
+    // Show the current step's Ion message
+    const steps = getActiveSteps(savedProgress.data as OnboardingContext)
+    const step = steps[savedProgress.stepIndex]
+    if (step && step.responseType !== 'done') {
+      setTimeout(() => showIonMessage(step, savedProgress.data as OnboardingContext), 400)
+    }
+  }
+
+  function handleStartFresh() {
+    clearProgress()
+    setSavedProgress(null)
+  }
+
   // ── Plan generation complete ────────────────────────────
   function handlePlanReady() {
+    clearProgress()
     router.push('/dashboard')
   }
 
@@ -320,7 +377,17 @@ export default function OnboardingPage() {
 
   // ── Render start screen ──────────────────────────────────
   if (!started) {
-    return <StartScreen lang={lang} ionGender={ionGender} onStart={() => setStarted(true)} onLangChange={setLang} />
+    return (
+      <StartScreen
+        lang={lang}
+        ionGender={ionGender}
+        onStart={() => setStarted(true)}
+        onLangChange={setLang}
+        savedProgress={savedProgress}
+        onResume={handleResume}
+        onStartFresh={handleStartFresh}
+      />
+    )
   }
 
   return (
@@ -558,13 +625,20 @@ function StartScreen({
   ionGender,
   onStart,
   onLangChange,
+  savedProgress,
+  onResume,
+  onStartFresh,
 }: {
   lang: 'en' | 'ar'
   ionGender: 'male' | 'female'
   onStart: () => void
   onLangChange: (l: 'en' | 'ar') => void
+  savedProgress: ReturnType<typeof loadProgress>
+  onResume: () => void
+  onStartFresh: () => void
 }) {
   const isRTL = lang === 'ar'
+  const savedName = savedProgress?.data?.name
 
   return (
     <div
@@ -572,7 +646,6 @@ function StartScreen({
       style={{ background: '#050505' }}
       dir={isRTL ? 'rtl' : 'ltr'}
     >
-      {/* Background */}
       <div className="orb w-[500px] h-[500px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ background: 'rgba(187,92,246,0.1)' }} />
 
       <div className="relative z-10 flex flex-col items-center gap-8 max-w-sm w-full text-center">
@@ -590,56 +663,89 @@ function StartScreen({
           </div>
         </div>
 
-        <div className="glass-card p-5 w-full" style={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <p className="font-heading text-sm leading-relaxed" style={{ color: '#94A3B8' }}>
-            {isRTL
-              ? 'سأسألك أسئلة كمدرّب حقيقي — عن جدولك، طعامك، أهدافك وصحتك. ثم أبني خطتك الكاملة.'
-              : "I'll ask you questions like a real trainer — your schedule, food, goals, health. Then I build your complete plan."}
-          </p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            {(isRTL
-              ? ['8 دقائق', 'مجاناً 100%', 'بدون قوالب']
-              : ['8 min', '100% free', 'No templates']
-            ).map(tag => (
-              <span
-                key={tag}
-                className="font-heading text-[10px] font-semibold px-2.5 py-1 rounded-full tracking-wider"
-                style={{ background: 'rgba(187,92,246,0.1)', border: '1px solid rgba(187,92,246,0.2)', color: '#BB5CF6' }}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Language toggle */}
-        <div className="flex gap-2">
-          {(['en', 'ar'] as const).map(l => (
+        {/* ── Resume prompt ── */}
+        {savedProgress && savedName ? (
+          <div className="glass-card p-5 w-full flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <p className="font-heading font-bold text-sm text-white tracking-wider">
+                {isRTL ? `مرحباً مجدداً، ${savedName}` : `Welcome back, ${savedName}`}
+              </p>
+              <p className="font-heading text-xs" style={{ color: '#64748B' }}>
+                {isRTL
+                  ? 'وجدنا تقدمك المحفوظ — واصل من حيث توقفت.'
+                  : "We saved your progress — pick up right where you left off."}
+              </p>
+            </div>
             <button
-              key={l}
-              onClick={() => onLangChange(l)}
-              className="px-5 py-2 rounded-xl font-heading font-bold text-sm tracking-widest transition-all"
-              style={{
-                background: lang === l ? '#BB5CF6' : 'rgba(255,255,255,0.04)',
-                color: lang === l ? 'white' : '#475569',
-                border: `1px solid ${lang === l ? '#BB5CF6' : 'rgba(255,255,255,0.06)'}`,
-                boxShadow: lang === l ? '0 0 16px rgba(187,92,246,0.35)' : 'none',
-                letterSpacing: '0.1em',
-              }}
+              onClick={onResume}
+              className="btn-primary w-full py-3.5 font-heading font-black text-sm group"
+              style={{ letterSpacing: '0.1em' }}
             >
-              {l === 'en' ? 'ENGLISH' : 'العربية'}
+              {isRTL ? 'استئناف' : 'CONTINUE WHERE I LEFT OFF'}
+              <ChevronRight size={15} className="transition-transform group-hover:translate-x-1" />
             </button>
-          ))}
-        </div>
+            <button
+              onClick={onStartFresh}
+              className="font-heading text-xs tracking-wider transition-colors"
+              style={{ color: '#475569' }}
+            >
+              {isRTL ? 'أو ابدأ من جديد' : 'or start over from the beginning'}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="glass-card p-5 w-full" style={{ textAlign: isRTL ? 'right' : 'left' }}>
+              <p className="font-heading text-sm leading-relaxed" style={{ color: '#94A3B8' }}>
+                {isRTL
+                  ? 'سأسألك أسئلة كمدرّب حقيقي — عن جدولك، طعامك، أهدافك وصحتك. ثم أبني خطتك الكاملة.'
+                  : "I'll ask you questions like a real trainer — your schedule, food, goals, health. Then I build your complete plan."}
+              </p>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {(isRTL
+                  ? ['8 دقائق', 'مجاناً 100%', 'بدون قوالب']
+                  : ['8 min', '100% free', 'No templates']
+                ).map(tag => (
+                  <span
+                    key={tag}
+                    className="font-heading text-[10px] font-semibold px-2.5 py-1 rounded-full tracking-wider"
+                    style={{ background: 'rgba(187,92,246,0.1)', border: '1px solid rgba(187,92,246,0.2)', color: '#BB5CF6' }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-        <button
-          onClick={onStart}
-          className="btn-primary w-full py-4 font-heading font-black text-sm group"
-          style={{ letterSpacing: '0.12em' }}
-        >
-          {isRTL ? 'ابدأ مع Ion' : "LET'S BUILD YOUR PLAN"}
-          <ChevronRight size={16} className="transition-transform group-hover:translate-x-1" />
-        </button>
+            {/* Language toggle */}
+            <div className="flex gap-2">
+              {(['en', 'ar'] as const).map(l => (
+                <button
+                  key={l}
+                  onClick={() => onLangChange(l)}
+                  className="px-5 py-2 rounded-xl font-heading font-bold text-sm tracking-widest transition-all"
+                  style={{
+                    background: lang === l ? '#BB5CF6' : 'rgba(255,255,255,0.04)',
+                    color: lang === l ? 'white' : '#475569',
+                    border: `1px solid ${lang === l ? '#BB5CF6' : 'rgba(255,255,255,0.06)'}`,
+                    boxShadow: lang === l ? '0 0 16px rgba(187,92,246,0.35)' : 'none',
+                    letterSpacing: '0.1em',
+                  }}
+                >
+                  {l === 'en' ? 'ENGLISH' : 'العربية'}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={onStart}
+              className="btn-primary w-full py-4 font-heading font-black text-sm group"
+              style={{ letterSpacing: '0.12em' }}
+            >
+              {isRTL ? 'ابدأ مع Ion' : "LET'S BUILD YOUR PLAN"}
+              <ChevronRight size={16} className="transition-transform group-hover:translate-x-1" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
