@@ -104,7 +104,7 @@ function DietPlanView({ plan, expandedMeal, setExpandedMeal }: any) {
     { label: 'Calories', value: plan.daily_calories || plan.calories_per_day, unit: 'kcal', icon: <Flame size={14} />, color: '#F59E0B' },
     { label: 'Protein', value: plan.macros?.protein_g || plan.protein_g, unit: 'g', icon: <Beef size={14} />, color: '#EF4444' },
     { label: 'Carbs', value: plan.macros?.carbs_g || plan.carbs_g, unit: 'g', icon: <Wheat size={14} />, color: '#F59E0B' },
-    { label: 'Fat', value: plan.macros?.fat_g || plan.fats_g, unit: 'g', icon: <Droplets size={14} />, color: '#22D3EE' },
+    { label: 'Fat', value: plan.macros?.fat_g || plan.fat_g, unit: 'g', icon: <Droplets size={14} />, color: '#22D3EE' },
   ]
 
   const weeks = plan.weeks || []
@@ -185,11 +185,11 @@ function DietPlanView({ plan, expandedMeal, setExpandedMeal }: any) {
       ) : null}
 
       {/* Hydration & notes */}
-      {plan.hydration_liters && (
+      {(plan.hydration_liters || plan.water_l) && (
         <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)' }}>
           <Droplets size={18} style={{ color: '#22D3EE' }} />
           <p className="font-heading text-sm" style={{ color: '#94A3B8' }}>
-            Daily water target: <span className="text-white font-semibold">{plan.hydration_liters}L</span>
+            Daily water target: <span className="text-white font-semibold">{plan.hydration_liters || plan.water_l}L</span>
           </p>
         </div>
       )}
@@ -225,17 +225,26 @@ function MealCard({ meal }: { meal: any }) {
       </button>
       {expanded && foods.length > 0 && (
         <div className="px-4 pb-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
-          <div className="flex flex-col gap-1.5 mt-3">
-            {foods.map((food: any, fi: number) => (
-              <div key={fi} className="flex items-center justify-between">
-                <span className="font-heading text-sm" style={{ color: '#94A3B8' }}>
-                  {food.name || food.food || food}
-                </span>
-                <span className="font-heading text-xs" style={{ color: '#475569' }}>
-                  {food.amount || food.quantity || ''}
-                </span>
-              </div>
-            ))}
+          <div className="flex flex-col gap-2 mt-3">
+            {foods.map((food: any, fi: number) => {
+              const name = food.item || food.name || food.food || (typeof food === 'string' ? food : '')
+              const amount = food.amount || food.quantity || food.serving || ''
+              const kcal = food.calories ?? food.kcal ?? null
+              if (!name) return null
+              return (
+                <div key={fi} className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-heading text-sm" style={{ color: '#94A3B8' }}>{name}</span>
+                    {amount ? <span className="font-heading text-xs ml-1" style={{ color: '#475569' }}>· {amount}</span> : null}
+                  </div>
+                  {kcal !== null && (
+                    <span className="font-heading text-xs flex-shrink-0 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.08)', color: '#F59E0B' }}>
+                      {kcal} kcal
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

@@ -44,7 +44,7 @@ export default async function DashboardPage() {
   const totalCalories = dietPlan?.daily_calories || dietPlan?.calories_per_day || 0
   const totalProtein = dietPlan?.macros?.protein_g || dietPlan?.protein_g || 0
   const totalCarbs = dietPlan?.macros?.carbs_g || dietPlan?.carbs_g || 0
-  const totalFat = dietPlan?.macros?.fat_g || dietPlan?.fats_g || 0
+  const totalFat = dietPlan?.macros?.fat_g || dietPlan?.fat_g || 0
   const todayMeals = dietPlan?.meals || []
 
   const greetingHour = new Date().getHours()

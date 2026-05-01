@@ -6,9 +6,10 @@ import { ArrowRight, Zap } from 'lucide-react'
 
 interface CTAProps {
   lang: Language
+  isLoggedIn?: boolean
 }
 
-export default function CTA({ lang }: CTAProps) {
+export default function CTA({ lang, isLoggedIn = false }: CTAProps) {
   const isRTL = lang === 'ar'
 
   return (
@@ -44,21 +45,26 @@ export default function CTA({ lang }: CTAProps) {
             </div>
 
             {/* CTA button */}
-            <Link
-              href="/auth/signup"
-              className="btn-primary text-lg px-10 py-5 group mt-2"
-            >
-              {t(lang, 'cta_btn')}
-              <ArrowRight
-                size={20}
-                className={`transition-transform group-hover:translate-x-1 ${isRTL ? 'rotate-180 group-hover:-translate-x-1 group-hover:translate-x-0' : ''}`}
-              />
-            </Link>
+            {isLoggedIn ? (
+              <Link href="/dashboard" className="btn-primary text-lg px-10 py-5 group mt-2">
+                OPEN MY DASHBOARD →
+              </Link>
+            ) : (
+              <Link href="/auth/signup" className="btn-primary text-lg px-10 py-5 group mt-2">
+                {t(lang, 'cta_btn')}
+                <ArrowRight
+                  size={20}
+                  className={`transition-transform group-hover:translate-x-1 ${isRTL ? 'rotate-180 group-hover:-translate-x-1 group-hover:translate-x-0' : ''}`}
+                />
+              </Link>
+            )}
 
             {/* Note */}
-            <p className="text-light-muted/60 text-sm">
-              {t(lang, 'cta_note')}
-            </p>
+            {!isLoggedIn && (
+              <p className="text-light-muted/60 text-sm">
+                {t(lang, 'cta_note')}
+              </p>
+            )}
 
             {/* Stats */}
             <div className={`flex flex-wrap justify-center gap-8 mt-4 pt-6 border-t border-white/5 w-full`}>

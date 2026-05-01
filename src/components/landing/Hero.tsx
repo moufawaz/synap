@@ -9,11 +9,14 @@ import { ArrowRight, Cpu } from 'lucide-react'
 
 interface HeroProps {
   lang: Language
+  isLoggedIn?: boolean
+  userName?: string
 }
 
-export default function Hero({ lang }: HeroProps) {
+export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroProps) {
   const [ionGender, setIonGender] = useState<'male' | 'female'>('male')
   const isRTL = lang === 'ar'
+  const firstName = userName ? userName.split(' ')[0] : ''
 
   return (
     <section
@@ -104,16 +107,24 @@ export default function Hero({ lang }: HeroProps) {
 
             {/* CTA */}
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto animate-slide-up" style={{ animationDelay: '0.2s' }}>
-              <Link href="/auth/signup" className="btn-primary text-sm px-8 py-4 group font-heading font-bold" style={{ letterSpacing: '0.1em' }}>
-                {t(lang, 'hero_cta').toUpperCase()}
-                <ArrowRight size={16} className={`transition-transform group-hover:translate-x-1 ${isRTL ? 'rotate-180' : ''}`} />
-              </Link>
+              {isLoggedIn ? (
+                <Link href="/dashboard" className="btn-primary text-sm px-8 py-4 group font-heading font-bold" style={{ letterSpacing: '0.1em' }}>
+                  {firstName ? `WELCOME BACK, ${firstName.toUpperCase()} →` : 'OPEN DASHBOARD →'}
+                </Link>
+              ) : (
+                <Link href="/auth/signup" className="btn-primary text-sm px-8 py-4 group font-heading font-bold" style={{ letterSpacing: '0.1em' }}>
+                  {t(lang, 'hero_cta').toUpperCase()}
+                  <ArrowRight size={16} className={`transition-transform group-hover:translate-x-1 ${isRTL ? 'rotate-180' : ''}`} />
+                </Link>
+              )}
             </div>
 
             {/* Free note */}
-            <p className="text-silver-muted/50 text-xs font-heading tracking-widest uppercase animate-fade-in" style={{ animationDelay: '0.3s' }}>
-              {t(lang, 'hero_free_note')}
-            </p>
+            {!isLoggedIn && (
+              <p className="text-silver-muted/50 text-xs font-heading tracking-widest uppercase animate-fade-in" style={{ animationDelay: '0.3s' }}>
+                {t(lang, 'hero_free_note')}
+              </p>
+            )}
 
             {/* Social proof */}
             <div className="flex items-center gap-3 animate-fade-in" style={{ animationDelay: '0.4s' }}>
