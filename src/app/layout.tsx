@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter, Exo_2 } from 'next/font/google'
+import { Inter, Space_Grotesk } from 'next/font/google'
 import '@/app/globals.css'
 
 const inter = Inter({
@@ -8,15 +8,15 @@ const inter = Inter({
   display: 'swap',
 })
 
-const exo2 = Exo_2({
+const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
-  variable: '--font-exo2',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-space',
   display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: 'SYNAP — Performance Connected.',
+  title: 'SYNAP — The Intelligence of Sport',
   description: 'Meet Ion — your AI personal trainer. Adaptive diet plans, personalized workouts, and a coach that actually follows up with you.',
   keywords: ['AI personal trainer', 'fitness app', 'workout plan', 'diet plan', 'Ion trainer', 'SYNAP'],
   manifest: '/manifest.json',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     title: 'SYNAP',
   },
   openGraph: {
-    title: 'SYNAP — Performance Connected.',
+    title: 'SYNAP — The Intelligence of Sport',
     description: 'Meet Ion — your AI personal trainer. Adaptive diet plans, personalized workouts, and a coach that actually follows up with you.',
     url: 'https://synapfit.app',
     siteName: 'SYNAP',
@@ -34,13 +34,13 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SYNAP — Performance Connected.',
+    title: 'SYNAP — The Intelligence of Sport',
     description: 'Meet Ion — your AI personal trainer.',
   },
 }
 
 export const viewport = {
-  themeColor: '#BB5CF6',
+  themeColor: '#7C3AED',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -53,8 +53,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${exo2.variable}`}>
-      <body className="bg-obsidian text-silver antialiased">
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+      <body style={{ backgroundColor: '#0D0D1A', color: '#F0F0FF' }} className="antialiased">
         {children}
       </body>
     </html>

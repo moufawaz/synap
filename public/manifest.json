@@ -1,11 +1,11 @@
 {
-  "name": "SYNAP — Performance Connected",
+  "name": "SYNAP — The Intelligence of Sport",
   "short_name": "SYNAP",
-  "description": "Your AI personal trainer. Adaptive plans, personalized coaching.",
+  "description": "Meet Ion — your AI personal trainer. Adaptive diet plans, personalized workouts, and a coach that actually follows up.",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#121212",
-  "theme_color": "#BB5CF6",
+  "background_color": "#0D0D1A",
+  "theme_color": "#7C3AED",
   "orientation": "portrait",
   "icons": [
     {
@@ -22,5 +22,22 @@
     }
   ],
   "categories": ["health", "fitness", "sports"],
+  "shortcuts": [
+    {
+      "name": "Today's Workout",
+      "url": "/workout/today",
+      "description": "Start today's training session"
+    },
+    {
+      "name": "Chat with Ion",
+      "url": "/chat",
+      "description": "Ask Ion anything"
+    },
+    {
+      "name": "Log Measurements",
+      "url": "/measurements",
+      "description": "Track your body measurements"
+    }
+  ],
   "screenshots": []
 }
