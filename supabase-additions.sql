@@ -9,7 +9,7 @@ alter table public.chat_messages
   add constraint chat_messages_message_type_check
   check (message_type in ('text', 'suggestion', 'card', 'quickreply', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan'));
 
--- Also fix role to accept 'assistant' (from old API)
+-- Fix role to accept 'assistant'
 alter table public.chat_messages
   drop constraint if exists chat_messages_role_check;
 
@@ -30,21 +30,25 @@ insert into storage.buckets (id, name, public)
 values ('progress-photos', 'progress-photos', true)
 on conflict (id) do nothing;
 
--- Storage RLS: authenticated users can manage own photos
-create policy if not exists "Users can upload own photos"
+-- 5. Storage policies (drop first to avoid conflicts)
+drop policy if exists "Users can upload own photos" on storage.objects;
+drop policy if exists "Users can view own photos" on storage.objects;
+drop policy if exists "Public photos readable" on storage.objects;
+
+create policy "Users can upload own photos"
   on storage.objects for insert
   to authenticated
   with check (bucket_id = 'progress-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 
-create policy if not exists "Users can view own photos"
+create policy "Users can view own photos"
   on storage.objects for select
   to authenticated
   using (bucket_id = 'progress-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 
-create policy if not exists "Public photos readable"
+create policy "Public photos readable"
   on storage.objects for select
   to anon
   using (bucket_id = 'progress-photos');
 
--- 5. Verify
+-- Verify
 select 'SYNAP schema additions applied' as status;

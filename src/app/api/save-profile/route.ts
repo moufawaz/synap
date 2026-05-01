@@ -31,6 +31,7 @@ export async function POST(req: Request) {
       gym_access: profileData.gym_access === 'gym',
       equipment: profileData.equipment ? profileData.equipment.split(',') : [],
       work_schedule: profileData.work_schedule || 'work',
+      work_hours: profileData.work_hours || null,
       wake_time: profileData.wake_time || '7:30',
       sleep_time: profileData.sleep_time || '23:00',
       lunch_break_time: profileData.lunch_break || null,
@@ -47,6 +48,8 @@ export async function POST(req: Request) {
       cooking_ability: profileData.cooking_ability || 'cook',
       food_budget: profileData.food_budget || 'moderate',
       training_experience: profileData.currently_training === 'already' ? 'intermediate' : 'beginner',
+      ion_gender: profileData.ion_gender || 'male',
+      goal_speed: profileData.goal_speed || null,
     }
 
     const { error: profileError } = await supabase
@@ -57,6 +60,12 @@ export async function POST(req: Request) {
       console.error('Profile error:', profileError)
       return NextResponse.json({ error: profileError.message }, { status: 500 })
     }
+
+    // Save ion_gender + language to users table
+    await supabase.from('users').update({
+      ion_gender: profileData.ion_gender || 'male',
+      language: profileData.language || 'en',
+    }).eq('id', user.id)
 
     // Save initial measurements if provided
     if (profileData.measurements && typeof profileData.measurements === 'object') {
