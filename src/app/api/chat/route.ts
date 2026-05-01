@@ -83,13 +83,27 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ reply })
   } catch (err: any) {
-    console.error('Chat error:', err)
-    // Return a friendly error that the UI can display
-    return NextResponse.json(
-      { error: err.message || 'Ion ran into an issue. Please try again.' },
-      { status: 500 }
-    )
+    console.error('Chat error:', err?.message || err)
+    // Never expose raw API errors to users — map to friendly messages
+    const friendly = friendlyError(err?.message || '')
+    return NextResponse.json({ error: friendly }, { status: 500 })
   }
+}
+
+function friendlyError(raw: string): string {
+  if (raw.includes('credit balance') || raw.includes('billing') || raw.includes('quota')) {
+    return "I'm temporarily unavailable. Please try again in a moment."
+  }
+  if (raw.includes('overloaded') || raw.includes('529') || raw.includes('rate_limit')) {
+    return "I'm a bit busy right now. Give me a second and try again."
+  }
+  if (raw.includes('invalid_api_key') || raw.includes('authentication')) {
+    return "I'm having a configuration issue. Please contact support."
+  }
+  if (raw.includes('context_length') || raw.includes('too long')) {
+    return "That message is too long for me. Can you shorten it?"
+  }
+  return "Something went wrong on my end. Try again in a moment."
 }
 
 function buildSystemPrompt(profile: any, workoutPlan: any, dietPlan: any): string {

@@ -93,8 +93,15 @@ export async function POST(req: Request) {
       diet_plan_id: dietPlan?.id,
     })
   } catch (err: any) {
-    console.error('Generate plan error:', err)
-    return NextResponse.json({ error: err.message || 'Internal error generating plan' }, { status: 500 })
+    console.error('Generate plan error:', err?.message || err)
+    const raw = err?.message || ''
+    let friendly = "Ion couldn't build your plan right now. Please try again."
+    if (raw.includes('credit balance') || raw.includes('billing') || raw.includes('quota')) {
+      friendly = "Plan generation is temporarily unavailable. Please try again shortly."
+    } else if (raw.includes('overloaded') || raw.includes('rate_limit')) {
+      friendly = "Ion is busy right now. Wait a moment and try again."
+    }
+    return NextResponse.json({ error: friendly }, { status: 500 })
   }
 }
 
