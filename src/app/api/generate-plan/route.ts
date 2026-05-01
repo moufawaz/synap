@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { sendEmail } from '@/lib/resend'
 
 export async function POST(req: Request) {
   // ── Guard: API key must be set ─────────────────────────
@@ -85,6 +86,15 @@ export async function POST(req: Request) {
         content: plan.ion_message,
         message_type: 'text',
       })
+    }
+
+    // Send welcome email (fire-and-forget — don't block response)
+    if (user.email) {
+      sendEmail({
+        to: user.email,
+        type: 'welcome',
+        data: { name: profileData.name || 'Athlete' },
+      }).catch(() => {}) // silently ignore email errors
     }
 
     return NextResponse.json({
