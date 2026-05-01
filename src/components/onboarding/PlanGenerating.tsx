@@ -76,7 +76,7 @@ export default function PlanGenerating({ lang, name, data, onComplete }: PlanGen
 
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.error || 'Generation failed')
+        throw new Error(err.error || 'Plan generation failed')
       }
 
       // Show final step
@@ -86,9 +86,7 @@ export default function PlanGenerating({ lang, name, data, onComplete }: PlanGen
     } catch (err: any) {
       clearInterval(stepInterval)
       console.error('Plan generation error:', err)
-      setError(err.message)
-      // Still redirect after a moment — plan can be regenerated
-      setTimeout(onComplete, 3000)
+      setError(err.message || 'Something went wrong. You can retry from your dashboard.')
     }
   }
 
@@ -133,10 +131,29 @@ export default function PlanGenerating({ lang, name, data, onComplete }: PlanGen
           <p className="font-heading font-bold text-white text-lg tracking-wider" style={{ letterSpacing: '0.06em' }}>
             {isRTL ? `جارٍ البناء، ${name}` : `Building yours, ${name}`}
           </p>
-          <div className="h-6 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
             {error ? (
-              <p className="font-heading text-sm" style={{ color: '#F87171' }}>{error}</p>
-            ) : (
+              <>
+                <p className="font-heading text-sm text-center max-w-xs" style={{ color: '#F87171' }}>{error}</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { called.current = false; setError(null); setProgress(0); setCurrentStep(0); runGeneration() }}
+                    className="px-4 py-2 rounded-xl font-heading text-xs font-bold tracking-wider transition-all"
+                    style={{ background: 'rgba(187,92,246,0.15)', border: '1px solid rgba(187,92,246,0.35)', color: '#CC80FF' }}
+                  >
+                    {isRTL ? 'إعادة المحاولة' : 'Try Again'}
+                  </button>
+                  <button
+                    onClick={onComplete}
+                    className="px-4 py-2 rounded-xl font-heading text-xs font-semibold tracking-wider transition-all"
+                    style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.06)' }}
+                  >
+                    {isRTL ? 'متابعة' : 'Continue Anyway'}
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {!error && (
               <p key={currentStep} className="font-heading text-sm tracking-wider" style={{ color: '#64748B', letterSpacing: '0.06em', animation: 'fadeIn 0.4s ease' }}>
                 {steps[Math.min(currentStep, steps.length - 1)]}
               </p>

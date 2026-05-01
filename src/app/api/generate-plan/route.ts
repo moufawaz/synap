@@ -2,9 +2,19 @@ import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
 export async function POST(req: Request) {
+  // ── Guard: API key must be set ─────────────────────────
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    console.error('ANTHROPIC_API_KEY is not set')
+    return NextResponse.json(
+      { error: 'Ion is not configured. The ANTHROPIC_API_KEY environment variable is missing in your Vercel project settings.' },
+      { status: 503 }
+    )
+  }
+
+  const client = new Anthropic({ apiKey })
+
   try {
     const body = await req.json()
     const { profileData } = body
@@ -28,26 +38,44 @@ export async function POST(req: Request) {
     // Extract JSON from response
     let plan: any
     try {
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/)
-      plan = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent)
+      // Try to find a JSON block, handle markdown code fences
+      const cleaned = rawContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+      plan = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned)
     } catch {
-      console.error('JSON parse error, raw:', rawContent.slice(0, 200))
-      return NextResponse.json({ error: 'Failed to parse plan' }, { status: 500 })
+      console.error('JSON parse error. Raw response (first 500 chars):', rawContent.slice(0, 500))
+      return NextResponse.json({ error: 'Ion returned an invalid plan format. Please try again.' }, { status: 500 })
     }
 
+    // Deactivate any existing plans first
+    await Promise.all([
+      supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id),
+      supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id),
+    ])
+
     // Save workout plan
-    const { data: workoutPlan } = await supabase.from('workout_plans').insert({
+    const { data: workoutPlan, error: wpError } = await supabase.from('workout_plans').insert({
       user_id: user.id,
       plan_json: plan.workout_plan,
       active: true,
     }).select().single()
 
+    if (wpError) {
+      console.error('Workout plan save error:', wpError)
+      return NextResponse.json({ error: `Failed to save workout plan: ${wpError.message}` }, { status: 500 })
+    }
+
     // Save diet plan
-    const { data: dietPlan } = await supabase.from('diet_plans').insert({
+    const { data: dietPlan, error: dpError } = await supabase.from('diet_plans').insert({
       user_id: user.id,
       plan_json: plan.diet_plan,
       active: true,
     }).select().single()
+
+    if (dpError) {
+      console.error('Diet plan save error:', dpError)
+      return NextResponse.json({ error: `Failed to save diet plan: ${dpError.message}` }, { status: 500 })
+    }
 
     // Save Ion's personal message as first chat message
     if (plan.ion_message) {
@@ -55,6 +83,7 @@ export async function POST(req: Request) {
         user_id: user.id,
         role: 'assistant',
         content: plan.ion_message,
+        message_type: 'text',
       })
     }
 
@@ -65,7 +94,7 @@ export async function POST(req: Request) {
     })
   } catch (err: any) {
     console.error('Generate plan error:', err)
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Internal error generating plan' }, { status: 500 })
   }
 }
 
@@ -123,12 +152,12 @@ HEALTH:
 - Medical conditions: ${p.medical_conditions || 'None'}
 - Supplements: ${p.supplements || 'None'}
 
-Generate a complete personalized plan. Respond with ONLY valid JSON in this exact structure (no markdown, no extra text):
+IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text before or after. Use this exact structure:
 
 {
   "summary": "2-3 sentence overview of the approach",
   "workout_plan": {
-    "name": "Plan name (e.g. 'Power Hypertrophy Upper Lower')",
+    "name": "Plan name",
     "schedule": "X days/week",
     "split_type": "push_pull_legs / upper_lower / full_body / etc",
     "weeks": 12,
@@ -185,6 +214,6 @@ Generate a complete personalized plan. Respond with ONLY valid JSON in this exac
       }
     ]
   },
-  "ion_message": "A warm, personal, motivating message from you (Ion) to this specific person. Reference their name, their specific goal, and something personal from their profile. 3-4 sentences. Sound like a real coach."
+  "ion_message": "A warm, personal, motivating message from Ion to this specific person. Reference their name, their specific goal, and something personal from their profile. 3-4 sentences. Sound like a real coach."
 }`
 }

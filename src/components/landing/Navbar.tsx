@@ -96,7 +96,7 @@ export default function Navbar({ lang, onLangChange }: NavbarProps) {
           </Link>
 
           <Link
-            href="/onboarding"
+            href="/auth/signup"
             className="btn-primary text-xs px-5 py-2.5 font-heading font-bold"
             style={{ letterSpacing: '0.1em' }}
           >
@@ -152,7 +152,7 @@ export default function Navbar({ lang, onLangChange }: NavbarProps) {
                 {t(lang, 'nav_login').toUpperCase()}
               </Link>
               <Link
-                href="/onboarding"
+                href="/auth/signup"
                 className="btn-primary text-sm text-center font-heading font-bold tracking-widest"
                 onClick={() => setMobileOpen(false)}
               >

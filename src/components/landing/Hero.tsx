@@ -104,7 +104,7 @@ export default function Hero({ lang }: HeroProps) {
 
             {/* CTA */}
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto animate-slide-up" style={{ animationDelay: '0.2s' }}>
-              <Link href="/onboarding" className="btn-primary text-sm px-8 py-4 group font-heading font-bold" style={{ letterSpacing: '0.1em' }}>
+              <Link href="/auth/signup" className="btn-primary text-sm px-8 py-4 group font-heading font-bold" style={{ letterSpacing: '0.1em' }}>
                 {t(lang, 'hero_cta').toUpperCase()}
                 <ArrowRight size={16} className={`transition-transform group-hover:translate-x-1 ${isRTL ? 'rotate-180' : ''}`} />
               </Link>

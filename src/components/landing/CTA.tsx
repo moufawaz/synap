@@ -45,7 +45,7 @@ export default function CTA({ lang }: CTAProps) {
 
             {/* CTA button */}
             <Link
-              href="/onboarding"
+              href="/auth/signup"
               className="btn-primary text-lg px-10 py-5 group mt-2"
             >
               {t(lang, 'cta_btn')}

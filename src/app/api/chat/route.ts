@@ -2,9 +2,19 @@ import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
 export async function POST(req: Request) {
+  // ── Guard: API key must be set ─────────────────────────
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    console.error('ANTHROPIC_API_KEY is not set')
+    return NextResponse.json(
+      { error: 'Ion is not configured yet. The ANTHROPIC_API_KEY environment variable is missing.' },
+      { status: 503 }
+    )
+  }
+
+  const client = new Anthropic({ apiKey })
+
   try {
     const { message } = await req.json()
     const supabase = createServerClient()
@@ -25,6 +35,7 @@ export async function POST(req: Request) {
     const profile = profileRes.data
     const workoutPlan = workoutRes.data?.plan_json
     const dietPlan = dietRes.data?.plan_json
+    // Reverse to get chronological order
     const history = (historyRes.data || []).reverse()
 
     // Save user message
@@ -32,16 +43,24 @@ export async function POST(req: Request) {
       user_id: user.id,
       role: 'user',
       content: message,
+      message_type: 'text',
     })
 
     const systemPrompt = buildSystemPrompt(profile, workoutPlan, dietPlan)
 
-    // Build conversation history for Claude
-    const messages: Anthropic.MessageParam[] = [
-      ...history.map((h) => ({
-        role: h.role as 'user' | 'assistant',
+    // Build conversation history — Anthropic only accepts 'user' | 'assistant'
+    // Normalize 'ion' role to 'assistant', skip any invalid roles
+    const normalizedHistory: Anthropic.MessageParam[] = history
+      .filter(h => h.role === 'user' || h.role === 'assistant' || h.role === 'ion')
+      .map(h => ({
+        role: (h.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
         content: h.content,
-      })),
+      }))
+
+    // Ensure conversation alternates properly (Anthropic requirement)
+    // Remove duplicates at the end and add current user message
+    const messages: Anthropic.MessageParam[] = [
+      ...normalizedHistory,
       { role: 'user', content: message },
     ]
 
@@ -59,12 +78,17 @@ export async function POST(req: Request) {
       user_id: user.id,
       role: 'assistant',
       content: reply,
+      message_type: 'text',
     })
 
     return NextResponse.json({ reply })
   } catch (err: any) {
     console.error('Chat error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    // Return a friendly error that the UI can display
+    return NextResponse.json(
+      { error: err.message || 'Ion ran into an issue. Please try again.' },
+      { status: 500 }
+    )
   }
 }
 
@@ -73,7 +97,7 @@ function buildSystemPrompt(profile: any, workoutPlan: any, dietPlan: any): strin
 
 YOUR PERSONALITY:
 - Direct, confident, and genuinely encouraging — like a real coach
-- You know science but speak like a human, not a textbook
+- You know the science but speak like a human, not a textbook
 - You hold people accountable with warmth
 - Short, punchy responses unless a detailed answer is truly needed
 - Use the person's name naturally
@@ -83,10 +107,10 @@ ${profile ? `Name: ${profile.name}, Age: ${profile.age}, Gender: ${profile.gende
 Goal: ${profile.goal} | Weight: ${profile.weight_kg}kg | Height: ${profile.height_cm}cm
 Training days: ${profile.training_days}/week | Gym access: ${profile.gym_access}
 Injuries: ${profile.injuries || 'None'} | Medical: ${profile.medical_conditions || 'None'}
-Dietary: ${profile.dietary_preference?.join(', ') || 'No restrictions'}` : 'No profile loaded'}
+Dietary: ${profile.dietary_preference?.join(', ') || 'No restrictions'}` : 'No profile loaded yet — introduce yourself and ask them to complete onboarding'}
 
 THEIR CURRENT WORKOUT PLAN:
-${workoutPlan ? JSON.stringify(workoutPlan, null, 2).slice(0, 1500) : 'No plan yet'}
+${workoutPlan ? JSON.stringify(workoutPlan, null, 2).slice(0, 1500) : 'No plan yet — encourage them to generate one'}
 
 THEIR CURRENT DIET PLAN:
 ${dietPlan ? `Daily targets: ${dietPlan.daily_calories} kcal, ${dietPlan.protein_g}g protein, ${dietPlan.carbs_g}g carbs, ${dietPlan.fat_g}g fat` : 'No plan yet'}

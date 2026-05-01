@@ -75,7 +75,7 @@ export default function Footer({ lang }: FooterProps) {
                 : 'Ion is ready to build your plan right now. Free, no card.'}
             </p>
             <Link
-              href="/onboarding"
+              href="/auth/signup"
               className="btn-primary text-sm px-5 py-2.5"
             >
               {t(lang, 'nav_cta')}

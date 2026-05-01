@@ -76,6 +76,7 @@ export default function ChatPage() {
         body: JSON.stringify({ message: content }),
       })
       const data = await res.json()
+
       if (data.reply) {
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
@@ -83,13 +84,22 @@ export default function ChatPage() {
           content: data.reply,
           message_type: data.message_type || 'text',
         }])
+      } else {
+        // API returned an error — show it in the chat as an alert
+        const errMsg = data.error || 'Something went wrong. Try again.'
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'ion',
+          content: errMsg,
+          message_type: 'alert',
+        }])
       }
     } catch {
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'ion',
-        content: "Sorry, I had a connection issue. Try again?",
-        message_type: 'text',
+        content: "I lost the connection. Check your internet and try again.",
+        message_type: 'alert',
       }])
     } finally {
       setLoading(false)

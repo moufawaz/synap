@@ -260,8 +260,9 @@ export default function OnboardingPage() {
     }
 
     const field = currentStep.field
-    addMessage({ role: 'user', content: textInput })
-    advance(field ? { [field]: textInput } : {})
+    const userText = textInput
+    addMessage({ role: 'user', content: userText })
+    advance(field ? { [field]: userText } : {})
   }
 
   // ── Handle measurement card ─────────────────────────────
@@ -427,43 +428,74 @@ export default function OnboardingPage() {
 
           {/* Quick replies */}
           {(currentStep.responseType === 'quickreply' || currentStep.responseType === 'multiselect') && currentStep.quickReplies && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {currentStep.quickReplies.map(reply => {
-                const label = isRTL ? reply.labelAr : reply.label
-                const isSelected = selectedMulti.includes(reply.value)
-                return (
-                  <button
-                    key={reply.value}
-                    onClick={() => {
-                      if (currentStep.responseType === 'multiselect') {
-                        toggleMulti(reply.value)
-                      } else {
-                        handleQuickReply(reply.value, label)
-                      }
-                    }}
-                    className="px-4 py-2 rounded-full text-sm font-heading font-semibold tracking-wider transition-all duration-150"
-                    style={{
-                      border: `1px solid ${isSelected ? '#BB5CF6' : 'rgba(187,92,246,0.25)'}`,
-                      background: isSelected ? 'rgba(187,92,246,0.2)' : 'rgba(187,92,246,0.06)',
-                      color: isSelected ? '#CC80FF' : '#94A3B8',
-                      boxShadow: isSelected ? '0 0 10px rgba(187,92,246,0.2)' : 'none',
-                    }}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
+            <div className="flex flex-col gap-3 mb-1">
+              <div className="flex flex-wrap gap-2">
+                {currentStep.quickReplies.map(reply => {
+                  const label = isRTL ? reply.labelAr : reply.label
+                  const isSelected = selectedMulti.includes(reply.value)
+                  return (
+                    <button
+                      key={reply.value}
+                      onClick={() => {
+                        if (currentStep.responseType === 'multiselect') {
+                          toggleMulti(reply.value)
+                        } else {
+                          handleQuickReply(reply.value, label)
+                        }
+                      }}
+                      className="px-4 py-2 rounded-full text-sm font-heading font-semibold tracking-wider transition-all duration-150"
+                      style={{
+                        border: `1px solid ${isSelected ? '#BB5CF6' : 'rgba(187,92,246,0.25)'}`,
+                        background: isSelected ? 'rgba(187,92,246,0.2)' : 'rgba(187,92,246,0.06)',
+                        color: isSelected ? '#CC80FF' : '#94A3B8',
+                        boxShadow: isSelected ? '0 0 10px rgba(187,92,246,0.2)' : 'none',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
 
-              {/* Multiselect confirm */}
-              {currentStep.responseType === 'multiselect' && selectedMulti.length > 0 && (
-                <button
-                  onClick={handleMultiConfirm}
-                  className="px-4 py-2 rounded-full text-sm font-heading font-black tracking-wider flex items-center gap-1.5 transition-all"
-                  style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.08em', boxShadow: '0 0 16px rgba(187,92,246,0.4)' }}
-                >
-                  {isRTL ? 'تأكيد' : 'CONFIRM'}
-                  <ChevronRight size={14} />
-                </button>
+                {/* Multiselect confirm */}
+                {currentStep.responseType === 'multiselect' && selectedMulti.length > 0 && (
+                  <button
+                    onClick={handleMultiConfirm}
+                    className="px-4 py-2 rounded-full text-sm font-heading font-black tracking-wider flex items-center gap-1.5 transition-all"
+                    style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.08em', boxShadow: '0 0 16px rgba(187,92,246,0.4)' }}
+                  >
+                    {isRTL ? 'تأكيد' : 'CONFIRM'}
+                    <ChevronRight size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Custom text input for quick reply steps — lets user type their own answer */}
+              {currentStep.responseType === 'quickreply' && (
+                <form onSubmit={handleTextSubmit} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={textInput}
+                    onChange={e => setTextInput(e.target.value)}
+                    placeholder={isRTL ? 'أو اكتب إجابتك...' : 'Or type your own answer...'}
+                    className="flex-1 rounded-xl px-4 py-2.5 text-sm font-heading outline-none transition-all"
+                    style={{
+                      background: '#111111',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      color: '#E2E8F0',
+                    }}
+                    onFocus={e => { e.target.style.borderColor = 'rgba(187,92,246,0.35)' }}
+                    onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.06)' }}
+                  />
+                  {textInput.trim() && (
+                    <button
+                      type="submit"
+                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+                      style={{ background: '#BB5CF6', boxShadow: '0 0 12px rgba(187,92,246,0.35)' }}
+                    >
+                      <Send size={14} style={{ color: 'white' }} />
+                    </button>
+                  )}
+                </form>
               )}
             </div>
           )}
