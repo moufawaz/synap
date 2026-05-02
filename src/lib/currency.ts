@@ -32,8 +32,9 @@ const LOCALE_PREFIX_TO_REGION: Record<string, string> = {
   tr: 'TR', ur: 'PK', hi: 'IN',
 }
 
-const CACHE_KEY = 'synap_currency_v3'  // bumped from v2 to clear stale cache
-const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
+// Only cache exchange RATES — country is always re-detected fresh
+const RATE_CACHE_KEY = 'synap_rates_v1'
+const RATE_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
 
 export interface CurrencyInfo {
   code: string
@@ -68,59 +69,71 @@ export function detectRegion(): string {
   }
 }
 
-// ── Fetch live exchange rate from frankfurter.app ──────────────
+// ── Fetch live exchange rate (rates cached 24h, country always fresh) ──────
 async function fetchRate(targetCurrency: string): Promise<number> {
   if (targetCurrency === 'SAR') return 1
 
+  // Check rate cache first
+  try {
+    const cached = localStorage.getItem(RATE_CACHE_KEY)
+    if (cached) {
+      const { rates, expiry } = JSON.parse(cached)
+      if (Date.now() < expiry && rates?.[targetCurrency] != null) {
+        return rates[targetCurrency]
+      }
+    }
+  } catch {}
+
   const res = await fetch(
-    `https://api.frankfurter.app/latest?base=SAR&symbols=${targetCurrency}`,
-    { cache: 'force-cache' }
+    `https://api.frankfurter.app/latest?base=SAR&symbols=${targetCurrency}`
   )
   const data = await res.json()
-  return data?.rates?.[targetCurrency] ?? 1
+  const rate = data?.rates?.[targetCurrency] ?? 1
+
+  // Cache this rate
+  try {
+    const cached = localStorage.getItem(RATE_CACHE_KEY)
+    const existing = cached ? JSON.parse(cached) : { rates: {}, expiry: Date.now() + RATE_CACHE_TTL }
+    existing.rates[targetCurrency] = rate
+    localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(existing))
+  } catch {}
+
+  return rate
+}
+
+// ── Detect country — always fresh, never cached ───────────────
+async function detectCountry(): Promise<string> {
+  // 1. Vercel server-side geo header (most reliable — our own API, no rate limits)
+  try {
+    const controller = new AbortController()
+    const tid = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch('/api/geo', { signal: controller.signal })
+    clearTimeout(tid)
+    const data = await res.json()
+    if (data?.country && REGION_TO_CURRENCY[data.country]) return data.country
+  } catch {}
+
+  // 2. Browser locale (great for Arabic/MENA users with ar-SA locale)
+  const fromLocale = detectRegion()
+  if (fromLocale && REGION_TO_CURRENCY[fromLocale]) return fromLocale
+
+  // 3. ipapi.co last resort
+  try {
+    const controller = new AbortController()
+    const tid = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch('https://ipapi.co/json/', { signal: controller.signal })
+    clearTimeout(tid)
+    const data = await res.json()
+    if (data?.country_code) return data.country_code
+  } catch {}
+
+  return 'SA' // default to Saudi Arabia
 }
 
 // ── Main detection + rate function ────────────────────────────
 export async function detectUserCurrency(): Promise<CurrencyInfo> {
-  // Check localStorage cache
-  try {
-    const cached = localStorage.getItem(CACHE_KEY)
-    if (cached) {
-      const { data, expiry } = JSON.parse(cached)
-      if (Date.now() < expiry) return data
-    }
-  } catch {}
-
-  let region = ''
-
-  // 1. Server-side geo via Vercel's x-vercel-ip-country header (most reliable)
-  //    Our own /api/geo endpoint reads this header — no external API, no rate limits
-  try {
-    const controller = new AbortController()
-    const tid = setTimeout(() => controller.abort(), 3000)
-    const geoRes = await fetch('/api/geo', { signal: controller.signal })
-    clearTimeout(tid)
-    const geoData = await geoRes.json()
-    if (geoData?.country && REGION_TO_CURRENCY[geoData.country]) {
-      region = geoData.country
-    }
-  } catch {}
-
-  // 2. Fall back to browser locale (works great for Arabic/MENA browsers)
-  if (!region) region = detectRegion()
-
-  // 3. Last resort: ipapi.co (unreliable on free tier, but better than nothing)
-  if (!region || !REGION_TO_CURRENCY[region]) {
-    try {
-      const controller = new AbortController()
-      const tid = setTimeout(() => controller.abort(), 3000)
-      const geoRes = await fetch('https://ipapi.co/json/', { signal: controller.signal })
-      clearTimeout(tid)
-      const geoData = await geoRes.json()
-      if (geoData?.country_code) region = geoData.country_code
-    } catch {}
-  }
-
+  // Country is ALWAYS detected fresh (Vercel geo is fast & free)
+  const region = await detectCountry()
   const currencyInfo = REGION_TO_CURRENCY[region] || REGION_TO_CURRENCY['SA']
 
   let rate = 1
@@ -130,22 +143,12 @@ export async function detectUserCurrency(): Promise<CurrencyInfo> {
     rate = 1
   }
 
-  const result: CurrencyInfo = {
+  return {
     code: currencyInfo.code,
     symbol: currencyInfo.symbol,
     rate,
     detected: true,
   }
-
-  // Cache result
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      data: result,
-      expiry: Date.now() + CACHE_TTL,
-    }))
-  } catch {}
-
-  return result
 }
 
 // ── Format a SAR price in user's currency ─────────────────────
