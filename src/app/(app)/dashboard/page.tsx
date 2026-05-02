@@ -4,8 +4,9 @@ import Link from 'next/link'
 import IonAvatar from '@/components/ui/IonAvatar'
 import {
   Dumbbell, UtensilsCrossed, TrendingUp, Flame,
-  ChevronRight, Zap, Target, Sparkles,
+  ChevronRight, Zap, Target, Sparkles, Shield, Crown,
 } from 'lucide-react'
+import { getTrialDaysRemaining, effectivePlan } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,13 +15,14 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const [profileRes, workoutRes, dietRes, measurementsRes, workoutLogRes, chatRes] = await Promise.all([
+  const [profileRes, workoutRes, dietRes, measurementsRes, workoutLogRes, chatRes, subRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('user_id', user.id).single(),
     supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
     supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
     supabase.from('measurements').select('weight_kg, date').eq('user_id', user.id).order('date', { ascending: false }).limit(8),
     supabase.from('workout_log').select('logged_at').eq('user_id', user.id).gte('logged_at', new Date(Date.now() - 7 * 86400000).toISOString()),
     supabase.from('chat_messages').select('content, role').eq('user_id', user.id).in('role', ['ion', 'assistant']).order('created_at', { ascending: false }).limit(1),
+    supabase.from('subscriptions').select('*').eq('user_id', user.id).single(),
   ])
 
   const profile = profileRes.data
@@ -29,8 +31,16 @@ export default async function DashboardPage() {
   const measurements = measurementsRes.data || []
   const weeklyWorkouts = workoutLogRes.data || []
   const lastIonMessage = chatRes.data?.[0]?.content || null
+  const subscription = subRes.data
 
   if (!profile) redirect('/onboarding')
+
+  // ── Subscription state ───────────────────────────────────
+  const isLaunchMode = process.env.LAUNCH_MODE === 'true'
+  const plan = effectivePlan(subscription)
+  const isTrial = subscription?.status === 'trial'
+  const trialDaysLeft = getTrialDaysRemaining(subscription)
+  const isFree = plan === 'free' && !isLaunchMode
 
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const todayName = days[new Date().getDay()]
@@ -52,6 +62,62 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-4xl mx-auto pb-24 md:pb-6">
+
+      {/* ── Launch mode banner ──────────────────────────────── */}
+      {isLaunchMode && (
+        <div className="mb-5 p-3.5 rounded-2xl flex items-center gap-3"
+          style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
+          <Zap size={14} style={{ color: '#10B981' }} />
+          <p className="font-heading text-xs" style={{ color: '#10B981' }}>
+            🎉 <strong>Launch Special:</strong> All features unlocked for free during our launch period.
+          </p>
+        </div>
+      )}
+
+      {/* ── Trial countdown banner ───────────────────────────── */}
+      {isTrial && trialDaysLeft !== null && !isLaunchMode && (
+        <Link href="/settings?tab=billing">
+          <div className="mb-5 p-3.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:opacity-90"
+            style={{
+              background: trialDaysLeft <= 1 ? 'rgba(239,68,68,0.08)' : trialDaysLeft <= 2 ? 'rgba(245,158,11,0.08)' : 'rgba(187,92,246,0.08)',
+              border: `1px solid ${trialDaysLeft <= 1 ? 'rgba(239,68,68,0.2)' : trialDaysLeft <= 2 ? 'rgba(245,158,11,0.2)' : 'rgba(187,92,246,0.2)'}`,
+            }}>
+            <div className="flex items-center gap-2.5">
+              <Shield size={14} style={{ color: trialDaysLeft <= 1 ? '#EF4444' : trialDaysLeft <= 2 ? '#F59E0B' : '#BB5CF6' }} />
+              <div>
+                <p className="font-heading font-bold text-xs text-white">
+                  Free trial — {trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} left
+                </p>
+                <p className="font-heading text-[10px] mt-0.5" style={{ color: '#64748B' }}>
+                  Cancel before day 7 = zero charges. Tap to manage billing.
+                </p>
+              </div>
+            </div>
+            <ChevronRight size={12} style={{ color: '#475569', flexShrink: 0 }} />
+          </div>
+        </Link>
+      )}
+
+      {/* ── Upgrade CTA (free plan, not in launch mode) ─────── */}
+      {isFree && (
+        <Link href="/pricing">
+          <div className="mb-5 p-3.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:opacity-90"
+            style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.15)' }}>
+            <div className="flex items-center gap-2.5">
+              <Crown size={14} style={{ color: '#BB5CF6' }} />
+              <div>
+                <p className="font-heading font-bold text-xs text-white">You&apos;re on the Free plan</p>
+                <p className="font-heading text-[10px] mt-0.5" style={{ color: '#64748B' }}>
+                  5 messages/day. Upgrade for unlimited access — 7-day free trial.
+                </p>
+              </div>
+            </div>
+            <span className="font-heading font-black text-[10px] px-3 py-1.5 rounded-lg shrink-0" style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.08em' }}>
+              UPGRADE
+            </span>
+          </div>
+        </Link>
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-8">

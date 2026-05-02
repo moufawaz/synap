@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { canSendMessage, incrementMessageCount, isLaunchMode } from '@/lib/subscription'
 
 export async function POST(req: Request) {
   // ── Guard: API key must be set ─────────────────────────
@@ -22,6 +23,23 @@ export async function POST(req: Request) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // ── Check message limits (skip in launch mode) ────────
+    if (!isLaunchMode()) {
+      const { allowed, used, limit, plan } = await canSendMessage(user.id)
+
+      if (!allowed) {
+        const planLabel = plan === 'free' ? 'Free' : plan.charAt(0).toUpperCase() + plan.slice(1)
+        const limitLabel = limit === Infinity ? 'unlimited' : String(limit)
+        return NextResponse.json({
+          error: `daily_limit_reached`,
+          message: `You've used all ${limitLabel} messages today on the ${planLabel} plan. Upgrade for more.`,
+          used,
+          limit,
+          plan,
+        }, { status: 429 })
+      }
     }
 
     // Load user profile + active plans for context
@@ -49,7 +67,6 @@ export async function POST(req: Request) {
     const systemPrompt = buildSystemPrompt(profile, workoutPlan, dietPlan)
 
     // Build conversation history — Anthropic only accepts 'user' | 'assistant'
-    // Normalize 'ion' role to 'assistant', skip any invalid roles
     const normalizedHistory: Anthropic.MessageParam[] = history
       .filter(h => h.role === 'user' || h.role === 'assistant' || h.role === 'ion')
       .map(h => ({
@@ -57,8 +74,6 @@ export async function POST(req: Request) {
         content: h.content,
       }))
 
-    // Ensure conversation alternates properly (Anthropic requirement)
-    // Remove duplicates at the end and add current user message
     const messages: Anthropic.MessageParam[] = [
       ...normalizedHistory,
       { role: 'user', content: message },
@@ -81,10 +96,14 @@ export async function POST(req: Request) {
       message_type: 'text',
     })
 
+    // ── Increment message count (skip in launch mode) ─────
+    if (!isLaunchMode()) {
+      await incrementMessageCount(user.id).catch(() => {})
+    }
+
     return NextResponse.json({ reply })
   } catch (err: any) {
     console.error('Chat error:', err?.message || err)
-    // Never expose raw API errors to users — map to friendly messages
     const friendly = friendlyError(err?.message || '')
     return NextResponse.json({ error: friendly }, { status: 500 })
   }

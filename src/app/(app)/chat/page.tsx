@@ -86,7 +86,11 @@ export default function ChatPage() {
         }])
       } else {
         // API returned an error — show it in the chat as an alert
-        const errMsg = data.error || 'Something went wrong. Try again.'
+        // Use human-readable message if available (e.g. daily limit), fallback to error code
+        const isDailyLimit = data.error === 'daily_limit_reached'
+        const errMsg = isDailyLimit
+          ? `${data.message} [Upgrade for more →](/pricing)`
+          : (data.message || data.error || 'Something went wrong. Try again.')
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
           role: 'ion',
