@@ -1,11 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import nextDynamic from 'next/dynamic'
 import { X, ExternalLink, PlayCircle } from 'lucide-react'
 import { getYouTubeId, getSearchUrl } from '@/lib/exercises'
-
-const YouTube = nextDynamic(() => import('react-youtube'), { ssr: false })
 
 interface Props {
   exerciseName: string
@@ -51,15 +48,12 @@ export default function ExerciseVideoModal({ exerciseName, onClose }: Props) {
 
         {/* Video */}
         {videoId ? (
-          <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
-            <YouTube
-              videoId={videoId}
-              className="absolute inset-0 w-full h-full"
-              opts={{
-                width: '100%',
-                height: '100%',
-                playerVars: { autoplay: 1, modestbranding: 1, rel: 0 },
-              }}
+          <div className="w-full" style={{ aspectRatio: '16/9', background: '#000' }}>
+            <iframe
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&modestbranding=1&rel=0`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             />
           </div>
         ) : (
