@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, ExternalLink, PlayCircle } from 'lucide-react'
+import { X, ExternalLink, PlayCircle, Search } from 'lucide-react'
 import { getYouTubeId, getSearchUrl } from '@/lib/exercises'
 
 interface Props {
@@ -12,6 +12,10 @@ interface Props {
 export default function ExerciseVideoModal({ exerciseName, onClose }: Props) {
   const videoId = getYouTubeId(exerciseName)
   const searchUrl = getSearchUrl(exerciseName)
+  const watchUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : searchUrl
+  const thumbnailUrl = videoId
+    ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+    : null
 
   // Close on Escape
   useEffect(() => {
@@ -23,7 +27,7 @@ export default function ExerciseVideoModal({ exerciseName, onClose }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}
+      style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)' }}
       onClick={onClose}
     >
       <div
@@ -39,44 +43,49 @@ export default function ExerciseVideoModal({ exerciseName, onClose }: Props) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
             style={{ background: 'rgba(255,255,255,0.06)' }}
           >
             <X size={14} style={{ color: '#64748B' }} />
           </button>
         </div>
 
-        {/* Video */}
-        {videoId ? (
-          <div className="w-full" style={{ aspectRatio: '16/9', background: '#000' }}>
-            <iframe
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&modestbranding=1&rel=0`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+        {/* Thumbnail + open on YouTube */}
+        <a
+          href={watchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block relative group"
+          style={{ aspectRatio: '16/9', background: '#000', overflow: 'hidden' }}
+        >
+          {thumbnailUrl && (
+            <img
+              src={thumbnailUrl}
+              alt={exerciseName}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
             />
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-4 py-12 px-6 text-center">
-            <PlayCircle size={40} style={{ color: '#334155' }} />
-            <div>
-              <p className="font-heading font-semibold text-sm text-white mb-1">No embedded video found</p>
-              <p className="font-heading text-xs" style={{ color: '#475569' }}>
-                Search YouTube for a tutorial on this exercise
-              </p>
-            </div>
-            <a
-              href={searchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-heading font-bold text-xs tracking-wider transition-all"
-              style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#FCA5A5' }}
+          )}
+
+          {/* Dark overlay + play button */}
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 transition-opacity duration-200"
+            style={{ background: thumbnailUrl ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.85)' }}
+          >
+            {/* YouTube-style play button */}
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-2xl transition-transform duration-150 group-hover:scale-110"
+              style={{ background: '#FF0000' }}
             >
-              <ExternalLink size={12} />
-              Search on YouTube
-            </a>
+              <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+            <span className="font-heading font-bold text-sm text-white tracking-wider">
+              Watch on YouTube
+            </span>
           </div>
-        )}
+        </a>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
@@ -85,11 +94,11 @@ export default function ExerciseVideoModal({ exerciseName, onClose }: Props) {
             href={searchUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 font-heading text-xs transition-all"
+            className="flex items-center gap-1.5 font-heading text-xs transition-all"
             style={{ color: '#475569' }}
           >
-            <ExternalLink size={10} />
-            More videos
+            <Search size={10} />
+            More tutorials
           </a>
         </div>
       </div>
@@ -97,7 +106,7 @@ export default function ExerciseVideoModal({ exerciseName, onClose }: Props) {
   )
 }
 
-// ── Inline trigger button — drop this next to any exercise ───
+// ── Inline trigger button — drop next to any exercise ────────
 export function VideoButton({ exerciseName }: { exerciseName: string }) {
   const [open, setOpen] = useState(false)
   const hasVideo = !!getYouTubeId(exerciseName)
@@ -108,14 +117,14 @@ export function VideoButton({ exerciseName }: { exerciseName: string }) {
         onClick={e => { e.stopPropagation(); setOpen(true) }}
         className="flex items-center gap-1 px-2 py-1 rounded-lg font-heading text-[10px] font-semibold tracking-wider transition-all flex-shrink-0"
         style={{
-          background: hasVideo ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.04)',
-          border: `1px solid ${hasVideo ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.06)'}`,
-          color: hasVideo ? '#FCA5A5' : '#475569',
+          background: 'rgba(239,68,68,0.1)',
+          border: '1px solid rgba(239,68,68,0.2)',
+          color: '#FCA5A5',
         }}
-        title={hasVideo ? 'Watch tutorial' : 'Search on YouTube'}
+        title="Watch tutorial"
       >
         <PlayCircle size={11} />
-        {hasVideo ? 'Watch' : 'Search'}
+        Watch
       </button>
 
       {open && <ExerciseVideoModal exerciseName={exerciseName} onClose={() => setOpen(false)} />}
