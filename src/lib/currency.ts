@@ -23,7 +23,16 @@ export const REGION_TO_CURRENCY: Record<string, { code: string; symbol: string; 
   IN: { code: 'INR', symbol: '₹',   name: 'Indian Rupee' },
 }
 
-const CACHE_KEY = 'synap_currency_v2'
+// ── Locale prefix → region fallback (for browsers that report language without region) ──
+const LOCALE_PREFIX_TO_REGION: Record<string, string> = {
+  ar: 'SA',   // Arabic → Saudi Arabia (most common MENA Arabic)
+  'ar-SA': 'SA', 'ar-AE': 'AE', 'ar-KW': 'KW', 'ar-QA': 'QA',
+  'ar-BH': 'BH', 'ar-OM': 'OM', 'ar-JO': 'JO', 'ar-EG': 'EG',
+  'ar-MA': 'MA',
+  tr: 'TR', ur: 'PK', hi: 'IN',
+}
+
+const CACHE_KEY = 'synap_currency_v3'  // bumped from v2 to clear stale cache
 const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
 
 export interface CurrencyInfo {
@@ -33,16 +42,29 @@ export interface CurrencyInfo {
   detected: boolean
 }
 
-// ── Detect user's currency from browser locale ─────────────────
+// ── Detect region from browser locale (fast, no network, correct for MENA) ──
 export function detectRegion(): string {
   if (typeof window === 'undefined') return 'SA'
   try {
-    const lang = navigator.language || 'en-SA'
+    const lang = navigator.language || navigator.languages?.[0] || 'en'
+
+    // 1. Exact match on full locale tag (e.g. "ar-SA", "en-US", "tr-TR")
+    const exactMatch = LOCALE_PREFIX_TO_REGION[lang]
+    if (exactMatch) return exactMatch
+
+    // 2. Try Intl.Locale to extract the region subtag (e.g. "en-SA" → "SA")
     const locale = new Intl.Locale(lang)
     const region = locale.region || (locale as any).maximize?.()?.region || ''
-    return region || 'SA'
+    if (region && REGION_TO_CURRENCY[region]) return region
+
+    // 3. Match on language prefix only (e.g. "ar" → "SA", "tr" → "TR")
+    const prefix = lang.split('-')[0].toLowerCase()
+    const prefixMatch = LOCALE_PREFIX_TO_REGION[prefix]
+    if (prefixMatch) return prefixMatch
+
+    return region || ''  // empty string signals "unknown, try IP"
   } catch {
-    return 'SA'
+    return ''
   }
 }
 
@@ -52,7 +74,7 @@ async function fetchRate(targetCurrency: string): Promise<number> {
 
   const res = await fetch(
     `https://api.frankfurter.app/latest?base=SAR&symbols=${targetCurrency}`,
-    { next: { revalidate: 86400 } }
+    { cache: 'force-cache' }
   )
   const data = await res.json()
   return data?.rates?.[targetCurrency] ?? 1
@@ -69,18 +91,24 @@ export async function detectUserCurrency(): Promise<CurrencyInfo> {
     }
   } catch {}
 
-  // Use IP geolocation (more accurate than browser locale for MENA users)
-  let region = 'SA'
-  try {
-    const controller = new AbortController()
-    const tid = setTimeout(() => controller.abort(), 3000)
-    const geoRes = await fetch('https://ipapi.co/json/', { signal: controller.signal })
-    clearTimeout(tid)
-    const geoData = await geoRes.json()
-    if (geoData?.country_code) region = geoData.country_code
-  } catch {
-    region = detectRegion()
+  // 1. Try browser locale first — fast, reliable for MENA / Arabic users
+  let region = detectRegion()
+
+  // 2. Only fall back to IP geolocation if locale gives no recognizable region
+  //    (e.g. plain "en" with no country code)
+  if (!region || !REGION_TO_CURRENCY[region]) {
+    try {
+      const controller = new AbortController()
+      const tid = setTimeout(() => controller.abort(), 3000)
+      const geoRes = await fetch('https://ipapi.co/json/', { signal: controller.signal })
+      clearTimeout(tid)
+      const geoData = await geoRes.json()
+      if (geoData?.country_code) region = geoData.country_code
+    } catch {
+      // both locale and IP failed — default to SAR
+    }
   }
+
   const currencyInfo = REGION_TO_CURRENCY[region] || REGION_TO_CURRENCY['SA']
 
   let rate = 1
