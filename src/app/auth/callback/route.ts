@@ -6,6 +6,9 @@ import type { NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
+  
+  // 1. Capture the 'next' parameter from the URL, defaulting to '/dashboard'
+  const next = requestUrl.searchParams.get('next') ?? '/dashboard'
 
   if (code) {
     const cookieStore = cookies()
@@ -25,22 +28,14 @@ export async function GET(request: NextRequest) {
         },
       }
     )
+    
+    // 2. Exchange the code for a session
     await supabase.auth.exchangeCodeForSession(code)
-
-    // Check if this user already has a profile (returning user vs new signup)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .single()
-
-      if (profile) {
-        return NextResponse.redirect(new URL('/dashboard', request.url))
-      }
-    }
+    
+    // 3. Redirect to the requested 'next' page (e.g., /auth/reset-password)
+    return NextResponse.redirect(new URL(next, request.url))
   }
 
-  return NextResponse.redirect(new URL('/onboarding', request.url))
+  // Fallback if no code is present
+  return NextResponse.redirect(new URL('/auth/login', request.url))
 }
