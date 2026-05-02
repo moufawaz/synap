@@ -8,10 +8,10 @@ import {
   Clock, Dumbbell, Trophy, Play, RotateCcw,
   PlayCircle, Pause, ExternalLink,
 } from 'lucide-react'
-import dynamic from 'next/dynamic'
+import nextDynamic from 'next/dynamic'
 import confetti from 'canvas-confetti'
 
-const YouTube = dynamic(() => import('react-youtube'), { ssr: false })
+const YouTube = nextDynamic(() => import('react-youtube'), { ssr: false })
 
 export const dynamic = 'force-dynamic'
 
