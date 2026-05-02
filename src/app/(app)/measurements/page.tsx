@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
-import { Plus, Ruler, ChevronDown, ChevronUp, Camera, ArrowLeftRight, TrendingUp, TrendingDown } from 'lucide-react'
+import { Plus, Ruler, ChevronDown, ChevronUp, Camera, ArrowLeftRight, TrendingUp, TrendingDown, Upload, FileText, CheckCircle } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,17 +36,47 @@ export default function MeasurementsPage() {
   const [form, setForm] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [activeTab, setActiveTab] = useState<'stats' | 'symmetry' | 'photos'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'symmetry' | 'photos' | 'inbody'>('stats')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [inbodyUrl, setInbodyUrl] = useState<string | null>(null)
+  const [uploadingInbody, setUploadingInbody] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
+  const inbodyInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { loadMeasurements() }, [])
+  useEffect(() => { loadMeasurements(); loadInbody() }, [])
 
   async function loadMeasurements() {
     const res = await fetch('/api/measurements')
     const data = await res.json()
     setMeasurements(data.measurements || [])
     setLoading(false)
+  }
+
+  async function loadInbody() {
+    const supabase = createBrowserClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase.from('profiles').select('inbody_url').eq('user_id', user.id).single()
+    if (data?.inbody_url) setInbodyUrl(data.inbody_url)
+  }
+
+  async function uploadInbody(file: File) {
+    setUploadingInbody(true)
+    try {
+      const supabase = createBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const ext = file.name.split('.').pop() || 'jpg'
+      const path = `${user.id}/inbody_${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('inbody-scans').upload(path, file, { upsert: true })
+      if (error) throw error
+      const { data: urlData } = supabase.storage.from('inbody-scans').getPublicUrl(path)
+      await supabase.from('profiles').update({ inbody_url: urlData.publicUrl }).eq('user_id', user.id)
+      setInbodyUrl(urlData.publicUrl)
+    } catch (e) {
+      console.error('InBody upload failed:', e)
+    }
+    setUploadingInbody(false)
   }
 
   async function saveMeasurement() {
@@ -218,7 +248,7 @@ export default function MeasurementsPage() {
       {/* Tabs */}
       {measurements.length > 0 && (
         <div className="flex gap-1 p-1 rounded-xl mb-5 w-fit" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          {(['stats', 'symmetry', 'photos'] as const).map(t => (
+          {(['stats', 'symmetry', 'photos', 'inbody'] as const).map(t => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -368,6 +398,83 @@ export default function MeasurementsPage() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* InBody Tab */}
+      {activeTab === 'inbody' && (
+        <div className="mb-6">
+          <div className="glass-card p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <FileText size={20} style={{ color: '#BB5CF6' }} />
+              <div>
+                <p className="font-heading font-black text-sm text-white tracking-wider" style={{ letterSpacing: '0.06em' }}>INBODY SCAN</p>
+                <p className="font-heading text-xs" style={{ color: '#475569' }}>Body composition analysis report</p>
+              </div>
+              {inbodyUrl && <CheckCircle size={16} style={{ color: '#10B981' }} className="ml-auto" />}
+            </div>
+
+            {inbodyUrl ? (
+              <div className="flex flex-col gap-4">
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  <p className="font-heading text-xs font-semibold mb-2" style={{ color: '#10B981' }}>✓ InBody scan on file</p>
+                  {inbodyUrl.match(/\.(jpg|jpeg|png|webp)$/i) ? (
+                    <img src={inbodyUrl} alt="InBody scan" className="w-full rounded-lg object-contain max-h-80" />
+                  ) : (
+                    <a href={inbodyUrl} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-heading font-semibold text-xs w-fit transition-all"
+                      style={{ background: 'rgba(187,92,246,0.1)', border: '1px solid rgba(187,92,246,0.2)', color: '#A78BFA' }}>
+                      <FileText size={13} /> View PDF Report
+                    </a>
+                  )}
+                </div>
+                <div>
+                  <p className="font-heading text-xs mb-3" style={{ color: '#475569' }}>Upload a newer scan to replace it:</p>
+                  <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl cursor-pointer font-heading font-semibold text-xs w-fit transition-all"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}>
+                    <Upload size={13} />
+                    {uploadingInbody ? 'Uploading...' : 'Replace Scan'}
+                    <input ref={inbodyInputRef} type="file" accept="image/*,.pdf" className="hidden"
+                      onChange={e => e.target.files?.[0] && uploadInbody(e.target.files[0])} />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)' }}>
+                  <p className="font-heading font-semibold text-xs text-white mb-2">📊 Why upload an InBody scan?</p>
+                  <ul className="flex flex-col gap-1.5">
+                    {[
+                      'Exact muscle mass & fat mass values',
+                      'Ion can fine-tune your calorie & protein targets',
+                      'Track body recomposition (not just weight)',
+                      'Identify muscle imbalances between sides',
+                    ].map(t => (
+                      <li key={t} className="flex items-start gap-2">
+                        <span className="text-xs mt-0.5" style={{ color: '#F59E0B' }}>•</span>
+                        <span className="font-heading text-xs" style={{ color: '#94A3B8' }}>{t}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <label className="flex flex-col items-center gap-4 p-8 rounded-2xl cursor-pointer transition-all"
+                  style={{ border: '2px dashed rgba(187,92,246,0.25)', background: 'rgba(187,92,246,0.04)' }}>
+                  <Upload size={32} style={{ color: '#BB5CF6' }} />
+                  <div className="text-center">
+                    <p className="font-heading font-bold text-sm text-white mb-1">
+                      {uploadingInbody ? 'Uploading...' : 'Upload InBody Scan'}
+                    </p>
+                    <p className="font-heading text-xs" style={{ color: '#475569' }}>
+                      Photo of your report or PDF • Any InBody model
+                    </p>
+                  </div>
+                  <input ref={inbodyInputRef} type="file" accept="image/*,.pdf" className="hidden"
+                    onChange={e => e.target.files?.[0] && uploadInbody(e.target.files[0])} />
+                </label>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

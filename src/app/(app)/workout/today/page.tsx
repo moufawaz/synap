@@ -11,11 +11,15 @@ import {
 import nextDynamic from 'next/dynamic'
 import confetti from 'canvas-confetti'
 
+import { getYouTubeId, getSearchUrl } from '@/lib/exercises'
+import { VideoButton } from '@/components/ui/ExerciseVideoModal'
+
 const YouTube = nextDynamic(() => import('react-youtube'), { ssr: false })
 
 export const dynamic = 'force-dynamic'
 
-// ── Curated exercise → YouTube video ID map ──────────────
+// ── Exercise → YouTube ID map moved to src/lib/exercises.ts ─
+// Keep a local stub so old inline references still compile while we migrate
 const YOUTUBE_IDS: Record<string, string> = {
   // Chest
   'bench press': 'rT7DgCr-3pg',
@@ -144,18 +148,6 @@ const YOUTUBE_IDS: Record<string, string> = {
   'jump rope': 'FJmRQ5iTXKE',
   'high knee': 'pMDJFtEFRcE',
   'jump squat': 'U4s4mEQ5VIU',
-}
-
-function getYouTubeId(name: string): string | null {
-  const lower = name.toLowerCase()
-  for (const [key, id] of Object.entries(YOUTUBE_IDS)) {
-    if (lower.includes(key)) return id
-  }
-  return null
-}
-
-function getSearchUrl(name: string): string {
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(name + ' exercise tutorial form')}`
 }
 
 // ── Session persistence ───────────────────────────────────

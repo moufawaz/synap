@@ -80,6 +80,7 @@ export interface OnboardingData {
   injuries: string
   medical_conditions: string
   supplements: string
+  inbody_url: string   // optional InBody scan upload
 }
 
 export type OnboardingContext = Partial<OnboardingData>
@@ -539,6 +540,17 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       { label: '📦 Multiple', labelAr: '📦 متعددة', value: 'multiple' },
     ],
     field: 'supplements',
+  },
+
+  // ── InBody Upload (optional) ──────────────────────────
+  {
+    id: 'inbody_upload',
+    phase: 7,
+    ionMessage: (ctx) => `One last thing before I build your plan, ${ctx.name || 'you'} — do you have an InBody scan or body composition report?\n\n📊 An InBody gives me your exact muscle mass, fat mass, and water distribution — which lets me fine-tune your targets far more accurately than weight alone.\n\nIf you have one, take a photo or upload the PDF now. If not, no problem — you can always add it later from the Measurements section.\n\nThis step is completely optional.`,
+    ionMessageAr: (ctx) => `شيء أخير قبل أن أبني خطتك، ${ctx.name || 'أنت'} — هل لديك تقرير InBody أو تحليل تركيب الجسم؟\n\n📊 يعطيني InBody قيم كتلة العضلات والدهون والماء بدقة — مما يتيح لي ضبط أهدافك بشكل أدق بكثير من الوزن وحده.\n\nإذا كان لديك، التقط صورة أو حمّل ملف PDF الآن. إن لم يكن لديك، لا مشكلة — يمكنك إضافته لاحقاً من قسم القياسات.\n\nهذه الخطوة اختيارية تماماً.`,
+    responseType: 'photo_upload',
+    field: 'inbody_url',
+    optional: true,
   },
 
   // ── PHASE 8: Done ─────────────────────────────────────

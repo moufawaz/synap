@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { Dumbbell, CheckCircle2, Circle, ChevronDown, ChevronUp, Clock, RotateCcw, Trophy } from 'lucide-react'
+import { VideoButton } from '@/components/ui/ExerciseVideoModal'
 
 export const dynamic = 'force-dynamic'
 
@@ -232,6 +233,7 @@ export default function WorkoutPage() {
                         </span>
                       </div>
                     </div>
+                    <VideoButton exerciseName={ex.name} />
                     <button onClick={() => toggleExpand(key)} className="flex-shrink-0 p-1">
                       {expanded ? <ChevronUp size={14} style={{ color: '#475569' }} /> : <ChevronDown size={14} style={{ color: '#475569' }} />}
                     </button>

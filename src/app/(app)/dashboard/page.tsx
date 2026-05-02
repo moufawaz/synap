@@ -4,7 +4,7 @@ import Link from 'next/link'
 import IonAvatar from '@/components/ui/IonAvatar'
 import {
   Dumbbell, UtensilsCrossed, TrendingUp, Flame,
-  ChevronRight, Zap, Target, Sparkles, Shield, Crown,
+  ChevronRight, Zap, Target, Sparkles, Shield, Crown, FileText,
 } from 'lucide-react'
 import { getTrialDaysRemaining, effectivePlan } from '@/lib/subscription'
 
@@ -59,6 +59,7 @@ export default async function DashboardPage() {
 
   const greetingHour = new Date().getHours()
   const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening'
+  const hasInbody = !!profile?.inbody_url
 
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-4xl mx-auto pb-24 md:pb-6">
@@ -94,6 +95,27 @@ export default async function DashboardPage() {
               </div>
             </div>
             <ChevronRight size={12} style={{ color: '#475569', flexShrink: 0 }} />
+          </div>
+        </Link>
+      )}
+
+      {/* ── InBody reminder (shown once, dismissed after upload) ─ */}
+      {!hasInbody && (
+        <Link href="/measurements">
+          <div className="mb-5 p-3.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:opacity-90"
+            style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)' }}>
+            <div className="flex items-center gap-2.5">
+              <FileText size={14} style={{ color: '#F59E0B' }} />
+              <div>
+                <p className="font-heading font-bold text-xs text-white">Add your InBody scan</p>
+                <p className="font-heading text-[10px] mt-0.5" style={{ color: '#64748B' }}>
+                  Unlock more accurate calorie & protein targets from Ion.
+                </p>
+              </div>
+            </div>
+            <span className="font-heading font-bold text-[10px] px-2.5 py-1 rounded-lg shrink-0" style={{ background: 'rgba(245,158,11,0.1)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.2)' }}>
+              ADD
+            </span>
           </div>
         </Link>
       )}

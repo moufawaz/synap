@@ -17,7 +17,7 @@ import {
   type OnboardingContext,
   type OnboardingStep,
 } from '@/lib/onboardingFlow'
-import { Send, ChevronRight, Globe } from 'lucide-react'
+import { Send, ChevronRight, Globe, Upload, X, ImageIcon } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────
 type Message = {
@@ -118,6 +118,9 @@ export default function OnboardingPage() {
   const [savedProgress, setSavedProgress] = useState<ReturnType<typeof loadProgress>>(null)
   // Stores partial weight/height if only one was captured
   const [partialWH, setPartialWH] = useState<{ weight?: string; height?: string }>({})
+  const [inbodyFile, setInbodyFile] = useState<File | null>(null)
+  const [inbodyUploading, setInbodyUploading] = useState(false)
+  const [inbodyPreview, setInbodyPreview] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const isRTL = lang === 'ar'
@@ -304,6 +307,53 @@ export default function OnboardingPage() {
     advance({ measurements })
   }
 
+  // ── Handle InBody file select ────────────────────────────
+  function handleInbodySelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setInbodyFile(file)
+    if (file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file)
+      setInbodyPreview(url)
+    } else {
+      setInbodyPreview(null) // PDF — no preview
+    }
+  }
+
+  async function handleInbodyUpload() {
+    if (!inbodyFile) {
+      // Skip
+      addMessage({ role: 'user', content: isRTL ? 'تخطي' : "I'll add it later" })
+      advance({})
+      return
+    }
+    setInbodyUploading(true)
+    try {
+      const supabase = createBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not logged in')
+
+      const ext = inbodyFile.name.split('.').pop() || 'jpg'
+      const path = `${user.id}/inbody_${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('inbody-scans').upload(path, inbodyFile, { upsert: true })
+      if (error) throw error
+
+      const { data: urlData } = supabase.storage.from('inbody-scans').getPublicUrl(path)
+      const inbody_url = urlData.publicUrl
+
+      // Save to profile immediately
+      await supabase.from('profiles').update({ inbody_url }).eq('user_id', user.id)
+
+      addMessage({ role: 'user', content: isRTL ? '✓ تم رفع تقرير InBody' : '✓ InBody scan uploaded' })
+      advance({ inbody_url })
+    } catch {
+      addMessage({ role: 'user', content: isRTL ? '✓ سيتم الإضافة لاحقاً' : "I'll add it later" })
+      advance({})
+    } finally {
+      setInbodyUploading(false)
+    }
+  }
+
   // ── Resume saved progress ────────────────────────────────
   function handleResume() {
     if (!savedProgress) return
@@ -486,11 +536,80 @@ export default function OnboardingPage() {
           </div>
         )}
 
+        {/* InBody upload card (inline) */}
+        {!isTyping && currentStep?.responseType === 'photo_upload' && currentStep?.id === 'inbody_upload' && (
+          <div className="flex items-start gap-3">
+            <IonAvatar gender={ionGender} size="sm" />
+            <div className="flex-1 max-w-sm rounded-2xl p-4" style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.06)' }}>
+              {inbodyPreview ? (
+                <div className="relative mb-3">
+                  <img src={inbodyPreview} alt="InBody preview" className="w-full rounded-xl object-cover max-h-40" />
+                  <button
+                    onClick={() => { setInbodyFile(null); setInbodyPreview(null) }}
+                    className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
+                    style={{ background: 'rgba(0,0,0,0.7)' }}
+                  >
+                    <X size={12} style={{ color: 'white' }} />
+                  </button>
+                </div>
+              ) : inbodyFile ? (
+                <div className="flex items-center gap-3 mb-3 p-3 rounded-xl" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  <ImageIcon size={20} style={{ color: '#10B981' }} />
+                  <div>
+                    <p className="font-heading text-xs font-semibold text-white">{inbodyFile.name}</p>
+                    <p className="font-heading text-[10px]" style={{ color: '#475569' }}>{(inbodyFile.size / 1024).toFixed(0)} KB</p>
+                  </div>
+                  <button onClick={() => setInbodyFile(null)} className="ml-auto">
+                    <X size={14} style={{ color: '#475569' }} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center gap-3 p-6 rounded-xl cursor-pointer transition-all"
+                  style={{ border: '2px dashed rgba(187,92,246,0.25)', background: 'rgba(187,92,246,0.04)' }}>
+                  <Upload size={28} style={{ color: '#BB5CF6' }} />
+                  <div className="text-center">
+                    <p className="font-heading font-semibold text-sm text-white mb-1">
+                      {isRTL ? 'ارفع تقرير InBody' : 'Upload InBody Scan'}
+                    </p>
+                    <p className="font-heading text-xs" style={{ color: '#475569' }}>
+                      {isRTL ? 'صورة أو PDF — اختياري' : 'Photo or PDF • Optional'}
+                    </p>
+                  </div>
+                  <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleInbodySelect} />
+                </label>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={handleInbodyUpload}
+                  disabled={inbodyUploading}
+                  className="flex-1 py-2.5 rounded-xl font-heading font-black text-xs tracking-wider transition-all"
+                  style={{
+                    background: inbodyFile ? '#BB5CF6' : 'rgba(255,255,255,0.04)',
+                    color: inbodyFile ? 'white' : '#475569',
+                    border: inbodyFile ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                    boxShadow: inbodyFile ? '0 0 16px rgba(187,92,246,0.3)' : 'none',
+                  }}
+                >
+                  {inbodyUploading ? (isRTL ? 'جاري الرفع...' : 'Uploading...') : inbodyFile ? (isRTL ? 'رفع وتابع' : 'Upload & Continue') : (isRTL ? 'رفع التقرير' : 'Upload Report')}
+                </button>
+                <button
+                  onClick={() => { addMessage({ role: 'user', content: isRTL ? 'سأضيفه لاحقاً' : "I'll add it later" }); advance({}) }}
+                  className="px-4 py-2.5 rounded-xl font-heading text-xs font-semibold transition-all"
+                  style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  {isRTL ? 'لاحقاً' : 'Skip'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
       {/* ── Input Area ── */}
-      {!isTyping && currentStep && currentStep.responseType !== 'done' && currentStep.responseType !== 'measurement_card' && (
+      {!isTyping && currentStep && currentStep.responseType !== 'done' && currentStep.responseType !== 'measurement_card' && currentStep.responseType !== 'photo_upload' && (
         <div className="flex-shrink-0 px-4 pb-4 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: '#080808' }}>
 
           {/* Quick replies */}
