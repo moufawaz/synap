@@ -25,6 +25,19 @@ export async function middleware(req: NextRequest) {
     }
   )
 
+  // ── Stamp country cookie from Vercel's geo header ──────────────
+  // This runs on every request so all pages (including the landing page)
+  // can read the user's country synchronously from a cookie — no /api/geo fetch needed.
+  const country = req.headers.get('x-vercel-ip-country') || ''
+  if (country) {
+    res.cookies.set('synap_country', country.toUpperCase(), {
+      path: '/',
+      maxAge: 60 * 60 * 24, // 24h
+      sameSite: 'lax',
+      httpOnly: false, // must be readable by client-side JS
+    })
+  }
+
   const { data: { session } } = await supabase.auth.getSession()
   const path = req.nextUrl.pathname
 

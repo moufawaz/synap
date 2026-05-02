@@ -43,6 +43,17 @@ export interface CurrencyInfo {
   detected: boolean
 }
 
+// ── Read country cookie set by middleware (instant, no network) ───────────
+function readCountryCookie(): string {
+  if (typeof document === 'undefined') return ''
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)synap_country=([^;]+)/)
+    return match ? match[1].toUpperCase() : ''
+  } catch {
+    return ''
+  }
+}
+
 // ── Detect region from browser locale (fast, no network, correct for MENA) ──
 export function detectRegion(): string {
   if (typeof window === 'undefined') return 'SA'
@@ -103,7 +114,16 @@ async function fetchRate(targetCurrency: string): Promise<number> {
 
 // ── Detect country — always fresh, never cached ───────────────
 async function detectCountry(): Promise<string> {
-  // 1. Vercel server-side geo header (most reliable — our own API, no rate limits)
+  // 1. Cookie set by middleware from Vercel's x-vercel-ip-country header.
+  //    Instant (no network), works on every page including the landing page.
+  const fromCookie = readCountryCookie()
+  if (fromCookie && REGION_TO_CURRENCY[fromCookie]) return fromCookie
+
+  // 2. Browser locale (great for Arabic/MENA users with ar-SA locale)
+  const fromLocale = detectRegion()
+  if (fromLocale && REGION_TO_CURRENCY[fromLocale]) return fromLocale
+
+  // 3. /api/geo fallback (our own Vercel endpoint)
   try {
     const controller = new AbortController()
     const tid = setTimeout(() => controller.abort(), 3000)
@@ -113,11 +133,7 @@ async function detectCountry(): Promise<string> {
     if (data?.country && REGION_TO_CURRENCY[data.country]) return data.country
   } catch {}
 
-  // 2. Browser locale (great for Arabic/MENA users with ar-SA locale)
-  const fromLocale = detectRegion()
-  if (fromLocale && REGION_TO_CURRENCY[fromLocale]) return fromLocale
-
-  // 3. ipapi.co last resort
+  // 4. ipapi.co last resort
   try {
     const controller = new AbortController()
     const tid = setTimeout(() => controller.abort(), 3000)
