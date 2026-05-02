@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AuthCard from '@/components/auth/AuthCard'
 import { createBrowserClient } from '@/lib/supabase'
@@ -17,6 +17,7 @@ export default function ResetPasswordPage() {
 function ResetPasswordForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const supabaseRef = useRef(createBrowserClient())
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -28,8 +29,7 @@ function ResetPasswordForm() {
   useEffect(() => {
     const code = searchParams.get('code')
     if (!code) { setError('Invalid or expired reset link. Please request a new one.'); setExchanging(false); return }
-    const supabase = createBrowserClient()
-    supabase.auth.exchangeCodeForSession(code).then(({ error: err }) => {
+    supabaseRef.current.auth.exchangeCodeForSession(code).then(({ error: err }) => {
       if (err) setError('This reset link has expired. Please request a new one.')
       setExchanging(false)
     })
@@ -41,8 +41,7 @@ function ResetPasswordForm() {
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
     if (password !== confirm) { setError('Passwords do not match.'); return }
     setLoading(true)
-    const supabase = createBrowserClient()
-    const { error: updateError } = await supabase.auth.updateUser({ password })
+    const { error: updateError } = await supabaseRef.current.auth.updateUser({ password })
     if (updateError) { setError('Failed to update password. Please try again.'); setLoading(false); return }
     setDone(true)
     setTimeout(() => router.push('/dashboard'), 2000)
