@@ -25,7 +25,7 @@ export default function LandingPricing({ lang }: Props) {
     },
     {
       name: 'PRO',
-      priceSAR: 289.99 / 12,
+      priceSAR: 34.99,
       badge: isRTL ? 'الأكثر شعبية' : 'MOST POPULAR',
       features: isRTL
         ? ['30 رسالة يومياً مع Ion', 'كل مزايا المجاني', 'تكييف الخطة بواسطة Ion', 'دعم ذو أولوية']
@@ -36,7 +36,7 @@ export default function LandingPricing({ lang }: Props) {
     },
     {
       name: 'PRO+',
-      priceSAR: 369.99 / 12,
+      priceSAR: 44.99,
       badge: isRTL ? 'غير محدود' : 'UNLIMITED',
       features: isRTL
         ? ['رسائل Ion غير محدودة', 'كل مزايا برو', 'ملخصات شهرية بالذكاء الاصطناعي', 'وصول مبكر للمزايا']
@@ -62,7 +62,7 @@ export default function LandingPricing({ lang }: Props) {
             {isRTL ? 'أسعار شفافة وبسيطة' : 'Simple, Transparent Pricing'}
           </h2>
           <p className="font-heading text-sm" style={{ color: '#64748B' }}>
-            {isRTL ? 'أسعار سنوية — وفّر حتى 30% مقارنةً بالشهري' : 'Annual pricing shown — save up to 30% vs monthly'}
+            {isRTL ? 'تجربة مجانية 7 أيام — لا بطاقة مطلوبة' : '7-day free trial — no card charged until day 7'}
           </p>
         </div>
 
@@ -92,7 +92,7 @@ export default function LandingPricing({ lang }: Props) {
                         <span className="font-heading text-xs" style={{ color: '#475569' }}>/mo</span>
                       </div>
                       <p className="font-heading text-xs mt-1" style={{ color: '#475569' }}>
-                        {isRTL ? 'يُفوتر سنوياً · تجربة مجانية 7 أيام' : 'billed annually · 7-day free trial'}
+                        {isRTL ? 'يُفوتر شهرياً · تجربة مجانية 7 أيام' : 'billed monthly · 7-day free trial'}
                       </p>
                     </div>
                   ) : (
