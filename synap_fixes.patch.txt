@@ -1,0 +1,142 @@
+diff --git a/src/app/(app)/workout/today/page.tsx b/src/app/(app)/workout/today/page.tsx
+index 2579d0c..2317107 100644
+--- a/src/app/(app)/workout/today/page.tsx
++++ b/src/app/(app)/workout/today/page.tsx
+@@ -13,7 +13,7 @@ import confetti from 'canvas-confetti'
+ 
+ const YouTube = dynamic(() => import('react-youtube'), { ssr: false })
+ 
+-export const dynamicConfig = 'force-dynamic'
++export const dynamic = 'force-dynamic'
+ 
+ // ── Curated exercise → YouTube video ID map ──────────────
+ const YOUTUBE_IDS: Record<string, string> = {
+diff --git a/src/app/api/adaptation-check/route.ts b/src/app/api/adaptation-check/route.ts
+index 53ff4ac..1392db5 100644
+--- a/src/app/api/adaptation-check/route.ts
++++ b/src/app/api/adaptation-check/route.ts
+@@ -4,13 +4,15 @@ import Anthropic from '@anthropic-ai/sdk'
+ import { sendPushNotification } from '@/lib/onesignal'
+ import { sendEmail } from '@/lib/resend'
+ 
+-const client = new Anthropic()
+-
+ // POST /api/adaptation-check
+ // Called daily (e.g., via Vercel Cron or external scheduler) for a specific user
+ // Also called from dashboard load for the current user
+ export async function POST(req: Request) {
+   try {
++    if (!process.env.ANTHROPIC_API_KEY) {
++      return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
++    }
++    const client = new Anthropic()
+     const supabase = createServerClient()
+     const { data: { user } } = await supabase.auth.getUser()
+     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+@@ -104,12 +106,19 @@ export async function POST(req: Request) {
+     }
+ 
+     // ── Check 7: Streak milestone ─────────────────────────
++    // Deduplicate logs to one entry per day, then count consecutive days back from today
++    const uniqueDays = [...new Set(workoutLogs.map((l: any) =>
++      new Date(l.logged_at).toDateString()
++    ))]
+     let streak = 0
+-    const today = new Date().toDateString()
+-    for (const log of workoutLogs) {
+-      const d = new Date(log.logged_at).toDateString()
+-      if (d === today || streak > 0) streak++
+-      else break
++    for (let i = 0; i < uniqueDays.length; i++) {
++      const expected = new Date()
++      expected.setDate(expected.getDate() - i)
++      if (uniqueDays[i] === expected.toDateString()) {
++        streak++
++      } else {
++        break
++      }
+     }
+     if ([7, 14, 21, 30].includes(streak)) {
+       issues.push({ type: 'streak_milestone', message: `${streak}-day workout streak! 🔥`, priority: 'low' })
+diff --git a/src/app/api/monthly-summary/route.ts b/src/app/api/monthly-summary/route.ts
+index 7af25eb..a29066b 100644
+--- a/src/app/api/monthly-summary/route.ts
++++ b/src/app/api/monthly-summary/route.ts
+@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server'
+ import { createServerClient } from '@/lib/supabase-server'
+ import Anthropic from '@anthropic-ai/sdk'
+ 
+-const client = new Anthropic()
+-
+ export async function GET() {
+   try {
++    if (!process.env.ANTHROPIC_API_KEY) {
++      return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
++    }
++    const client = new Anthropic()
+     const supabase = createServerClient()
+     const { data: { user } } = await supabase.auth.getUser()
+     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+diff --git a/src/app/api/renew-plan/route.ts b/src/app/api/renew-plan/route.ts
+index fc430dc..b93326a 100644
+--- a/src/app/api/renew-plan/route.ts
++++ b/src/app/api/renew-plan/route.ts
+@@ -4,11 +4,13 @@ import Anthropic from '@anthropic-ai/sdk'
+ import { sendEmail } from '@/lib/resend'
+ import { sendPushNotification } from '@/lib/onesignal'
+ 
+-const client = new Anthropic()
+-
+ // POST /api/renew-plan — called by the adaptation-check job when a plan is expiring
+ export async function POST(req: Request) {
+   try {
++    if (!process.env.ANTHROPIC_API_KEY) {
++      return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
++    }
++    const client = new Anthropic()
+     const supabase = createServerClient()
+     const { data: { user } } = await supabase.auth.getUser()
+     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+diff --git a/src/app/auth/callback/route.ts b/src/app/auth/callback/route.ts
+index 0a9d9d0..483197b 100644
+--- a/src/app/auth/callback/route.ts
++++ b/src/app/auth/callback/route.ts
+@@ -26,6 +26,20 @@ export async function GET(request: NextRequest) {
+       }
+     )
+     await supabase.auth.exchangeCodeForSession(code)
++
++    // Check if this user already has a profile (returning user vs new signup)
++    const { data: { user } } = await supabase.auth.getUser()
++    if (user) {
++      const { data: profile } = await supabase
++        .from('profiles')
++        .select('user_id')
++        .eq('user_id', user.id)
++        .single()
++
++      if (profile) {
++        return NextResponse.redirect(new URL('/dashboard', request.url))
++      }
++    }
+   }
+ 
+   return NextResponse.redirect(new URL('/onboarding', request.url))
+diff --git a/src/components/onboarding/PlanGenerating.tsx b/src/components/onboarding/PlanGenerating.tsx
+index e29e61d..92c6b6c 100644
+--- a/src/components/onboarding/PlanGenerating.tsx
++++ b/src/components/onboarding/PlanGenerating.tsx
+@@ -58,11 +58,11 @@ export default function PlanGenerating({ lang, name, data, onComplete }: PlanGen
+     }, 900)
+ 
+     try {
+-      // 1. Save profile to Supabase
++      // 1. Save profile to Supabase (include language from onboarding)
+       await fetch('/api/save-profile', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ data }),
++        body: JSON.stringify({ data: { ...data, language: lang } }),
+       })
+ 
+       // 2. Generate plan with Claude
