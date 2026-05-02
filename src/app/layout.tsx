@@ -20,6 +20,11 @@ export const metadata: Metadata = {
   description: 'Meet Ion — your AI personal trainer. Adaptive diet plans, personalized workouts, and a coach that actually follows up with you.',
   keywords: ['AI personal trainer', 'fitness app', 'workout plan', 'diet plan', 'Ion trainer', 'SYNAP'],
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icon.jpg',
+    shortcut: '/icon.jpg',
+    apple: '/icon.jpg',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
