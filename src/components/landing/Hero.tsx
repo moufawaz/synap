@@ -119,6 +119,13 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
               )}
             </div>
 
+            {/* Pricing link */}
+            {!isLoggedIn && (
+              <Link href="/pricing" className="text-xs font-heading font-semibold tracking-widest uppercase transition-colors duration-200" style={{ color: '#BB5CF6', letterSpacing: '0.15em' }} onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#D88BFF' }} onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#BB5CF6' }}>
+                {isRTL ? 'عرض الخطط والأسعار ←' : 'SEE PLANS & PRICING →'}
+              </Link>
+            )}
+
             {/* Free note */}
             {!isLoggedIn && (
               <p className="text-silver-muted/50 text-xs font-heading tracking-widest uppercase animate-fade-in" style={{ animationDelay: '0.3s' }}>

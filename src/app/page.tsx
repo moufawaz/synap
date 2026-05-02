@@ -8,6 +8,7 @@ import HowItWorks from '@/components/landing/HowItWorks'
 import Features from '@/components/landing/Features'
 import WhyIon from '@/components/landing/WhyIon'
 import CTA from '@/components/landing/CTA'
+import LandingPricing from '@/components/landing/LandingPricing'
 import Footer from '@/components/landing/Footer'
 
 export default function LandingPage() {
@@ -47,6 +48,7 @@ export default function LandingPage() {
         <HowItWorks lang={lang} />
         <Features lang={lang} />
         <WhyIon lang={lang} />
+        <LandingPricing lang={lang} />
         <CTA lang={lang} isLoggedIn={isLoggedIn} />
       </main>
       <Footer lang={lang} />

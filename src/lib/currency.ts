@@ -69,7 +69,18 @@ export async function detectUserCurrency(): Promise<CurrencyInfo> {
     }
   } catch {}
 
-  const region = detectRegion()
+  // Use IP geolocation (more accurate than browser locale for MENA users)
+  let region = 'SA'
+  try {
+    const controller = new AbortController()
+    const tid = setTimeout(() => controller.abort(), 3000)
+    const geoRes = await fetch('https://ipapi.co/json/', { signal: controller.signal })
+    clearTimeout(tid)
+    const geoData = await geoRes.json()
+    if (geoData?.country_code) region = geoData.country_code
+  } catch {
+    region = detectRegion()
+  }
   const currencyInfo = REGION_TO_CURRENCY[region] || REGION_TO_CURRENCY['SA']
 
   let rate = 1

@@ -14,6 +14,7 @@ export default function Footer({ lang }: FooterProps) {
   const links = [
     { label: t(lang, 'nav_features'), href: '#features' },
     { label: t(lang, 'nav_how_it_works'), href: '#how-it-works' },
+    { label: lang === 'ar' ? 'الأسعار' : 'Pricing', href: '/pricing' },
     { label: t(lang, 'footer_privacy'), href: '/privacy' },
     { label: t(lang, 'footer_terms'), href: '/terms' },
   ]

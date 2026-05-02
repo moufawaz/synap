@@ -59,6 +59,12 @@ export default function CTA({ lang, isLoggedIn = false }: CTAProps) {
               </Link>
             )}
 
+            {/* Pricing link */}
+            {!isLoggedIn && (
+              <Link href="/pricing" className="font-heading text-sm font-semibold tracking-widest transition-colors duration-200" style={{ color: '#BB5CF6' }} onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#D88BFF' }} onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#BB5CF6' }}>
+                {lang === 'ar' ? 'عرض الخطط والأسعار ←' : 'VIEW PLANS & PRICING →'}
+              </Link>
+            )}
             {/* Note */}
             {!isLoggedIn && (
               <p className="text-light-muted/60 text-sm">
