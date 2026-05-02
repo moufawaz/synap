@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       userId: user.id,
       userEmail: user.email!,
       userName: profile?.name || '',
-      trialDays: 7,
+      // Trial is configured on the variant in Lemon Squeezy dashboard, not via API
     })
 
     return NextResponse.json({ url: checkoutUrl })

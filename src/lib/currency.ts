@@ -91,11 +91,25 @@ export async function detectUserCurrency(): Promise<CurrencyInfo> {
     }
   } catch {}
 
-  // 1. Try browser locale first — fast, reliable for MENA / Arabic users
-  let region = detectRegion()
+  let region = ''
 
-  // 2. Only fall back to IP geolocation if locale gives no recognizable region
-  //    (e.g. plain "en" with no country code)
+  // 1. Server-side geo via Vercel's x-vercel-ip-country header (most reliable)
+  //    Our own /api/geo endpoint reads this header — no external API, no rate limits
+  try {
+    const controller = new AbortController()
+    const tid = setTimeout(() => controller.abort(), 3000)
+    const geoRes = await fetch('/api/geo', { signal: controller.signal })
+    clearTimeout(tid)
+    const geoData = await geoRes.json()
+    if (geoData?.country && REGION_TO_CURRENCY[geoData.country]) {
+      region = geoData.country
+    }
+  } catch {}
+
+  // 2. Fall back to browser locale (works great for Arabic/MENA browsers)
+  if (!region) region = detectRegion()
+
+  // 3. Last resort: ipapi.co (unreliable on free tier, but better than nothing)
   if (!region || !REGION_TO_CURRENCY[region]) {
     try {
       const controller = new AbortController()
@@ -104,9 +118,7 @@ export async function detectUserCurrency(): Promise<CurrencyInfo> {
       clearTimeout(tid)
       const geoData = await geoRes.json()
       if (geoData?.country_code) region = geoData.country_code
-    } catch {
-      // both locale and IP failed — default to SAR
-    }
+    } catch {}
   }
 
   const currencyInfo = REGION_TO_CURRENCY[region] || REGION_TO_CURRENCY['SA']

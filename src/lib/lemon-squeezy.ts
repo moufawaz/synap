@@ -103,9 +103,8 @@ export async function createCheckout(params: {
           receipt_button_text: 'Go to Dashboard',
           receipt_link_url: `${appUrl}/dashboard`,
         },
-        ...(params.trialDays ? {
-          trial_ends_at: new Date(Date.now() + params.trialDays * 24 * 60 * 60 * 1000).toISOString(),
-        } : {}),
+        // Note: trial period must be configured on the variant in the LS dashboard.
+        // The trial_ends_at field is NOT supported in the checkout API (LS returns 422).
         expires_at: null,
       },
       relationships: {
