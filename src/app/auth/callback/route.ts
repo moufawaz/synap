@@ -26,6 +26,20 @@ export async function GET(request: NextRequest) {
       }
     )
     await supabase.auth.exchangeCodeForSession(code)
+
+    // Check if this user already has a profile (returning user vs new signup)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .single()
+
+      if (profile) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+    }
   }
 
   return NextResponse.redirect(new URL('/onboarding', request.url))

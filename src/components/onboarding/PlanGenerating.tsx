@@ -62,7 +62,7 @@ export default function PlanGenerating({ lang, name, data, onComplete }: PlanGen
       await fetch('/api/save-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data }),
+        body: JSON.stringify({ data: { ...data, language: lang } }),
       })
 
       // 2. Generate plan with Claude

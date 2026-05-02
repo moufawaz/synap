@@ -4,11 +4,13 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
 import { sendPushNotification } from '@/lib/onesignal'
 
-const client = new Anthropic()
-
 // POST /api/renew-plan — called by the adaptation-check job when a plan is expiring
 export async function POST(req: Request) {
   try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
+    }
+    const client = new Anthropic()
     const supabase = createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

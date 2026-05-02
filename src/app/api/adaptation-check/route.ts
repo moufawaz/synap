@@ -4,13 +4,15 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sendPushNotification } from '@/lib/onesignal'
 import { sendEmail } from '@/lib/resend'
 
-const client = new Anthropic()
-
 // POST /api/adaptation-check
 // Called daily (e.g., via Vercel Cron or external scheduler) for a specific user
 // Also called from dashboard load for the current user
 export async function POST(req: Request) {
   try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
+    }
+    const client = new Anthropic()
     const supabase = createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -104,12 +106,18 @@ export async function POST(req: Request) {
     }
 
     // ── Check 7: Streak milestone ─────────────────────────
+    const uniqueDays = [...new Set(workoutLogs.map((l) =>
+      new Date(l.logged_at).toDateString()
+    ))]
     let streak = 0
-    const today = new Date().toDateString()
-    for (const log of workoutLogs) {
-      const d = new Date(log.logged_at).toDateString()
-      if (d === today || streak > 0) streak++
-      else break
+    for (let i = 0; i < uniqueDays.length; i++) {
+      const expected = new Date()
+      expected.setDate(expected.getDate() - i)
+      if (uniqueDays[i] === expected.toDateString()) {
+        streak++
+      } else {
+        break
+      }
     }
     if ([7, 14, 21, 30].includes(streak)) {
       issues.push({ type: 'streak_milestone', message: `${streak}-day workout streak! 🔥`, priority: 'low' })

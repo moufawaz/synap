@@ -13,7 +13,7 @@ import confetti from 'canvas-confetti'
 
 const YouTube = dynamic(() => import('react-youtube'), { ssr: false })
 
-export const dynamicConfig = 'force-dynamic'
+export const dynamic = 'force-dynamic'
 
 // ── Curated exercise → YouTube video ID map ──────────────
 const YOUTUBE_IDS: Record<string, string> = {
