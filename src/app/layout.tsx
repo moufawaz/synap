@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter, Space_Grotesk } from 'next/font/google'
+import { Inter, Exo_2, JetBrains_Mono } from 'next/font/google'
 import '@/app/globals.css'
 
 const inter = Inter({
@@ -8,17 +8,26 @@ const inter = Inter({
   display: 'swap',
 })
 
-const spaceGrotesk = Space_Grotesk({
+// SYNAP brand display font — wide-set, "digital and fast" with letter cuts.
+// Replaces Space Grotesk per the brand spec.
+const exo2 = Exo_2({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-space',
+  weight: ['300', '400', '500', '600', '700', '800', '900'],
+  variable: '--font-exo',
+  display: 'swap',
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-mono',
   display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: 'SYNAP — The Intelligence of Sport',
-  description: 'Meet Ion — your AI personal trainer. Adaptive diet plans, personalized workouts, and a coach that actually follows up with you.',
-  keywords: ['AI personal trainer', 'fitness app', 'workout plan', 'diet plan', 'Ion trainer', 'SYNAP'],
+  title: 'SYNAP — Performance Connected.',
+  description: 'Your body is a system. SYNAP is the OS. Meet ION — the AI agent that bridges biological potential and artificial intelligence through data-driven training, nutrition, and recovery.',
+  keywords: ['AI personal trainer', 'fitness app', 'workout plan', 'diet plan', 'ION', 'SYNAP', 'performance'],
   manifest: '/manifest.json',
   icons: {
     icon: '/icon.jpg',
@@ -31,16 +40,16 @@ export const metadata: Metadata = {
     title: 'SYNAP',
   },
   openGraph: {
-    title: 'SYNAP — The Intelligence of Sport',
-    description: 'Meet Ion — your AI personal trainer. Adaptive diet plans, personalized workouts, and a coach that actually follows up with you.',
+    title: 'SYNAP — Performance Connected.',
+    description: 'Your body is a system. SYNAP is the OS.',
     url: 'https://synapfit.app',
     siteName: 'SYNAP',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SYNAP — The Intelligence of Sport',
-    description: 'Meet Ion — your AI personal trainer.',
+    title: 'SYNAP — Performance Connected.',
+    description: 'Your body is a system. SYNAP is the OS.',
   },
 }
 
@@ -58,7 +67,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+    <html lang="en" className={`${inter.variable} ${exo2.variable} ${jetbrainsMono.variable}`}>
       <body style={{ backgroundColor: '#0D0D1A', color: '#F0F0FF' }} className="antialiased">
         {children}
       </body>
