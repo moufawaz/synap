@@ -6,17 +6,19 @@ import IonAvatar from '@/components/ui/IonAvatar'
 import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useLanguage } from '@/lib/useLanguage'
+import { t } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
 
 export default function SettingsPage() {
   const router = useRouter()
+  const { lang, setLang: setAppLang } = useLanguage()
   const [profile, setProfile] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [subscription, setSubscription] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [lang, setLang] = useState<'en' | 'ar'>('en')
   const [activeSection, setActiveSection] = useState('profile')
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
@@ -34,13 +36,11 @@ export default function SettingsPage() {
     if (!user) return
     setUser(user)
 
-    const [profileRes, userRes, subRes] = await Promise.all([
+    const [profileRes, subRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('users').select('language').eq('id', user.id).single(),
       supabase.from('subscriptions').select('*').eq('user_id', user.id).single(),
     ])
     setProfile(profileRes.data || {})
-    setLang(userRes.data?.language || 'en')
     setSubscription(subRes.data || null)
   }
 
@@ -49,7 +49,6 @@ export default function SettingsPage() {
     setSaving(true)
     const supabase = createBrowserClient()
     await supabase.from('profiles').update(profile).eq('user_id', user.id)
-    await supabase.from('users').update({ language: lang }).eq('id', user.id)
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -91,10 +90,10 @@ export default function SettingsPage() {
   const isLaunchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
 
   const SECTIONS = [
-    { id: 'profile', label: 'Profile', icon: User },
-    { id: 'training', label: 'Training', icon: Dumbbell },
-    { id: 'preferences', label: 'Preferences', icon: Globe },
-    { id: 'billing', label: 'Billing', icon: CreditCard },
+    { id: 'profile', label: t(lang, 'settings_profile'), icon: User },
+    { id: 'training', label: t(lang, 'settings_training'), icon: Dumbbell },
+    { id: 'preferences', label: t(lang, 'settings_preferences'), icon: Globe },
+    { id: 'billing', label: t(lang, 'settings_billing'), icon: CreditCard },
   ]
 
   if (!profile) return (
@@ -126,8 +125,8 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-3xl mx-auto">
       <div className="mb-6">
-        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>ACCOUNT</p>
-        <h1 className="font-heading font-black text-2xl text-white tracking-wider" style={{ letterSpacing: '0.06em' }}>Settings</h1>
+        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>{t(lang, 'settings_account_label')}</p>
+        <h1 className="font-heading font-black text-2xl text-white tracking-wider" style={{ letterSpacing: '0.06em' }}>{t(lang, 'settings_title')}</h1>
       </div>
 
       {/* Avatar + email */}
@@ -164,21 +163,21 @@ export default function SettingsPage() {
       {activeSection === 'profile' && (
         <div className="flex flex-col gap-4">
           <div className="glass-card p-5">
-            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>PERSONAL INFO</p>
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_personal_info')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Name" value={profile.name || ''} onChange={v => updateProfile('name', v)} />
-              <Field label="Age" value={String(profile.age || '')} onChange={v => updateProfile('age', parseInt(v) || v)} type="number" />
-              <Field label="Weight (kg)" value={String(profile.weight_kg || '')} onChange={v => updateProfile('weight_kg', parseFloat(v) || v)} type="number" />
-              <Field label="Height (cm)" value={String(profile.height_cm || '')} onChange={v => updateProfile('height_cm', parseFloat(v) || v)} type="number" />
-              <SelectField label="Gender" value={profile.gender || 'male'} onChange={v => updateProfile('gender', v)}
-                options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} />
-              <SelectField label="Goal" value={profile.goal || ''} onChange={v => updateProfile('goal', v)}
+              <Field label={t(lang, 'settings_name')} value={profile.name || ''} onChange={v => updateProfile('name', v)} />
+              <Field label={t(lang, 'settings_age')} value={String(profile.age || '')} onChange={v => updateProfile('age', parseInt(v) || v)} type="number" />
+              <Field label={t(lang, 'settings_weight')} value={String(profile.weight_kg || '')} onChange={v => updateProfile('weight_kg', parseFloat(v) || v)} type="number" />
+              <Field label={t(lang, 'settings_height')} value={String(profile.height_cm || '')} onChange={v => updateProfile('height_cm', parseFloat(v) || v)} type="number" />
+              <SelectField label={t(lang, 'settings_gender')} value={profile.gender || 'male'} onChange={v => updateProfile('gender', v)}
+                options={[{ value: 'male', label: t(lang, 'settings_gender_male') }, { value: 'female', label: t(lang, 'settings_gender_female') }]} />
+              <SelectField label={t(lang, 'settings_goal')} value={profile.goal || ''} onChange={v => updateProfile('goal', v)}
                 options={[
-                  { value: 'lose_fat', label: 'Lose Fat' },
-                  { value: 'build_muscle', label: 'Build Muscle' },
-                  { value: 'recomposition', label: 'Recomposition' },
-                  { value: 'improve_fitness', label: 'Improve Fitness' },
-                  { value: 'be_healthier', label: 'Be Healthier' },
+                  { value: 'lose_fat', label: t(lang, 'settings_goal_lose_fat') },
+                  { value: 'build_muscle', label: t(lang, 'settings_goal_build_muscle') },
+                  { value: 'recomposition', label: t(lang, 'settings_goal_recomp') },
+                  { value: 'improve_fitness', label: t(lang, 'settings_goal_fitness') },
+                  { value: 'be_healthier', label: t(lang, 'settings_goal_healthier') },
                 ]} />
             </div>
           </div>
@@ -189,29 +188,34 @@ export default function SettingsPage() {
       {activeSection === 'training' && (
         <div className="flex flex-col gap-4">
           <div className="glass-card p-5">
-            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>TRAINING PREFS</p>
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_training_prefs')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <SelectField label="Training Days / Week" value={String(profile.training_days || '3')} onChange={v => updateProfile('training_days', parseInt(v))}
-                options={['2','3','4','5','6'].map(v => ({ value: v, label: `${v} days` }))} />
-              <SelectField label="Session Duration" value={String(profile.session_duration || '60')} onChange={v => updateProfile('session_duration', parseInt(v))}
-                options={[{ value: '30', label: '30 min' }, { value: '45', label: '45 min' }, { value: '60', label: '1 hour' }, { value: '90', label: '90 min' }]} />
-              <SelectField label="Gym Access" value={profile.gym_access ? 'true' : 'false'} onChange={v => updateProfile('gym_access', v === 'true')}
-                options={[{ value: 'true', label: 'Gym' }, { value: 'false', label: 'Home' }]} />
-              <SelectField label="Training Time" value={profile.training_time || 'morning'} onChange={v => updateProfile('training_time', v)}
+              <SelectField label={t(lang, 'settings_training_days')} value={String(profile.training_days || '3')} onChange={v => updateProfile('training_days', parseInt(v))}
+                options={['2','3','4','5','6'].map(v => ({ value: v, label: `${v} ${t(lang, 'settings_days_suffix')}` }))} />
+              <SelectField label={t(lang, 'settings_session_duration')} value={String(profile.session_duration || '60')} onChange={v => updateProfile('session_duration', parseInt(v))}
                 options={[
-                  { value: 'morning', label: 'Morning' },
-                  { value: 'afternoon', label: 'Afternoon' },
-                  { value: 'evening', label: 'Evening' },
-                  { value: 'late_night', label: 'Late Night' },
+                  { value: '30', label: t(lang, 'settings_min_30') },
+                  { value: '45', label: t(lang, 'settings_min_45') },
+                  { value: '60', label: t(lang, 'settings_hour_1') },
+                  { value: '90', label: t(lang, 'settings_min_90') },
+                ]} />
+              <SelectField label={t(lang, 'settings_gym_access')} value={profile.gym_access ? 'true' : 'false'} onChange={v => updateProfile('gym_access', v === 'true')}
+                options={[{ value: 'true', label: t(lang, 'settings_gym') }, { value: 'false', label: t(lang, 'settings_home') }]} />
+              <SelectField label={t(lang, 'settings_training_time')} value={profile.training_time || 'morning'} onChange={v => updateProfile('training_time', v)}
+                options={[
+                  { value: 'morning', label: t(lang, 'settings_morning') },
+                  { value: 'afternoon', label: t(lang, 'settings_afternoon') },
+                  { value: 'evening', label: t(lang, 'settings_evening') },
+                  { value: 'late_night', label: t(lang, 'settings_late_night') },
                 ]} />
             </div>
             <div className="mt-4">
-              <label className="font-heading text-[10px] tracking-wider block mb-1.5" style={{ color: '#475569' }}>Injuries / Limitations</label>
+              <label className="font-heading text-[10px] tracking-wider block mb-1.5" style={{ color: '#475569' }}>{t(lang, 'settings_injuries')}</label>
               <textarea
                 value={profile.injuries || ''}
                 onChange={e => updateProfile('injuries', e.target.value)}
                 rows={2}
-                placeholder="None"
+                placeholder={t(lang, 'settings_injuries_placeholder')}
                 className="w-full rounded-xl px-3 py-2.5 font-heading text-sm outline-none resize-none"
                 style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
               />
@@ -224,12 +228,12 @@ export default function SettingsPage() {
       {activeSection === 'preferences' && (
         <div className="flex flex-col gap-4">
           <div className="glass-card p-5">
-            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>LANGUAGE</p>
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_language')}</p>
             <div className="flex gap-3">
               {(['en', 'ar'] as const).map(l => (
                 <button
                   key={l}
-                  onClick={() => setLang(l)}
+                  onClick={() => setAppLang(l)}
                   className="flex-1 py-3 rounded-xl font-heading font-bold text-sm tracking-widest transition-all"
                   style={{
                     background: lang === l ? '#BB5CF6' : 'rgba(255,255,255,0.04)',
@@ -244,21 +248,25 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="glass-card p-5">
-            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>ION APPEARANCE</p>
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_ion_appearance')}</p>
             <SelectField
-              label="Ion Gender"
+              label={t(lang, 'settings_ion_gender')}
               value={profile.ion_gender || 'male'}
               onChange={v => updateProfile('ion_gender', v)}
-              options={[{ value: 'male', label: '♂ Male Ion' }, { value: 'female', label: '♀ Female Ion' }]}
+              options={[{ value: 'male', label: t(lang, 'settings_ion_male') }, { value: 'female', label: t(lang, 'settings_ion_female') }]}
             />
           </div>
           <div className="glass-card p-5">
-            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>NUTRITION</p>
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_nutrition_section')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <SelectField label="Meals per Day" value={String(profile.meals_per_day || '3')} onChange={v => updateProfile('meals_per_day', parseInt(v))}
-                options={['2','3','4','5','6'].map(v => ({ value: v, label: `${v} meals` }))} />
-              <SelectField label="Cooking Ability" value={profile.cooking_ability || 'cook'} onChange={v => updateProfile('cooking_ability', v)}
-                options={[{ value: 'cook', label: 'I Cook' }, { value: 'quick', label: 'Quick & Simple' }, { value: 'eat_out', label: 'Eat Out Mostly' }]} />
+              <SelectField label={t(lang, 'settings_meals_per_day')} value={String(profile.meals_per_day || '3')} onChange={v => updateProfile('meals_per_day', parseInt(v))}
+                options={['2','3','4','5','6'].map(v => ({ value: v, label: `${v} ${t(lang, 'settings_meals_suffix')}` }))} />
+              <SelectField label={t(lang, 'settings_cooking')} value={profile.cooking_ability || 'cook'} onChange={v => updateProfile('cooking_ability', v)}
+                options={[
+                  { value: 'cook', label: t(lang, 'settings_cooking_cook') },
+                  { value: 'quick', label: t(lang, 'settings_cooking_quick') },
+                  { value: 'eat_out', label: t(lang, 'settings_cooking_eat_out') },
+                ]} />
             </div>
           </div>
         </div>
@@ -285,7 +293,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  {planName === 'unlimited' && <InfinityIcon size={14} style={{ color: '#22D3EE' }} />}
+                  {planName === 'unlimited' && <InfinityIcon size={14} style={{ color: '#BB5CF6' }} />}
                   <p className="font-heading font-black text-xl text-white tracking-wider" style={{ letterSpacing: '0.06em' }}>
                     {planLabel}
                   </p>
@@ -461,7 +469,7 @@ export default function SettingsPage() {
             }}
           >
             <Save size={14} />
-            {saving ? 'SAVING...' : saved ? '✓ SAVED' : 'SAVE CHANGES'}
+            {saving ? t(lang, 'settings_saving') : saved ? t(lang, 'settings_saved') : t(lang, 'settings_save')}
           </button>
 
           <button
@@ -469,7 +477,7 @@ export default function SettingsPage() {
             className="w-full py-3 rounded-2xl font-heading font-semibold text-xs tracking-wider flex items-center justify-center gap-2 transition-all"
             style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.06)' }}
           >
-            <LogOut size={13} /> Sign Out
+            <LogOut size={13} /> {t(lang, 'settings_signout')}
           </button>
         </div>
       )}
@@ -481,7 +489,7 @@ export default function SettingsPage() {
             className="w-full py-3 rounded-2xl font-heading font-semibold text-xs tracking-wider flex items-center justify-center gap-2 transition-all"
             style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.06)' }}
           >
-            <LogOut size={13} /> Sign Out
+            <LogOut size={13} /> {t(lang, 'settings_signout')}
           </button>
         </div>
       )}

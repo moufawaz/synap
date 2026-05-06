@@ -29,7 +29,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const lang = (userData?.language || 'en') as 'en' | 'ar'
 
   return (
-    <div className="flex min-h-screen" style={{ background: '#0D0D1A' }}>
+    <div
+      className="flex min-h-screen"
+      style={{ background: '#0A0A0A' }}
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+      lang={lang}
+    >
       <Sidebar user={userInfo} lang={lang} />
       <main className="flex-1 min-w-0 pb-20 md:pb-0">
         {children}
