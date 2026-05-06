@@ -6,12 +6,17 @@ import type { Language } from './i18n'
 import { t as translate } from './i18n'
 
 const LANG_STORAGE_KEY = 'synap_lang'
+// Written before reload so the new tab-session won't loop; cleared on mount.
+const RELOAD_GUARD_KEY = 'synap_lang_reloading'
 
 export function useLanguage() {
   const [lang, setLangState] = useState<Language>('en')
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    // Clear the reload guard that was set before the last reload
+    try { sessionStorage.removeItem(RELOAD_GUARD_KEY) } catch {}
+
     // 1. Read localStorage immediately (fast, avoids flash)
     try {
       const cached = localStorage.getItem(LANG_STORAGE_KEY) as Language | null
@@ -46,12 +51,23 @@ export function useLanguage() {
   }, [lang, ready])
 
   const setLang = useCallback(async (newLang: Language) => {
-    setLangState(newLang)
+    // ── Prevent infinite reload loops ────────────────────────────────────────
+    // sessionStorage survives a location.reload() within the same tab but is
+    // cleared when the tab is closed, so the guard is always scoped correctly.
+    try {
+      const guard = sessionStorage.getItem(RELOAD_GUARD_KEY)
+      if (guard === newLang) return   // reload already in-flight for this value
+      sessionStorage.setItem(RELOAD_GUARD_KEY, newLang)
+    } catch {}
+
+    // Persist to localStorage BEFORE the reload — new page reads it immediately
     try { localStorage.setItem(LANG_STORAGE_KEY, newLang) } catch {}
-    // Immediate DOM update for instant RTL switch
+
+    // Immediate DOM update so RTL flips before the spinner appears
     document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr'
     document.documentElement.lang = newLang
-    // Persist to Supabase
+
+    // Persist to Supabase (fire-and-forget; reload happens right after)
     try {
       const supabase = createBrowserClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -61,6 +77,10 @@ export function useLanguage() {
     } catch (err) {
       console.error('[useLanguage] Failed to persist language preference:', err)
     }
+
+    // Full reload so all server components and React state re-initialise with
+    // the persisted language — no stale client state from before the switch.
+    window.location.reload()
   }, [])
 
   const isRTL = lang === 'ar'

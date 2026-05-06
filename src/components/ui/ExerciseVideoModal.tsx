@@ -1,24 +1,73 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { X, Loader2, PlayCircle, AlertCircle, Search } from 'lucide-react'
 import { getSearchUrl } from '@/lib/exercises'
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/
+
+/** Extract a bare 11-char video ID from a full URL or a bare ID. */
+function extractVideoId(input: string | null | undefined): string | null {
+  if (!input) return null
+  const s = input.trim()
+  if (VIDEO_ID_RE.test(s)) return s
+  try {
+    const url = new URL(s)
+    if (url.hostname === 'youtu.be') {
+      const id = url.pathname.replace(/^\//, '').split('/')[0]
+      if (VIDEO_ID_RE.test(id)) return id
+    }
+    const v = url.searchParams.get('v')
+    if (v && VIDEO_ID_RE.test(v)) return v
+    const segments = url.pathname.split('/').filter(Boolean)
+    const idx = segments.indexOf('embed')
+    if (idx !== -1) {
+      const id = segments[idx + 1]
+      if (id && VIDEO_ID_RE.test(id)) return id
+    }
+  } catch {}
+  return null
+}
+
+// ── Embed component ───────────────────────────────────────────────────────────
+
 function YouTubeEmbed({ videoId, title }: { videoId: string; title: string }) {
+  const [iframeError, setIframeError] = useState(false)
+
+  // youtube-nocookie.com avoids extra tracking cookies and is CSP-allowed
+  const src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&color=white`
+
+  if (iframeError) {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+        <AlertCircle size={28} style={{ color: '#FCA5A5' }} />
+        <span className="font-heading text-xs text-center px-6" style={{ color: '#64748B' }}>
+          This video cannot be played. Try "More videos" below.
+        </span>
+      </div>
+    )
+  }
+
   return (
     <iframe
       key={videoId}
+      src={src}
+      title={title}
       width="100%"
       height="100%"
-      src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&color=white`}
-      title={title}
       frameBorder="0"
+      loading="lazy"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
       allowFullScreen
       style={{ display: 'block', width: '100%', height: '100%' }}
+      onError={() => setIframeError(true)}
     />
   )
 }
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
 
 interface ModalProps {
   exerciseName: string
@@ -26,30 +75,51 @@ interface ModalProps {
   onClose: () => void
 }
 
-export default function ExerciseVideoModal({ exerciseName, videoId: propVideoId, onClose }: ModalProps) {
-  const [videoId, setVideoId] = useState<string | null>(propVideoId ?? null)
-  const [loading, setLoading] = useState(!propVideoId)
+export default function ExerciseVideoModal({
+  exerciseName,
+  videoId: propVideoId,
+  onClose,
+}: ModalProps) {
+  // Normalise the incoming prop — could be a full URL or a bare ID
+  const resolvedPropId = extractVideoId(propVideoId)
+
+  const [videoId,  setVideoId]  = useState<string | null>(resolvedPropId)
+  const [loading,  setLoading]  = useState(!resolvedPropId)
+  const [fetched,  setFetched]  = useState(!!resolvedPropId)
+
   const moreVideosUrl = getSearchUrl(exerciseName)
 
-  useEffect(() => {
-    if (propVideoId) {
-      setVideoId(propVideoId)
-      setLoading(false)
-      return
-    }
-
+  // Fetch a video ID when we don't already have a valid one
+  const fetchVideo = useCallback(() => {
     setLoading(true)
     const params = new URLSearchParams({ name: exerciseName })
 
     fetch(`/api/exercise-video?${params.toString()}`)
       .then(r => r.json())
-      .then(d => {
-        setVideoId(d.videoId ?? null)
-        setLoading(false)
+      .then((d: { videoId?: string | null }) => {
+        const id = extractVideoId(d.videoId)
+        setVideoId(id)
       })
-      .catch(() => setLoading(false))
-  }, [exerciseName, propVideoId])
+      .catch(() => setVideoId(null))
+      .finally(() => {
+        setLoading(false)
+        setFetched(true)
+      })
+  }, [exerciseName])
 
+  useEffect(() => {
+    if (resolvedPropId) {
+      // Valid ID passed from parent — use it directly
+      setVideoId(resolvedPropId)
+      setLoading(false)
+      setFetched(true)
+      return
+    }
+    // No valid ID — ask the API (which checks DB cache first)
+    fetchVideo()
+  }, [exerciseName, resolvedPropId, fetchVideo])
+
+  // Keyboard close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', handler)
@@ -67,6 +137,7 @@ export default function ExerciseVideoModal({ exerciseName, videoId: propVideoId,
         style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)' }}
         onClick={e => e.stopPropagation()}
       >
+        {/* Header */}
         <div
           className="flex items-center justify-between px-4 py-3"
           style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
@@ -89,12 +160,20 @@ export default function ExerciseVideoModal({ exerciseName, videoId: propVideoId,
           </button>
         </div>
 
-        <div style={{ aspectRatio: '16/9', background: '#000', position: 'relative', overflow: 'hidden' }}>
+        {/* Video area — 16:9 */}
+        <div
+          style={{
+            aspectRatio: '16/9',
+            background: '#000',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <Loader2 size={32} className="animate-spin" style={{ color: '#FF0000' }} />
               <span className="font-heading text-xs tracking-wider" style={{ color: '#64748b' }}>
-                Finding verified tutorial...
+                Finding verified tutorial…
               </span>
             </div>
           )}
@@ -103,24 +182,41 @@ export default function ExerciseVideoModal({ exerciseName, videoId: propVideoId,
             <YouTubeEmbed videoId={videoId} title={exerciseName} />
           )}
 
-          {!loading && !videoId && (
+          {!loading && !videoId && fetched && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <div
                 className="flex items-center justify-center rounded-2xl shadow-2xl"
-                style={{ width: 64, height: 64, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }}
+                style={{
+                  width: 64, height: 64,
+                  background: 'rgba(239,68,68,0.12)',
+                  border: '1px solid rgba(239,68,68,0.25)',
+                }}
               >
                 <AlertCircle size={28} style={{ color: '#FCA5A5' }} />
               </div>
               <span className="font-heading font-bold text-sm text-white tracking-wider">
-                Tutorial unavailable
+                No video available yet
               </span>
               <span className="font-heading text-xs text-center px-6" style={{ color: '#64748B' }}>
-                Ion could not find a verified playable video for this exercise yet.
+                Ion could not find a verified playable tutorial for this exercise.
               </span>
+              {/* Retry button */}
+              <button
+                onClick={fetchVideo}
+                className="mt-1 px-3 py-1.5 rounded-lg font-heading text-xs tracking-wider transition-colors"
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#94A3B8',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                Retry
+              </button>
             </div>
           )}
         </div>
 
+        {/* Footer */}
         <div
           className="flex items-center justify-between px-4 py-3"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
@@ -145,6 +241,8 @@ export default function ExerciseVideoModal({ exerciseName, videoId: propVideoId,
   )
 }
 
+// ── VideoButton — inline trigger ──────────────────────────────────────────────
+
 export function VideoButton({
   exerciseName,
   videoId,
@@ -161,8 +259,8 @@ export function VideoButton({
         className="flex items-center gap-1 px-2 py-1 rounded-lg font-heading text-[10px] font-semibold tracking-wider transition-all flex-shrink-0"
         style={{
           background: 'rgba(239,68,68,0.1)',
-          border: '1px solid rgba(239,68,68,0.2)',
-          color: '#FCA5A5',
+          border:     '1px solid rgba(239,68,68,0.2)',
+          color:      '#FCA5A5',
         }}
         title="Watch tutorial"
       >
