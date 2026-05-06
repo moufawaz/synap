@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
 import { sendPushNotification } from '@/lib/onesignal'
+import { resolveExerciseVideo } from '@/lib/youtube-search'
 
 // POST /api/renew-plan — called by the adaptation-check job when a plan is expiring
 export async function POST(req: Request) {
@@ -61,7 +62,15 @@ Generate a refreshed diet plan as JSON. Return ONLY valid JSON with this structu
               "time": "7:00 AM",
               "calories": number,
               "protein_g": number,
-              "foods": [{"name": "food", "amount": "quantity"}]
+              "foods": [{"name": "food", "amount": "quantity"}],
+              "recipe": {
+                "title": "Simple recipe name",
+                "prep_time_min": number,
+                "cook_time_min": number,
+                "ingredients": ["Ingredient with exact amount from foods list"],
+                "steps": ["Short practical cooking step 1", "Short practical cooking step 2", "Short practical cooking step 3"],
+                "tips": "One helpful cooking or meal-prep tip"
+              }
             }
           ]
         }
@@ -124,6 +133,22 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
     const match = raw.match(/\{[\s\S]*\}/)
     if (!match) return NextResponse.json({ error: 'Failed to parse plan' }, { status: 500 })
     const planJson = JSON.parse(match[0])
+
+    // Enrich workout exercises with verified YouTube video IDs
+    if (planType === 'workout') {
+      const allExercises: any[] = (planJson.days || planJson.weeks?.flatMap((w: any) => w.days) || [])
+        .flatMap((day: any) => day.exercises || [])
+      await Promise.all(
+        allExercises.map(async (ex: any) => {
+          try {
+            ex.video_id = await Promise.race([
+              resolveExerciseVideo(ex.name),
+              new Promise<null>(res => setTimeout(() => res(null), 10_000)),
+            ])
+          } catch { ex.video_id = null }
+        })
+      )
+    }
 
     const table = planType === 'diet' ? 'diet_plans' : 'workout_plans'
     const durationWeeks = planType === 'diet' ? 4 : 6

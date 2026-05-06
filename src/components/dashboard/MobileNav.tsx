@@ -33,8 +33,8 @@ export default function MobileNav() {
             href={item.href}
             className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all"
             style={{
-              color: active ? '#A78BFA' : '#475569',
-              background: active ? 'rgba(124,58,237,0.12)' : 'transparent',
+              color: active ? '#D88BFF' : '#475569',
+              background: active ? 'rgba(187,92,246,0.12)' : 'transparent',
             }}
           >
             <item.icon size={20} />

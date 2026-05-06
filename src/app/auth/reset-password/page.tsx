@@ -6,6 +6,8 @@ import AuthCard from '@/components/auth/AuthCard'
 import { createBrowserClient } from '@/lib/supabase'
 import { ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react'
 
+const recoverySessionPromises = new Map<string, Promise<boolean>>()
+
 export default function ResetPasswordPage() {
   return (
     <Suspense fallback={<div style={{ background: '#0A0A0A', minHeight: '100vh' }} />}>
@@ -18,26 +20,76 @@ function ResetPasswordForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabaseRef = useRef(createBrowserClient())
+  const initializedRef = useRef(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [exchanging, setExchanging] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [canResetPassword, setCanResetPassword] = useState(false)
   const [done, setDone] = useState(false)
 
   useEffect(() => {
-    const code = searchParams.get('code')
-    if (!code) { setError('Invalid or expired reset link. Please request a new one.'); setExchanging(false); return }
-    supabaseRef.current.auth.exchangeCodeForSession(code).then(({ error: err }) => {
-      if (err) setError('This reset link has expired. Please request a new one.')
+    if (initializedRef.current) return
+    initializedRef.current = true
+    let active = true
+
+    const finishWithCurrentSession = async () => {
+      const { data: { session } } = await supabaseRef.current.auth.getSession()
+      return Boolean(session)
+    }
+
+    const createRecoverySession = async () => {
+      const code = searchParams.get('code')
+      if (code) {
+        const { error: exchangeError } = await supabaseRef.current.auth.exchangeCodeForSession(code)
+        if (exchangeError) {
+          return finishWithCurrentSession()
+        }
+
+        window.history.replaceState(null, '', window.location.pathname)
+        return true
+      }
+
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabaseRef.current.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        })
+
+        if (sessionError) {
+          return finishWithCurrentSession()
+        }
+
+        window.history.replaceState(null, '', window.location.pathname)
+        return true
+      }
+
+      return finishWithCurrentSession()
+    }
+
+    const recoveryLinkKey = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const recoveryPromise = recoverySessionPromises.get(recoveryLinkKey) ?? createRecoverySession()
+    recoverySessionPromises.set(recoveryLinkKey, recoveryPromise)
+
+    recoveryPromise.then((hasRecoverySession) => {
+      if (!active) return
+      setCanResetPassword(hasRecoverySession)
+      if (!hasRecoverySession) setError('This reset link has expired. Please request a new one.')
       setExchanging(false)
     })
-  }, [])
+
+    return () => { active = false }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    if (!canResetPassword) { setError('This reset link has expired. Please request a new one.'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
     if (password !== confirm) { setError('Passwords do not match.'); return }
     setLoading(true)
@@ -94,7 +146,7 @@ function ResetPasswordForm() {
           )}
           {error && <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
             <p className="font-heading text-xs" style={{ color: '#F87171' }}>{error}</p></div>}
-          <button type="submit" disabled={loading} className="btn-primary w-full py-4 font-heading font-black text-sm group mt-2" style={{ letterSpacing: '0.12em' }}>
+          <button type="submit" disabled={loading || !canResetPassword} className="btn-primary w-full py-4 font-heading font-black text-sm group mt-2" style={{ letterSpacing: '0.12em' }}>
             {loading ? <Loader2 size={18} className="animate-spin" /> : <><span>SET NEW PASSWORD</span><ArrowRight size={16} className="transition-transform group-hover:translate-x-1" /></>}
           </button>
         </form>

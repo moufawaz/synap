@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
           <div className="text-center">
             <p className="font-heading font-bold text-white text-sm tracking-wider mb-1" style={{ letterSpacing: '0.06em' }}>Reset link sent</p>
             <p className="font-heading text-xs" style={{ color: '#64748B' }}>
-              Check <span style={{ color: '#A78BFA' }}>{email}</span> and follow the link to set a new password.
+              Check <span style={{ color: '#D88BFF' }}>{email}</span> and follow the link to set a new password.
             </p>
           </div>
         </div>

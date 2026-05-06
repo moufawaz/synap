@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import IonAvatar from '@/components/ui/IonAvatar'
-import { Send, Sparkles, Dumbbell, Utensils, TrendingUp, AlertCircle, Zap, CheckCircle } from 'lucide-react'
+import { Send, Sparkles, Dumbbell, Utensils, TrendingUp, AlertCircle, Zap, CheckCircle, Clock } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase'
+
+const PLAN_MODIFY_WINDOW_DAYS = 30
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +36,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [profileGender, setProfileGender] = useState<'male' | 'female'>('male')
+  const [planDaysLeft, setPlanDaysLeft] = useState<number | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -48,15 +51,21 @@ export default function ChatPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const [profileRes, historyRes] = await Promise.all([
+    const [profileRes, historyRes, planRes] = await Promise.all([
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
       supabase.from('chat_messages').select('id, role, content, message_type, metadata')
         .eq('user_id', user.id).order('created_at', { ascending: true }).limit(60),
+      supabase.from('workout_plans').select('created_at').eq('user_id', user.id).eq('active', true).single(),
     ])
 
     if (profileRes.data?.gender) setProfileGender(profileRes.data.gender as any)
     if (historyRes.data) {
       setMessages(historyRes.data.map((m: any, i: number) => ({ ...m, id: m.id || String(i) })))
+    }
+    if (planRes.data?.created_at) {
+      const planAge = Math.floor((Date.now() - new Date(planRes.data.created_at).getTime()) / 86400000)
+      const remaining = PLAN_MODIFY_WINDOW_DAYS - planAge
+      setPlanDaysLeft(remaining > 0 ? remaining : 0)
     }
   }
 
@@ -112,7 +121,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: '#080810' }}>
+    <div className="flex flex-col h-screen" style={{ background: '#080808' }}>
 
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#0A0A14' }}>
@@ -125,14 +134,36 @@ export default function ChatPage() {
           <button
             onClick={() => sendMessage("Run my daily adaptation check")}
             className="flex items-center gap-1 px-2.5 py-1 rounded-lg font-heading text-xs font-semibold transition-all"
-            style={{ background: 'rgba(124,58,237,0.1)', color: '#A78BFA', border: '1px solid rgba(124,58,237,0.2)' }}
+            style={{ background: 'rgba(187,92,246,0.1)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.2)' }}
             title="Run Ion's daily check"
           >
             <Zap size={11} /> Check-in
           </button>
-          <Sparkles size={16} style={{ color: '#7C3AED' }} />
+          <Sparkles size={16} style={{ color: '#BB5CF6' }} />
         </div>
       </div>
+
+      {/* Plan modification time banner */}
+      {planDaysLeft !== null && (
+        <div
+          className="flex items-center gap-2.5 px-4 py-2.5 flex-shrink-0"
+          style={{
+            background: planDaysLeft > 7
+              ? 'rgba(16,137,129,0.06)'
+              : planDaysLeft > 0
+              ? 'rgba(245,158,11,0.06)'
+              : 'rgba(239,68,68,0.06)',
+            borderBottom: `1px solid ${planDaysLeft > 7 ? 'rgba(16,137,129,0.18)' : planDaysLeft > 0 ? 'rgba(245,158,11,0.18)' : 'rgba(239,68,68,0.18)'}`,
+          }}
+        >
+          <Clock size={12} style={{ color: planDaysLeft > 7 ? '#108981' : planDaysLeft > 0 ? '#F59E0B' : '#EF4444', flexShrink: 0 }} />
+          <p className="font-heading text-xs" style={{ color: planDaysLeft > 7 ? '#108981' : planDaysLeft > 0 ? '#F59E0B' : '#EF4444' }}>
+            {planDaysLeft > 0
+              ? `${planDaysLeft} day${planDaysLeft !== 1 ? 's' : ''} left to modify your plan — ask Ion for changes here`
+              : 'Plan modification window expired — ask Ion for a new plan or renewal'}
+          </p>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
@@ -153,7 +184,7 @@ export default function ChatPage() {
                   key={p}
                   onClick={() => sendMessage(p)}
                   className="px-3 py-1.5 rounded-full font-heading text-xs font-semibold tracking-wider transition-all"
-                  style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', color: '#94A3B8' }}
+                  style={{ background: 'rgba(187,92,246,0.08)', border: '1px solid rgba(187,92,246,0.2)', color: '#94A3B8' }}
                 >
                   {p}
                 </button>
@@ -169,7 +200,7 @@ export default function ChatPage() {
         {loading && (
           <div className="flex items-end gap-2.5 chat-bubble">
             <IonAvatar gender={profileGender} size="sm" />
-            <div className="rounded-2xl px-4 py-3" style={{ background: '#121220', border: '1px solid rgba(255,255,255,0.05)', borderBottomLeftRadius: '4px' }}>
+            <div className="rounded-2xl px-4 py-3" style={{ background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.05)', borderBottomLeftRadius: '4px' }}>
               <div className="flex gap-1 items-center h-4">
                 <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
               </div>
@@ -187,7 +218,7 @@ export default function ChatPage() {
               key={p}
               onClick={() => sendMessage(p)}
               className="flex-shrink-0 px-3 py-1.5 rounded-full font-heading text-xs font-semibold tracking-wider transition-all"
-              style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.15)', color: '#64748B' }}
+              style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.15)', color: '#64748B' }}
             >
               {p}
             </button>
@@ -196,7 +227,7 @@ export default function ChatPage() {
       )}
 
       {/* Input */}
-      <div className="flex-shrink-0 px-4 pb-4 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: '#080810' }}>
+      <div className="flex-shrink-0 px-4 pb-4 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: '#080808' }}>
         <form onSubmit={e => { e.preventDefault(); sendMessage() }} className="flex items-center gap-2">
           <input
             ref={inputRef}
@@ -204,8 +235,8 @@ export default function ChatPage() {
             onChange={e => setInput(e.target.value)}
             placeholder="Ask Ion anything..."
             className="flex-1 rounded-xl px-4 py-3 text-sm font-heading outline-none transition-all"
-            style={{ background: '#121220', border: '1px solid rgba(255,255,255,0.07)', color: '#F0F0FF' }}
-            onFocus={e => { e.target.style.borderColor = 'rgba(124,58,237,0.45)' }}
+            style={{ background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.07)', color: '#F0F0FF' }}
+            onFocus={e => { e.target.style.borderColor = 'rgba(187,92,246,0.45)' }}
             onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.07)' }}
             disabled={loading}
           />
@@ -214,8 +245,8 @@ export default function ChatPage() {
             disabled={!input.trim() || loading}
             className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
             style={{
-              background: input.trim() && !loading ? '#7C3AED' : 'rgba(255,255,255,0.05)',
-              boxShadow: input.trim() && !loading ? '0 0 16px rgba(124,58,237,0.4)' : 'none',
+              background: input.trim() && !loading ? '#BB5CF6' : 'rgba(255,255,255,0.05)',
+              boxShadow: input.trim() && !loading ? '0 0 16px rgba(187,92,246,0.4)' : 'none',
             }}
           >
             <Send size={15} style={{ color: input.trim() && !loading ? 'white' : '#333' }} />
@@ -236,7 +267,7 @@ function MessageBubble({ msg, gender, onPrompt }: { msg: Message; gender: 'male'
       <div className="flex items-end gap-2.5 flex-row-reverse chat-bubble">
         <div
           className="max-w-[78%] sm:max-w-[65%] rounded-2xl px-4 py-3"
-          style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)', borderBottomRightRadius: '4px' }}
+          style={{ background: 'rgba(187,92,246,0.15)', border: '1px solid rgba(187,92,246,0.25)', borderBottomRightRadius: '4px' }}
         >
           <p className="font-heading text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#F0F0FF' }}>
             {msg.content}
@@ -248,13 +279,13 @@ function MessageBubble({ msg, gender, onPrompt }: { msg: Message; gender: 'male'
 
   // Ion messages with rich types
   const cardStyle = {
-    suggestion: { bg: 'rgba(124,58,237,0.06)', border: 'rgba(124,58,237,0.2)', icon: <Zap size={13} style={{ color: '#A78BFA' }} />, label: 'Suggestion' },
-    workout_card: { bg: 'rgba(34,211,238,0.04)', border: 'rgba(34,211,238,0.2)', icon: <Dumbbell size={13} style={{ color: '#22D3EE' }} />, label: 'Workout Update' },
+    suggestion: { bg: 'rgba(187,92,246,0.06)', border: 'rgba(187,92,246,0.2)', icon: <Zap size={13} style={{ color: '#D88BFF' }} />, label: 'Suggestion' },
+    workout_card: { bg: 'rgba(187,92,246,0.04)', border: 'rgba(187,92,246,0.2)', icon: <Dumbbell size={13} style={{ color: '#BB5CF6' }} />, label: 'Workout Update' },
     meal_card: { bg: 'rgba(16,185,129,0.04)', border: 'rgba(16,185,129,0.2)', icon: <Utensils size={13} style={{ color: '#10B981' }} />, label: 'Nutrition' },
     milestone: { bg: 'rgba(245,158,11,0.05)', border: 'rgba(245,158,11,0.25)', icon: <CheckCircle size={13} style={{ color: '#F59E0B' }} />, label: 'Milestone' },
     alert: { bg: 'rgba(239,68,68,0.05)', border: 'rgba(239,68,68,0.2)', icon: <AlertCircle size={13} style={{ color: '#EF4444' }} />, label: 'Alert' },
-    new_plan: { bg: 'rgba(124,58,237,0.08)', border: 'rgba(124,58,237,0.3)', icon: <TrendingUp size={13} style={{ color: '#A78BFA' }} />, label: 'New Plan' },
-    text: { bg: '#121220', border: 'rgba(255,255,255,0.05)', icon: null, label: null },
+    new_plan: { bg: 'rgba(187,92,246,0.08)', border: 'rgba(187,92,246,0.3)', icon: <TrendingUp size={13} style={{ color: '#D88BFF' }} />, label: 'New Plan' },
+    text: { bg: '#0E0E0E', border: 'rgba(255,255,255,0.05)', icon: null, label: null },
   }
 
   const style = cardStyle[type] || cardStyle.text
@@ -305,14 +336,14 @@ function MessageBubble({ msg, gender, onPrompt }: { msg: Message; gender: 'male'
         )}
         {type === 'new_plan' && (
           <div className="flex gap-2 mt-3 flex-wrap">
-            <a href="/plan" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(124,58,237,0.15)', color: '#A78BFA', border: '1px solid rgba(124,58,237,0.2)' }}>
+            <a href="/plan" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(187,92,246,0.15)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.2)' }}>
               View New Plan →
             </a>
           </div>
         )}
         {type === 'workout_card' && (
           <div className="flex gap-2 mt-3">
-            <a href="/workout/today" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(34,211,238,0.1)', color: '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+            <a href="/workout/today" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(187,92,246,0.1)', color: '#BB5CF6', border: '1px solid rgba(187,92,246,0.2)' }}>
               Go to Workout →
             </a>
           </div>

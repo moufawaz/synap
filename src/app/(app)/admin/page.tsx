@@ -24,7 +24,7 @@ const EVENT_LABELS: Record<string, { label: string; color: string }> = {
   subscription_expired:         { label: 'Expired',            color: '#F59E0B' },
   subscription_payment_success: { label: 'Payment received',   color: '#10B981' },
   subscription_payment_failed:  { label: 'Payment failed',     color: '#EF4444' },
-  order_created:                { label: 'Add-on purchased',   color: '#22D3EE' },
+  order_created:                { label: 'Add-on purchased',   color: '#D88BFF' },
 }
 
 const GOAL_LABELS: Record<string, string> = {
@@ -159,8 +159,8 @@ export default async function AdminPage() {
 
       {/* ── Second row KPIs ────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total Chats"     value={chatCountRes.count || 0}   sub="all time"            icon={MessageCircle} color="#A78BFA" />
-        <StatCard label="Workouts Logged" value={workoutLogRes.count || 0}  sub="all time"            icon={TrendingUp}    color="#22D3EE" />
+        <StatCard label="Total Chats"     value={chatCountRes.count || 0}   sub="all time"            icon={MessageCircle} color="#D88BFF" />
+        <StatCard label="Workouts Logged" value={workoutLogRes.count || 0}  sub="all time"            icon={TrendingUp}    color="#BB5CF6" />
         <StatCard label="Cancelled"       value={cancelledSubs.length}       sub="total cancelled"     icon={XCircle}       color="#EF4444" />
         <StatCard label="Free Users"      value={totalUsers - activeSubs.length - trialSubs.length} sub="no subscription" icon={BarChart3} color="#475569" />
       </div>
@@ -279,7 +279,7 @@ export default async function AdminPage() {
                   : sub?.status === 'active' ? (sub.plan_name === 'unlimited' ? 'Unlimited' : 'Pro')
                   : 'Free'
                 const planColor = planDisplay === 'Trial' ? '#BB5CF6'
-                  : planDisplay === 'Unlimited' ? '#22D3EE'
+                  : planDisplay === 'Unlimited' ? '#BB5CF6'
                   : planDisplay === 'Pro' ? '#10B981' : '#475569'
 
                 return (

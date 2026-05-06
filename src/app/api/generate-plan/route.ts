@@ -2,6 +2,7 @@ import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
+import { resolveExerciseVideo } from '@/lib/youtube-search'
 
 export async function POST(req: Request) {
   // ── Guard: API key must be set ─────────────────────────
@@ -47,6 +48,25 @@ export async function POST(req: Request) {
       console.error('JSON parse error. Raw response (first 500 chars):', rawContent.slice(0, 500))
       return NextResponse.json({ error: 'Ion returned an invalid plan format. Please try again.' }, { status: 500 })
     }
+
+    // ── Enrich every exercise with a verified YouTube video ID ──
+    // Run all lookups in parallel (static-map hits are instant; dynamic
+    // searches run concurrently so the total wait is ~one search, not N).
+    const allExercises: any[] = (plan.workout_plan?.days || []).flatMap(
+      (day: any) => day.exercises || []
+    )
+    await Promise.all(
+      allExercises.map(async (ex: any) => {
+        try {
+          ex.video_id = await Promise.race([
+            resolveExerciseVideo(ex.name),
+            new Promise<null>(res => setTimeout(() => res(null), 10_000)),
+          ])
+        } catch {
+          ex.video_id = null
+        }
+      })
+    )
 
     // Deactivate any existing plans first
     await Promise.all([
@@ -218,6 +238,14 @@ IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text befor
         "carbs_g": 70,
         "fat_g": 15,
         "description": "Short meal description",
+        "recipe": {
+          "title": "Simple recipe name",
+          "prep_time_min": 5,
+          "cook_time_min": 15,
+          "ingredients": ["Ingredient with exact amount from foods list"],
+          "steps": ["Short practical cooking step 1", "Short practical cooking step 2", "Short practical cooking step 3"],
+          "tips": "One helpful cooking or meal-prep tip for this user"
+        },
         "foods": [
           {
             "item": "Specific food name",

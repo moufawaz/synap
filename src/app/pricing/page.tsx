@@ -54,7 +54,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#0D0D1A' }}>
+    <div className="min-h-screen" style={{ background: '#0A0A0A' }}>
       {/* Nav */}
       <nav className="px-6 py-4 flex items-center justify-between max-w-5xl mx-auto">
         <Link href="/" className="font-heading font-black text-xl tracking-widest" style={{ color: '#BB5CF6', letterSpacing: '0.15em' }}>
@@ -151,9 +151,9 @@ export default function PricingPage() {
 
           {/* Pro — recommended */}
           <div className="rounded-2xl p-6 flex flex-col relative" style={{
-            background: 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(187,92,246,0.06))',
+            background: 'linear-gradient(135deg, rgba(187,92,246,0.12), rgba(187,92,246,0.06))',
             border: '1px solid rgba(187,92,246,0.35)',
-            boxShadow: '0 0 40px rgba(124,58,237,0.15)',
+            boxShadow: '0 0 40px rgba(187,92,246,0.15)',
           }}>
             {/* Popular badge */}
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -174,7 +174,7 @@ export default function PricingPage() {
                 </span>
               </div>
               {billing === 'annual' && proMonthlyEq && (
-                <p className="font-heading text-xs" style={{ color: '#A78BFA' }}>
+                <p className="font-heading text-xs" style={{ color: '#D88BFF' }}>
                   ≈ {fmt(proMonthlyEq, 2)} / month · saves {proSavings}%
                 </p>
               )}
@@ -219,14 +219,14 @@ export default function PricingPage() {
 
           {/* Pro + Unlimited */}
           <div className="rounded-2xl p-6 flex flex-col" style={{
-            background: 'linear-gradient(135deg, rgba(34,211,238,0.08), rgba(124,58,237,0.06))',
-            border: '1px solid rgba(34,211,238,0.2)',
+            background: 'linear-gradient(135deg, rgba(187,92,246,0.08), rgba(187,92,246,0.06))',
+            border: '1px solid rgba(187,92,246,0.2)',
           }}>
             <div className="mb-5">
               <div className="flex items-center gap-2 mb-2">
-                <p className="font-heading font-black text-xs tracking-widest uppercase" style={{ color: '#22D3EE' }}>PRO</p>
-                <InfinityIcon size={14} style={{ color: '#22D3EE' }} />
-                <p className="font-heading font-black text-xs tracking-widest uppercase" style={{ color: '#22D3EE' }}>UNLIMITED</p>
+                <p className="font-heading font-black text-xs tracking-widest uppercase" style={{ color: '#BB5CF6' }}>PRO</p>
+                <InfinityIcon size={14} style={{ color: '#BB5CF6' }} />
+                <p className="font-heading font-black text-xs tracking-widest uppercase" style={{ color: '#BB5CF6' }}>UNLIMITED</p>
               </div>
               <div className="flex items-end gap-1 mb-1">
                 <span className="font-heading font-black text-4xl text-white">
@@ -237,7 +237,7 @@ export default function PricingPage() {
                 </span>
               </div>
               {billing === 'annual' && unlimMonthlyEq && (
-                <p className="font-heading text-xs" style={{ color: '#22D3EE' }}>
+                <p className="font-heading text-xs" style={{ color: '#BB5CF6' }}>
                   ≈ {fmt(unlimMonthlyEq, 2)} / month · saves {unlimSavings}%
                 </p>
               )}
@@ -258,15 +258,15 @@ export default function PricingPage() {
               disabled={!!loading}
               className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
               style={{
-                background: loading === unlimPrice.variantId ? 'rgba(34,211,238,0.3)' : 'rgba(34,211,238,0.12)',
-                border: '1px solid rgba(34,211,238,0.3)',
-                color: loading === unlimPrice.variantId ? '#94A3B8' : '#22D3EE',
+                background: loading === unlimPrice.variantId ? 'rgba(187,92,246,0.3)' : 'rgba(187,92,246,0.12)',
+                border: '1px solid rgba(187,92,246,0.3)',
+                color: loading === unlimPrice.variantId ? '#94A3B8' : '#BB5CF6',
                 letterSpacing: '0.1em',
               }}
             >
               {loading === unlimPrice.variantId ? (
                 <>
-                  <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#22D3EE', borderTopColor: 'transparent' }} />
+                  <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
                   LOADING...
                 </>
               ) : (
@@ -352,8 +352,8 @@ function Feature({ text, highlight = false, cyan = false }: { text: string; high
   return (
     <div className="flex items-center gap-2.5">
       <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
-        style={{ background: cyan ? 'rgba(34,211,238,0.15)' : 'rgba(187,92,246,0.15)' }}>
-        <Check size={9} style={{ color: cyan ? '#22D3EE' : '#BB5CF6' }} />
+        style={{ background: cyan ? 'rgba(187,92,246,0.15)' : 'rgba(187,92,246,0.15)' }}>
+        <Check size={9} style={{ color: cyan ? '#BB5CF6' : '#BB5CF6' }} />
       </div>
       <span className="font-heading text-xs" style={{ color: highlight ? 'white' : '#94A3B8', fontWeight: highlight ? '700' : '400' }}>
         {text}

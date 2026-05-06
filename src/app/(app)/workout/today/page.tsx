@@ -5,150 +5,13 @@ import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp,
-  Clock, Dumbbell, Trophy, Play, RotateCcw,
-  PlayCircle, Pause, ExternalLink,
+  Clock, Dumbbell, Trophy, Play, RotateCcw, Pause,
 } from 'lucide-react'
-import nextDynamic from 'next/dynamic'
 import confetti from 'canvas-confetti'
 
-import { getYouTubeId, getSearchUrl } from '@/lib/exercises'
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
 
-const YouTube = nextDynamic(() => import('react-youtube'), { ssr: false })
-
 export const dynamic = 'force-dynamic'
-
-// ── Exercise → YouTube ID map moved to src/lib/exercises.ts ─
-// Keep a local stub so old inline references still compile while we migrate
-const YOUTUBE_IDS: Record<string, string> = {
-  // Chest
-  'bench press': 'rT7DgCr-3pg',
-  'chest press': 'rT7DgCr-3pg',
-  'incline bench press': 'DbFgADa2PL8',
-  'incline press': 'DbFgADa2PL8',
-  'decline bench press': 'LfyQTdG13eU',
-  'decline press': 'LfyQTdG13eU',
-  'push up': '_l3ySVKYVJ8',
-  'pushup': '_l3ySVKYVJ8',
-  'chest fly': 'eozdVDA78K0',
-  'dumbbell fly': 'eozdVDA78K0',
-  'cable fly': 'Iwe6AmxVf7o',
-  'pec deck': 'Iwe6AmxVf7o',
-  'chest dip': '2z8JmcrW-As',
-  // Back
-  'pull up': 'eGo4IYlbE5g',
-  'pullup': 'eGo4IYlbE5g',
-  'chin up': 'eGo4IYlbE5g',
-  'deadlift': 'op9kVnSso6Q',
-  'romanian deadlift': 'JCXUYuzwNrM',
-  'rdl': 'JCXUYuzwNrM',
-  'stiff leg deadlift': 'JCXUYuzwNrM',
-  'barbell row': 'kBWAon7ItDw',
-  'bent over row': 'kBWAon7ItDw',
-  'bent-over row': 'kBWAon7ItDw',
-  'dumbbell row': 'pYcpY20QaE8',
-  'one arm row': 'pYcpY20QaE8',
-  'lat pulldown': 'CAwf7n6Luuc',
-  'cable row': 'GZbfZ033f74',
-  'seated row': 'GZbfZ033f74',
-  't-bar row': 'KDEl3MrezQE',
-  'face pull': 'rep-qVOkqgk',
-  'hyperextension': 'ph3pMpfD6Mk',
-  'back extension': 'ph3pMpfD6Mk',
-  // Shoulders
-  'overhead press': 'QAQ64hK4d00',
-  'shoulder press': 'qEwKCR5JCog',
-  'military press': 'QAQ64hK4d00',
-  'ohp': 'QAQ64hK4d00',
-  'lateral raise': '3VcKaXpzqRo',
-  'side lateral': '3VcKaXpzqRo',
-  'side raise': '3VcKaXpzqRo',
-  'front raise': 'gVDqkSEJnk4',
-  'arnold press': '6Z15_WdXmVw',
-  'upright row': 'VcGxJVQm1mU',
-  'shrug': 'TE8JILCS4i0',
-  'rear delt fly': 'EA7u4Q_8HQ0',
-  'rear delt raise': 'EA7u4Q_8HQ0',
-  'cable lateral': '3VcKaXpzqRo',
-  // Biceps
-  'dumbbell curl': 'ykJmrZ5v0Oo',
-  'barbell curl': 'kwG2ipFRgfo',
-  'bicep curl': 'kwG2ipFRgfo',
-  'biceps curl': 'kwG2ipFRgfo',
-  'hammer curl': 'zC3nLlEvin4',
-  'preacher curl': 'fIWP-FRFNU0',
-  'concentration curl': '0AUJ7oSVS-s',
-  'incline curl': 'soxrZlIl35U',
-  'cable curl': 'NFzTWp2qpiE',
-  'ez bar curl': 'kwG2ipFRgfo',
-  // Triceps
-  'tricep dip': '0326dy_-CzM',
-  'dip': '0326dy_-CzM',
-  'tricep pushdown': 'vB5OHsJ3EME',
-  'triceps pushdown': 'vB5OHsJ3EME',
-  'cable pushdown': 'vB5OHsJ3EME',
-  'pushdown': 'vB5OHsJ3EME',
-  'skull crusher': 'd_KpSHiZOl0',
-  'lying tricep extension': 'd_KpSHiZOl0',
-  'overhead tricep extension': 'YbX7Wd8jQ-Q',
-  'tricep extension': 'YbX7Wd8jQ-Q',
-  'close grip bench': 'nEF0bv2FW7s',
-  'diamond push': 'J0DnG1_S92I',
-  'tricep kickback': '6SS6K3lAwZ8',
-  'rope pushdown': 'vB5OHsJ3EME',
-  // Legs
-  'squat': 'ultWZbUMPL8',
-  'back squat': 'ultWZbUMPL8',
-  'front squat': 'uYumuL_G_V0',
-  'goblet squat': 'MxsFDhcyFyE',
-  'sumo squat': 'MxsFDhcyFyE',
-  'leg press': 'IZxyjW7MPJQ',
-  'lunge': 'QOVaHwm-Q6U',
-  'walking lunge': 'L8fvypPrzzs',
-  'reverse lunge': 'xrjCHIKdLfA',
-  'bulgarian split squat': 'HRam-4iqsfw',
-  'split squat': 'HRam-4iqsfw',
-  'leg extension': 'ljO4jkwv8AA',
-  'leg curl': 'Orxowest56U',
-  'hamstring curl': 'Orxowest56U',
-  'lying leg curl': 'Orxowest56U',
-  'calf raise': 'gwLzBJYoWlQ',
-  'standing calf raise': 'gwLzBJYoWlQ',
-  'seated calf raise': 'gwLzBJYoWlQ',
-  'hip thrust': 'LM8XfLVEJY0',
-  'glute bridge': 'wPM8icPu6H8',
-  'sumo deadlift': 'ql_4M3G0Flg',
-  'hack squat': 'bD9jT5k2Q2s',
-  'good morning': 'M_EjpB_hDWA',
-  'sissy squat': 'ZbBYdwH_GBo',
-  'step up': 'Vu2fON1dPyYI',
-  'box squat': 'ultWZbUMPL8',
-  // Core
-  'plank': 'ASdvN_XEl_c',
-  'crunch': 'Xyd_fa5zoEU',
-  'sit up': 'iFpIoSGTCiU',
-  'situp': 'iFpIoSGTCiU',
-  'ab rollout': 'jbd4L-iVRAY',
-  'ab wheel': 'jbd4L-iVRAY',
-  'russian twist': '_oEJYT13RoU',
-  'hanging leg raise': 'Pr1ieGZ5atk',
-  'leg raise': 'Pr1ieGZ5atk',
-  'cable crunch': 'taI4XduLpTk',
-  'mountain climber': 'nmwgirgXLYM',
-  'bicycle crunch': '9FGilxCbdz8',
-  'dead bug': 'tIlbMpHMULo',
-  'wood chop': 'WrBh-1bG2M4',
-  'pallof press': 'j0Y0RaK63sE',
-  // Cardio/compound
-  'burpee': 'dZgVxmf6jkA',
-  'jumping jack': 'c4DAnQ6DtF8',
-  'box jump': 'hxldG9CXBas',
-  'kettlebell swing': 'YSxHifyI6s8',
-  'battle rope': '6tHPs0TGjvA',
-  'jump rope': 'FJmRQ5iTXKE',
-  'high knee': 'pMDJFtEFRcE',
-  'jump squat': 'U4s4mEQ5VIU',
-}
 
 // ── Session persistence ───────────────────────────────────
 const SESSION_KEY = 'synap_workout_session'
@@ -185,7 +48,6 @@ export default function WorkoutTodayPage() {
   const [gender, setGender] = useState<'male' | 'female'>('male')
   const [completedExercises, setCompletedExercises] = useState<Set<number>>(new Set())
   const [expandedExercise, setExpandedExercise] = useState<number | null>(null)
-  const [videoExercise, setVideoExercise] = useState<number | null>(null)
   const [workoutStarted, setWorkoutStarted] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [workoutDone, setWorkoutDone] = useState(false)
@@ -297,8 +159,8 @@ export default function WorkoutTodayPage() {
       confettiFired.current = true
       const end = Date.now() + 3000
       const frame = () => {
-        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#7C3AED', '#22D3EE', '#A78BFA'] })
-        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#7C3AED', '#22D3EE', '#10B981'] })
+        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#BB5CF6', '#D88BFF', '#7B2FFF'] })
+        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#BB5CF6', '#108981', '#D88BFF'] })
         if (Date.now() < end) requestAnimationFrame(frame)
       }
       frame()
@@ -331,7 +193,7 @@ export default function WorkoutTodayPage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#7C3AED', borderTopColor: 'transparent' }} />
+      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
     </div>
   )
 
@@ -376,7 +238,7 @@ export default function WorkoutTodayPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#22D3EE', letterSpacing: '0.14em' }}>TODAY · {todayName.toUpperCase()}</p>
+        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>TODAY · {todayName.toUpperCase()}</p>
         <h1 className="font-heading font-bold text-2xl text-white">{todayPlan.muscle_focus || "Today's Workout"}</h1>
         <p className="font-heading text-sm mt-1" style={{ color: '#64748B' }}>
           <Clock size={11} className="inline mr-1" />{todayPlan.duration_min} min &nbsp;·&nbsp;
@@ -386,22 +248,22 @@ export default function WorkoutTodayPage() {
 
       {/* Restored session banner */}
       {sessionRestored && (
-        <div className="mb-4 p-3 rounded-xl flex items-center gap-2" style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.25)' }}>
+        <div className="mb-4 p-3 rounded-xl flex items-center gap-2" style={{ background: 'rgba(187,92,246,0.1)', border: '1px solid rgba(187,92,246,0.25)' }}>
           <span className="text-sm">⏸</span>
-          <p className="font-heading text-sm flex-1" style={{ color: '#A78BFA' }}>Previous session restored — tap Resume to continue</p>
+          <p className="font-heading text-sm flex-1" style={{ color: '#D88BFF' }}>Previous session restored — tap Resume to continue</p>
         </div>
       )}
 
       {/* Timer card */}
       <div
         className="glass-card p-5 mb-6 flex items-center justify-between"
-        style={{ borderColor: workoutStarted ? (isPaused ? 'rgba(245,158,11,0.25)' : 'rgba(34,211,238,0.2)') : 'rgba(255,255,255,0.05)' }}
+        style={{ borderColor: workoutStarted ? (isPaused ? 'rgba(245,158,11,0.25)' : 'rgba(187,92,246,0.2)') : 'rgba(255,255,255,0.05)' }}
       >
         {workoutStarted ? (
           <>
             <div>
               <div className="flex items-baseline gap-2">
-                <p className="font-heading font-bold text-3xl" style={{ color: isPaused ? '#F59E0B' : '#22D3EE' }}>
+                <p className="font-heading font-bold text-3xl" style={{ color: isPaused ? '#F59E0B' : '#BB5CF6' }}>
                   {fmt(displaySecs)}
                 </p>
                 {isPaused && (
@@ -417,7 +279,7 @@ export default function WorkoutTodayPage() {
               {/* Progress dots */}
               <div className="flex gap-1.5 flex-wrap justify-end max-w-[140px]">
                 {Array.from({ length: Math.min(exercises.length, 14) }).map((_, i) => (
-                  <div key={i} className="w-2 h-2 rounded-full" style={{ background: completedExercises.has(i) ? '#22D3EE' : 'rgba(255,255,255,0.1)' }} />
+                  <div key={i} className="w-2 h-2 rounded-full" style={{ background: completedExercises.has(i) ? '#BB5CF6' : 'rgba(255,255,255,0.1)' }} />
                 ))}
               </div>
 
@@ -426,7 +288,7 @@ export default function WorkoutTodayPage() {
                 onClick={isPaused ? resumeWorkout : pauseWorkout}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-heading font-bold text-xs transition-all"
                 style={isPaused
-                  ? { background: '#22D3EE', color: '#080810' }
+                  ? { background: '#BB5CF6', color: '#080808' }
                   : { background: 'rgba(245,158,11,0.1)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.3)' }
                 }
               >
@@ -446,7 +308,7 @@ export default function WorkoutTodayPage() {
             <button
               onClick={startWorkout}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-heading font-bold text-sm transition-all"
-              style={{ background: '#7C3AED', color: 'white', boxShadow: '0 0 20px rgba(124,58,237,0.4)' }}
+              style={{ background: '#BB5CF6', color: 'white', boxShadow: '0 0 20px rgba(187,92,246,0.4)' }}
             >
               <Play size={14} fill="white" /> START
             </button>
@@ -459,16 +321,13 @@ export default function WorkoutTodayPage() {
         {exercises.map((ex: any, i: number) => {
           const done = completedExercises.has(i)
           const isExpanded = expandedExercise === i
-          const isVideoOpen = videoExercise === i
-          const ytId = getYouTubeId(ex.name)
-          const searchUrl = getSearchUrl(ex.name)
 
           return (
             <div
               key={i}
               className="rounded-2xl overflow-hidden transition-all"
               style={{
-                background: done ? 'rgba(16,185,129,0.06)' : '#121220',
+                background: done ? 'rgba(16,185,129,0.06)' : '#0E0E0E',
                 border: `1px solid ${done ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.05)'}`,
               }}
             >
@@ -495,7 +354,7 @@ export default function WorkoutTodayPage() {
                       <span className="font-heading text-xs" style={{ color: '#2D3748' }}>{ex.rest_sec}s rest</span>
                     )}
                     {ex.muscle_group && (
-                      <span className="font-heading text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(124,58,237,0.1)', color: '#A78BFA' }}>
+                      <span className="font-heading text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(187,92,246,0.1)', color: '#D88BFF' }}>
                         {ex.muscle_group}
                       </span>
                     )}
@@ -503,28 +362,7 @@ export default function WorkoutTodayPage() {
                 </div>
 
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  {/* Video: embed if known ID, else open YouTube search */}
-                  {ytId ? (
-                    <button
-                      onClick={() => setVideoExercise(isVideoOpen ? null : i)}
-                      className="p-1.5 rounded-lg transition-all"
-                      style={{ background: isVideoOpen ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.05)', color: isVideoOpen ? '#FF4444' : '#475569' }}
-                      title="Watch demo"
-                    >
-                      <PlayCircle size={15} />
-                    </button>
-                  ) : (
-                    <a
-                      href={searchUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 rounded-lg transition-all"
-                      style={{ background: 'rgba(255,255,255,0.05)', color: '#475569' }}
-                      title="Watch tutorial on YouTube"
-                    >
-                      <ExternalLink size={14} />
-                    </a>
-                  )}
+                  <VideoButton exerciseName={ex.name} videoId={ex.video_id} />
 
                   <button onClick={() => setExpandedExercise(isExpanded ? null : i)} className="p-1.5">
                     {isExpanded
@@ -534,19 +372,6 @@ export default function WorkoutTodayPage() {
                   </button>
                 </div>
               </div>
-
-              {/* YouTube embed */}
-              {isVideoOpen && ytId && (
-                <div className="px-4 pb-3">
-                  <div className="rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                    <YouTube
-                      videoId={ytId}
-                      opts={{ width: '100%', height: '100%', playerVars: { autoplay: 0, modestbranding: 1, rel: 0 } }}
-                      style={{ width: '100%', height: '100%' }}
-                    />
-                  </div>
-                </div>
-              )}
 
               {/* Form tips + weight guidance */}
               {isExpanded && (
@@ -563,17 +388,6 @@ export default function WorkoutTodayPage() {
                       <p className="font-heading text-xs leading-relaxed" style={{ color: '#64748B' }}>{ex.weight_guidance}</p>
                     </div>
                   )}
-                  {!ytId && (
-                    <a
-                      href={searchUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 mt-1 text-xs font-heading font-semibold transition-colors"
-                      style={{ color: '#64748B' }}
-                    >
-                      <ExternalLink size={11} /> Watch tutorial on YouTube
-                    </a>
-                  )}
                 </div>
               )}
             </div>
@@ -588,10 +402,10 @@ export default function WorkoutTodayPage() {
           disabled={!allDone || isPaused}
           className="w-full py-4 rounded-2xl font-heading font-bold text-sm tracking-wider transition-all mb-6"
           style={{
-            background: (allDone && !isPaused) ? 'linear-gradient(135deg, #7C3AED, #22D3EE)' : 'rgba(255,255,255,0.04)',
+            background: (allDone && !isPaused) ? 'linear-gradient(135deg, #BB5CF6, #BB5CF6)' : 'rgba(255,255,255,0.04)',
             color: (allDone && !isPaused) ? 'white' : '#2D3748',
             letterSpacing: '0.1em',
-            boxShadow: (allDone && !isPaused) ? '0 0 30px rgba(124,58,237,0.4)' : 'none',
+            boxShadow: (allDone && !isPaused) ? '0 0 30px rgba(187,92,246,0.4)' : 'none',
           }}
         >
           {isPaused ? 'RESUME TO FINISH' : allDone ? '🏆 FINISH WORKOUT' : `${completedExercises.size} / ${exercises.length} COMPLETED`}
@@ -616,12 +430,12 @@ function FinishedScreen({ elapsed, completed, total, gender, onReset }: any) {
         </div>
         <div className="flex gap-6">
           <div className="text-center">
-            <p className="font-heading font-bold text-3xl" style={{ color: '#22D3EE' }}>{mins}</p>
+            <p className="font-heading font-bold text-3xl" style={{ color: '#BB5CF6' }}>{mins}</p>
             <p className="font-heading text-xs" style={{ color: '#475569' }}>MINUTES</p>
           </div>
           <div className="w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
           <div className="text-center">
-            <p className="font-heading font-bold text-3xl" style={{ color: '#7C3AED' }}>{completed}</p>
+            <p className="font-heading font-bold text-3xl" style={{ color: '#BB5CF6' }}>{completed}</p>
             <p className="font-heading text-xs" style={{ color: '#475569' }}>EXERCISES</p>
           </div>
           <div className="w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
@@ -631,7 +445,7 @@ function FinishedScreen({ elapsed, completed, total, gender, onReset }: any) {
           </div>
         </div>
         <div className="flex gap-3 w-full">
-          <a href="/chat" className="flex-1 py-2.5 rounded-xl font-heading font-semibold text-sm text-center transition-all" style={{ background: 'rgba(124,58,237,0.15)', color: '#A78BFA', border: '1px solid rgba(124,58,237,0.2)' }}>
+          <a href="/chat" className="flex-1 py-2.5 rounded-xl font-heading font-semibold text-sm text-center transition-all" style={{ background: 'rgba(187,92,246,0.15)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.2)' }}>
             Tell Ion
           </a>
           <button onClick={onReset} className="flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl font-heading text-sm" style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.06)' }}>

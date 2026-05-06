@@ -102,7 +102,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null)
 
   // OAuth
-  const [oauthLoading, setOauthLoading] = useState<'google' | 'apple' | null>(null)
+  const [oauthLoading, setOauthLoading] = useState<'google' | null>(null)
 
   // Phone OTP
   const [showPhone, setShowPhone] = useState(false)
@@ -125,7 +125,7 @@ function LoginForm() {
   }
 
   // ── OAuth ───────────────────────────────────────────────
-  const handleOAuth = async (provider: 'google' | 'apple') => {
+  const handleOAuth = async (provider: 'google') => {
     setOauthLoading(provider)
     const supabase = createBrowserClient()
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -307,13 +307,6 @@ function LoginForm() {
           loading={oauthLoading === 'google'}
           icon={<GoogleIcon />}
           label="Continue with Google"
-        />
-
-        <OAuthButton
-          onClick={() => handleOAuth('apple')}
-          loading={oauthLoading === 'apple'}
-          icon={<AppleIcon />}
-          label="Continue with Apple"
         />
 
         <button

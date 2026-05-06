@@ -113,6 +113,18 @@ export default function MeasurementsPage() {
         try {
           localStorage.setItem(INBODY_ANALYSIS_CACHE_PREFIX + url, JSON.stringify(result.data))
         } catch {}
+        // Auto-populate measurements from InBody data
+        const d = result.data
+        const payload: Record<string, any> = { date: new Date().toISOString().split('T')[0] }
+        if (d.body_weight_kg != null) payload.weight_kg = d.body_weight_kg
+        if (d.body_fat_pct != null) payload.body_fat_pct = d.body_fat_pct
+        if (Object.keys(payload).length > 1) {
+          fetch('/api/measurements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }).then(() => loadMeasurements()).catch(() => {})
+        }
       }
     } catch (err: any) {
       console.error('[measurements] InBody analysis error:', err)

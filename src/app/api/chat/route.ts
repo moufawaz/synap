@@ -2,6 +2,7 @@ import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { canSendMessage, incrementMessageCount, isLaunchMode } from '@/lib/subscription'
+import { resolveExerciseVideo } from '@/lib/youtube-search'
 
 export async function POST(req: Request) {
   // ── Guard: API key must be set ─────────────────────────
@@ -86,14 +87,31 @@ export async function POST(req: Request) {
       messages,
     })
 
-    const reply = response.content[0].type === 'text' ? response.content[0].text : ''
+    let reply = response.content[0].type === 'text' ? response.content[0].text : ''
+    let messageType = 'text'
+
+    const planEdit = await maybeApplyPlanEdit({
+      client,
+      supabase,
+      userId: user.id,
+      profile,
+      message,
+      workoutPlan,
+      dietPlan,
+    })
+
+    if (planEdit.applied) {
+      messageType = planEdit.type === 'workout' ? 'workout_card' : 'meal_card'
+      reply = `${reply}\n\nDone - I updated your ${planEdit.type === 'workout' ? 'workout plan' : 'nutrition plan'} and saved it to your current plan. ${planEdit.summary}`
+    }
 
     // Save assistant response
     await supabase.from('chat_messages').insert({
       user_id: user.id,
       role: 'assistant',
       content: reply,
-      message_type: 'text',
+      message_type: messageType,
+      metadata: planEdit.applied ? { plan_edit: planEdit } : null,
     })
 
     // ── Increment message count (skip in launch mode) ─────
@@ -101,7 +119,7 @@ export async function POST(req: Request) {
       await incrementMessageCount(user.id).catch(() => {})
     }
 
-    return NextResponse.json({ reply })
+    return NextResponse.json({ reply, message_type: messageType, plan_edit: planEdit.applied ? planEdit : null })
   } catch (err: any) {
     console.error('Chat error:', err?.message || err)
     const friendly = friendlyError(err?.message || '')
@@ -123,6 +141,177 @@ function friendlyError(raw: string): string {
     return "That message is too long for me. Can you shorten it?"
   }
   return "Something went wrong on my end. Try again in a moment."
+}
+
+type PlanEditResult =
+  | { applied: false; reason: string }
+  | { applied: true; type: 'workout' | 'diet'; summary: string }
+
+async function maybeApplyPlanEdit({
+  client,
+  supabase,
+  userId,
+  profile,
+  message,
+  workoutPlan,
+  dietPlan,
+}: {
+  client: Anthropic
+  supabase: ReturnType<typeof createServerClient>
+  userId: string
+  profile: any
+  message: string
+  workoutPlan: any
+  dietPlan: any
+}): Promise<PlanEditResult> {
+  const intent = detectPlanEditIntent(message)
+  if (!intent) return { applied: false, reason: 'no_plan_edit_intent' }
+  if (intent === 'workout' && !workoutPlan) return { applied: false, reason: 'no_active_workout_plan' }
+  if (intent === 'diet' && !dietPlan) return { applied: false, reason: 'no_active_diet_plan' }
+
+  try {
+    const currentPlan = intent === 'workout' ? workoutPlan : dietPlan
+    const prompt = buildPlanEditPrompt({
+      type: intent,
+      profile,
+      userRequest: message,
+      currentPlan,
+    })
+
+    const editResponse = await client.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: intent === 'workout' ? 5000 : 3500,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
+    const edit = parseJsonObject(raw)
+    if (!edit?.updated_plan || typeof edit.summary !== 'string') {
+      return { applied: false, reason: 'invalid_plan_edit_response' }
+    }
+
+    if (intent === 'workout') {
+      await enrichWorkoutVideos(edit.updated_plan)
+      await supabase.from('workout_plans').update({ active: false }).eq('user_id', userId).eq('active', true)
+      const { error } = await supabase.from('workout_plans').insert({
+        user_id: userId,
+        plan_json: edit.updated_plan,
+        active: true,
+      })
+      if (error) throw error
+    } else {
+      await supabase.from('diet_plans').update({ active: false }).eq('user_id', userId).eq('active', true)
+      const { error } = await supabase.from('diet_plans').insert({
+        user_id: userId,
+        plan_json: edit.updated_plan,
+        active: true,
+      })
+      if (error) throw error
+    }
+
+    return {
+      applied: true,
+      type: intent,
+      summary: edit.summary.slice(0, 500),
+    }
+  } catch (err) {
+    console.error('Plan edit failed:', err)
+    return { applied: false, reason: 'plan_edit_failed' }
+  }
+}
+
+function detectPlanEditIntent(message: string): 'workout' | 'diet' | null {
+  const text = message.toLowerCase()
+  const changeWords = /\b(change|swap|replace|remove|avoid|hate|dislike|allergic|allergy|can't eat|cannot eat|adjust|update|modify|instead|alternative)\b/
+  if (!changeWords.test(text)) return null
+
+  const workoutWords = /\b(exercise|workout|training|lift|bench|squat|deadlift|cardio|sets|reps|gym|machine|dumbbell|barbell|shoulder|knee|back pain)\b/
+  const dietWords = /\b(food|meal|diet|nutrition|calorie|calories|macro|protein|carb|fat|breakfast|lunch|dinner|snack|chicken|rice|egg|milk|fish|beef|vegetarian|vegan)\b/
+
+  if (workoutWords.test(text) && !dietWords.test(text)) return 'workout'
+  if (dietWords.test(text) && !workoutWords.test(text)) return 'diet'
+  if (/\b(exercise|workout|training|gym)\b/.test(text)) return 'workout'
+  if (/\b(food|meal|diet|nutrition|calorie|macro)\b/.test(text)) return 'diet'
+  return null
+}
+
+function buildPlanEditPrompt({
+  type,
+  profile,
+  userRequest,
+  currentPlan,
+}: {
+  type: 'workout' | 'diet'
+  profile: any
+  userRequest: string
+  currentPlan: any
+}) {
+  const profileText = profile ? `Name: ${profile.name}
+Goal: ${profile.goal}
+Training days: ${profile.training_days}
+Gym access: ${profile.gym_access}
+Injuries: ${profile.injuries || 'None'}
+Medical: ${profile.medical_conditions || 'None'}
+Dietary: ${Array.isArray(profile.dietary_preference) ? profile.dietary_preference.join(', ') : profile.dietary_preference || 'None'}
+Allergies: ${profile.allergies || 'None'}` : 'No profile loaded'
+
+  return `You are Ion, a careful personal trainer and nutrition coach. The user is asking to change their active ${type === 'workout' ? 'workout' : 'nutrition'} plan.
+
+USER PROFILE:
+${profileText}
+
+USER REQUEST:
+${userRequest}
+
+CURRENT ACTIVE PLAN JSON:
+${JSON.stringify(currentPlan, null, 2)}
+
+TASK:
+- Return the full updated plan JSON, preserving the same overall shape and all useful existing fields.
+- Make only the requested change plus directly necessary balancing changes.
+- If this is a workout plan, keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group when present.
+- If replacing an exercise, choose a safe equivalent for the same muscle group and the user's equipment/injuries.
+- If this is a diet plan, keep daily calories/macros coherent and meal totals roughly aligned.
+- If this is a diet plan, every meal must include a practical recipe object with title, prep_time_min, cook_time_min, ingredients, steps, and tips.
+- Do not include markdown or explanations outside JSON.
+
+Return ONLY valid JSON in this exact wrapper:
+{
+  "summary": "1 sentence explaining what changed",
+  "updated_plan": { ...full updated plan... }
+}`
+}
+
+function parseJsonObject(raw: string): any | null {
+  try {
+    const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    const match = cleaned.match(/\{[\s\S]*\}/)
+    return JSON.parse(match ? match[0] : cleaned)
+  } catch {
+    return null
+  }
+}
+
+async function enrichWorkoutVideos(plan: any) {
+  const allExercises: any[] = getWorkoutDays(plan).flatMap((day: any) => day.exercises || [])
+  await Promise.all(
+    allExercises.map(async (ex: any) => {
+      try {
+        ex.video_id = await Promise.race([
+          resolveExerciseVideo(ex.name, ex.video_id),
+          new Promise<null>(res => setTimeout(() => res(null), 10_000)),
+        ])
+      } catch {
+        ex.video_id = null
+      }
+    })
+  )
+}
+
+function getWorkoutDays(plan: any): any[] {
+  if (Array.isArray(plan?.days)) return plan.days
+  if (Array.isArray(plan?.weeks)) return plan.weeks.flatMap((week: any) => week.days || [])
+  return []
 }
 
 function buildSystemPrompt(profile: any, workoutPlan: any, dietPlan: any): string {
@@ -150,7 +339,7 @@ ${dietPlan ? `Daily targets: ${dietPlan.daily_calories} kcal, ${dietPlan.protein
 
 RULES:
 - Never give generic advice — always reference their specific situation
-- If asked to modify their plan, describe the modification clearly
+- If asked to modify workouts or nutrition, make the change directly and describe what changed clearly
 - For medical questions, recommend consulting a doctor first
 - Keep responses focused and conversational (2-4 sentences usually)
 - If they're struggling, be encouraging but realistic`

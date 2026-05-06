@@ -33,7 +33,7 @@ interface SendEmailOptions {
 // ── Shared layout wrapper ──────────────────────────────────────
 function layout(content: string): string {
   return `
-    <div style="background:#0D0D1A;color:#F0F0FF;font-family:system-ui,-apple-system,sans-serif;padding:0;margin:0">
+    <div style="background:#0A0A0A;color:#F0F0FF;font-family:system-ui,-apple-system,sans-serif;padding:0;margin:0">
       <div style="max-width:580px;margin:0 auto;padding:40px 24px">
         <div style="margin-bottom:32px">
           <span style="font-size:18px;font-weight:900;letter-spacing:0.15em;color:#BB5CF6">SYNAP</span>
@@ -47,7 +47,7 @@ function layout(content: string): string {
     </div>`
 }
 
-function btn(text: string, href: string, color = '#7C3AED'): string {
+function btn(text: string, href: string, color = '#BB5CF6'): string {
   return `<a href="${href}" style="display:inline-block;margin-top:24px;padding:14px 32px;background:${color};color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:0.05em">${text}</a>`
 }
 
@@ -62,7 +62,7 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
     welcome: {
       subject: 'Welcome to SYNAP — Ion is ready for you',
       html: layout(`
-        <h1 style="color:#A78BFA;font-size:28px;font-weight:900;margin:0 0 8px">Welcome, ${data.name}!</h1>
+        <h1 style="color:#D88BFF;font-size:28px;font-weight:900;margin:0 0 8px">Welcome, ${data.name}!</h1>
         <p style="color:#94A3B8;font-size:16px;line-height:1.6;margin:8px 0 0">Ion has reviewed everything you shared and built your personalised plan. Let's get to work.</p>
         ${btn('Open My Dashboard', `${APP_URL}/dashboard`)}
       `),
@@ -164,12 +164,12 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
     weekly_summary: {
       subject: `Your weekly summary is ready — ${data.week}`,
       html: layout(`
-        <h1 style="color:#22D3EE;font-size:24px;font-weight:900;margin:0 0 8px">Week ${data.week} Summary</h1>
+        <h1 style="color:#BB5CF6;font-size:24px;font-weight:900;margin:0 0 8px">Week ${data.week} Summary</h1>
         <p style="color:#94A3B8;line-height:1.6">${data.name}, here's what you accomplished this week:</p>
         <div style="margin:24px 0;padding:20px;background:#0A1628;border-radius:10px;border:1px solid #1E1E35">
-          <p style="color:#A78BFA;margin:0 0 8px">🏋️ Workouts: <strong style="color:white">${data.workouts || 0}</strong></p>
-          <p style="color:#A78BFA;margin:0 0 8px">🥗 Meals logged: <strong style="color:white">${data.meals || 0}</strong></p>
-          <p style="color:#A78BFA;margin:0">⚖️ Current weight: <strong style="color:white">${data.weight || '—'} kg</strong></p>
+          <p style="color:#D88BFF;margin:0 0 8px">🏋️ Workouts: <strong style="color:white">${data.workouts || 0}</strong></p>
+          <p style="color:#D88BFF;margin:0 0 8px">🥗 Meals logged: <strong style="color:white">${data.meals || 0}</strong></p>
+          <p style="color:#D88BFF;margin:0">⚖️ Current weight: <strong style="color:white">${data.weight || '—'} kg</strong></p>
         </div>
         ${btn('View Progress', `${APP_URL}/progress`)}
       `),
@@ -196,7 +196,7 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
     milestone: {
       subject: `🏆 Milestone unlocked — ${data.milestone}`,
       html: layout(`
-        <h1 style="color:#A78BFA;font-size:24px;font-weight:900;margin:0 0 8px">🏆 ${data.milestone}</h1>
+        <h1 style="color:#D88BFF;font-size:24px;font-weight:900;margin:0 0 8px">🏆 ${data.milestone}</h1>
         <p style="color:#94A3B8;line-height:1.6">${data.message || 'You hit a new milestone. Ion is tracking every win.'}</p>
         ${btn('View Progress', `${APP_URL}/progress`)}
       `),

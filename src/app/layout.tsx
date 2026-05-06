@@ -1,33 +1,40 @@
-import type { Metadata } from 'next'
-import { Inter, Exo_2, JetBrains_Mono } from 'next/font/google'
-import '@/app/globals.css'
+import type { Metadata, Viewport } from 'next'
+import { Exo_2, Inter, JetBrains_Mono } from 'next/font/google'
+import './globals.css'
+
+// ─── SYNAP — Brand Typography System ─────────────────
+//  • Exo 2  → headings, display, UI labels
+//  • Inter  → long-form body
+//  • JetBrains Mono → numerals, metrics
+// ──────────────────────────────────────────────────────
+
+const exo2 = Exo_2({
+  subsets: ['latin'],
+  variable: '--font-heading',
+  weight: ['400', '500', '600', '700', '800', '900'],
+  display: 'swap',
+})
 
 const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-body',
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
 })
 
-// SYNAP brand display font — wide-set, "digital and fast" with letter cuts.
-// Replaces Space Grotesk per the brand spec.
-const exo2 = Exo_2({
+const jetbrains = JetBrains_Mono({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700', '800', '900'],
-  variable: '--font-exo',
-  display: 'swap',
-})
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
   variable: '--font-mono',
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: 'SYNAP — Performance Connected.',
-  description: 'Your body is a system. SYNAP is the OS. Meet ION — the AI agent that bridges biological potential and artificial intelligence through data-driven training, nutrition, and recovery.',
-  keywords: ['AI personal trainer', 'fitness app', 'workout plan', 'diet plan', 'ION', 'SYNAP', 'performance'],
+  title: 'Synap — Performance Connected.',
+  description:
+    'Your body is a system. Synap is the OS. AI-powered training, nutrition, and recovery — orchestrated by Ion.',
+  keywords: ['fitness', 'AI trainer', 'nutrition', 'workout', 'performance', 'Ion', 'Synap'],
+  authors: [{ name: 'Synap' }],
   manifest: '/manifest.json',
   icons: {
     icon: '/icon.jpg',
@@ -40,35 +47,28 @@ export const metadata: Metadata = {
     title: 'SYNAP',
   },
   openGraph: {
-    title: 'SYNAP — Performance Connected.',
-    description: 'Your body is a system. SYNAP is the OS.',
-    url: 'https://synapfit.app',
-    siteName: 'SYNAP',
+    title: 'Synap — Performance Connected.',
+    description: 'The operating system for your body.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SYNAP — Performance Connected.',
-    description: 'Your body is a system. SYNAP is the OS.',
+    title: 'Synap — Performance Connected.',
+    description: 'The operating system for your body.',
   },
 }
 
-export const viewport = {
-  themeColor: '#7C3AED',
+export const viewport: Viewport = {
+  themeColor: '#0A0A0A',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${exo2.variable} ${jetbrainsMono.variable}`}>
-      <body style={{ backgroundColor: '#0D0D1A', color: '#F0F0FF' }} className="antialiased">
+    <html lang="en" className={`${exo2.variable} ${inter.variable} ${jetbrains.variable}`}>
+      <body className="font-body antialiased bg-[#0A0A0A] text-[#E2E8F0] min-h-screen overflow-x-hidden">
         {children}
       </body>
     </html>

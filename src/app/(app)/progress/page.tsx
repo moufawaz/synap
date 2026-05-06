@@ -6,10 +6,10 @@ import { TrendingDown, TrendingUp, Minus, Sparkles, Flame } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 const CHART_METRICS = [
-  { key: 'weight_kg', label: 'Weight', unit: 'kg', color: '#7C3AED' },
+  { key: 'weight_kg', label: 'Weight', unit: 'kg', color: '#BB5CF6' },
   { key: 'waist_cm', label: 'Waist', unit: 'cm', color: '#F59E0B' },
   { key: 'chest_cm', label: 'Chest', unit: 'cm', color: '#10B981' },
-  { key: 'bicep_right_cm', label: 'Bicep', unit: 'cm', color: '#22D3EE' },
+  { key: 'bicep_right_cm', label: 'Bicep', unit: 'cm', color: '#BB5CF6' },
   { key: 'body_fat_pct', label: 'Body Fat', unit: '%', color: '#EF4444' },
 ]
 
@@ -62,7 +62,7 @@ export default function ProgressPage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#7C3AED', borderTopColor: 'transparent' }} />
+      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
     </div>
   )
 
@@ -71,7 +71,7 @@ export default function ProgressPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#22D3EE', letterSpacing: '0.14em' }}>ANALYTICS</p>
+        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>ANALYTICS</p>
         <h1 className="font-heading font-bold text-2xl text-white">Your Progress</h1>
       </div>
 
@@ -175,7 +175,7 @@ export default function ProgressPage() {
         <div className="flex items-center gap-3 mt-3">
           <span className="font-heading text-[10px]" style={{ color: '#475569' }}>Less</span>
           {[0, 0.3, 0.6, 1].map(o => (
-            <div key={o} className="w-2.5 h-2.5 rounded-sm" style={{ background: o === 0 ? 'rgba(255,255,255,0.04)' : `rgba(124,58,237,${o})` }} />
+            <div key={o} className="w-2.5 h-2.5 rounded-sm" style={{ background: o === 0 ? 'rgba(255,255,255,0.04)' : `rgba(187,92,246,${o})` }} />
           ))}
           <span className="font-heading text-[10px]" style={{ color: '#475569' }}>More</span>
         </div>
@@ -192,13 +192,13 @@ export default function ProgressPage() {
           <div className="flex items-end gap-2 h-24">
             {weeklyData.map((week, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <span className="font-heading text-xs font-bold" style={{ color: '#7C3AED' }}>{week.count}</span>
+                <span className="font-heading text-xs font-bold" style={{ color: '#BB5CF6' }}>{week.count}</span>
                 <div
                   className="w-full rounded-t-lg transition-all"
                   style={{
                     height: `${Math.max((week.count / 7) * 100, 8)}%`,
-                    background: `rgba(124,58,237,${0.2 + (week.count / 7) * 0.7})`,
-                    border: '1px solid rgba(124,58,237,0.3)',
+                    background: `rgba(187,92,246,${0.2 + (week.count / 7) * 0.7})`,
+                    border: '1px solid rgba(187,92,246,0.3)',
                   }}
                 />
                 <span className="font-heading text-[9px]" style={{ color: '#2D3748' }}>W{weeklyData.length - i}</span>
@@ -209,17 +209,17 @@ export default function ProgressPage() {
       </div>
 
       {/* Ion Monthly Summary Card */}
-      <div className="glass-card p-5 mb-6" style={{ borderColor: 'rgba(124,58,237,0.15)' }}>
+      <div className="glass-card p-5 mb-6" style={{ borderColor: 'rgba(187,92,246,0.15)' }}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Sparkles size={16} style={{ color: '#7C3AED' }} />
+            <Sparkles size={16} style={{ color: '#BB5CF6' }} />
             <p className="font-heading font-bold text-sm text-white">Ion Monthly Summary</p>
           </div>
           {!monthlySummary && !summaryLoading && (
             <button
               onClick={loadMonthlySummary}
               className="font-heading text-xs px-3 py-1.5 rounded-lg transition-all"
-              style={{ background: 'rgba(124,58,237,0.12)', color: '#A78BFA', border: '1px solid rgba(124,58,237,0.2)' }}
+              style={{ background: 'rgba(187,92,246,0.12)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.2)' }}
             >
               Generate
             </button>
@@ -228,7 +228,7 @@ export default function ProgressPage() {
 
         {summaryLoading ? (
           <div className="flex items-center gap-3 py-4">
-            <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#7C3AED', borderTopColor: 'transparent' }} />
+            <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
             <p className="font-heading text-sm" style={{ color: '#64748B' }}>Ion is reviewing your month...</p>
           </div>
         ) : monthlySummary ? (
@@ -238,11 +238,11 @@ export default function ProgressPage() {
             </p>
             <div className="grid grid-cols-3 gap-3 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
               <div className="text-center">
-                <p className="font-heading font-bold text-lg" style={{ color: '#7C3AED' }}>{monthlySummary.stats?.workouts || 0}</p>
+                <p className="font-heading font-bold text-lg" style={{ color: '#BB5CF6' }}>{monthlySummary.stats?.workouts || 0}</p>
                 <p className="font-heading text-[10px]" style={{ color: '#475569' }}>WORKOUTS</p>
               </div>
               <div className="text-center">
-                <p className="font-heading font-bold text-lg" style={{ color: '#22D3EE' }}>
+                <p className="font-heading font-bold text-lg" style={{ color: '#BB5CF6' }}>
                   {monthlySummary.stats?.avgDuration || 0}m
                 </p>
                 <p className="font-heading text-[10px]" style={{ color: '#475569' }}>AVG DURATION</p>
@@ -341,8 +341,8 @@ function StreakCalendar({ activeDays }: { activeDays: Set<string> }) {
                 title={key}
                 className="w-2.5 h-2.5 flex-shrink-0 rounded-sm transition-all"
                 style={{
-                  background: isFuture ? 'transparent' : isActive ? '#7C3AED' : 'rgba(255,255,255,0.04)',
-                  boxShadow: isActive ? '0 0 6px rgba(124,58,237,0.5)' : isToday ? '0 0 0 1px rgba(34,211,238,0.5)' : 'none',
+                  background: isFuture ? 'transparent' : isActive ? '#BB5CF6' : 'rgba(255,255,255,0.04)',
+                  boxShadow: isActive ? '0 0 6px rgba(187,92,246,0.5)' : isToday ? '0 0 0 1px rgba(187,92,246,0.5)' : 'none',
                 }}
               />
             )
@@ -385,7 +385,7 @@ function LineChart({ data, color, unit }: { data: { date: string; value: number 
         <path d={areaD} fill={`url(#${gId})`} />
         <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="3" fill={color} stroke="#0D0D1A" strokeWidth="1.5" />
+          <circle key={i} cx={p.x} cy={p.y} r="3" fill={color} stroke="#0A0A0A" strokeWidth="1.5" />
         ))}
       </svg>
       <div className="flex justify-between mt-2">

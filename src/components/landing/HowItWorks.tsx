@@ -26,8 +26,8 @@ const steps = [
     titleKey: 'how_step2_title' as const,
     descKey: 'how_step2_desc' as const,
     detail: {
-      en: ['Calorie & macro targets', 'Meal timing to your schedule', 'Exercise program + videos', '6-week progressive overload', 'Pre & post workout meals'],
-      ar: ['أهداف السعرات والمغذيات', 'توقيت الوجبات حسب جدولك', 'برنامج التمارين + الفيديوهات', '6 أسابيع تحميل تدريجي', 'وجبات ما قبل وبعد التمرين'],
+      en: ['Calorie & macro targets', 'Recipes for every meal', 'Exercise program + videos', '6-week progressive overload', 'Pre & post workout meals'],
+      ar: ['أهداف السعرات والمغذيات', 'وصفات لكل وجبة', 'برنامج التمارين + الفيديوهات', '6 أسابيع تحميل تدريجي', 'وجبات ما قبل وبعد التمرين'],
     },
   },
   {

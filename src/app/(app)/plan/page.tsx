@@ -3,9 +3,14 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
-import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp } from 'lucide-react'
+import Link from 'next/link'
+import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp, MessageSquare } from 'lucide-react'
+import { VideoButton } from '@/components/ui/ExerciseVideoModal'
+import { RecipeButton } from '@/components/ui/RecipeModal'
 
 export const dynamic = 'force-dynamic'
+
+const PLAN_MODIFY_WINDOW_DAYS = 30
 
 type Tab = 'diet' | 'workout'
 
@@ -17,6 +22,7 @@ export default function PlanPage() {
   const [loading, setLoading] = useState(true)
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [expandedMeal, setExpandedMeal] = useState<string | null>(null)
+  const [planDaysLeft, setPlanDaysLeft] = useState<number | null>(null)
 
   useEffect(() => { loadPlans() }, [])
 
@@ -34,12 +40,18 @@ export default function PlanPage() {
     setDietPlan(dietRes.data?.plan_json || null)
     setWorkoutPlan(workoutRes.data?.plan_json || null)
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
+
+    if (workoutRes.data?.created_at) {
+      const age = Math.floor((Date.now() - new Date(workoutRes.data.created_at).getTime()) / 86400000)
+      setPlanDaysLeft(Math.max(0, PLAN_MODIFY_WINDOW_DAYS - age))
+    }
+
     setLoading(false)
   }
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#7C3AED', borderTopColor: 'transparent' }} />
+      <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
     </div>
   )
 
@@ -50,10 +62,38 @@ export default function PlanPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#7C3AED', letterSpacing: '0.14em' }}>YOUR PLANS</p>
+        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>YOUR PLANS</p>
         <h1 className="font-heading font-bold text-2xl text-white tracking-wide">My Programme</h1>
         <p className="font-heading text-sm mt-1" style={{ color: '#64748B' }}>Ion-generated plans tailored to your goals</p>
       </div>
+
+      {/* Plan modification time banner */}
+      {planDaysLeft !== null && (
+        <Link href="/chat">
+          <div
+            className="mb-5 p-3.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:opacity-90"
+            style={{
+              background: planDaysLeft > 7 ? 'rgba(16,137,129,0.06)' : planDaysLeft > 0 ? 'rgba(245,158,11,0.06)' : 'rgba(239,68,68,0.06)',
+              border: `1px solid ${planDaysLeft > 7 ? 'rgba(16,137,129,0.2)' : planDaysLeft > 0 ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'}`,
+            }}
+          >
+            <div className="flex items-center gap-2.5">
+              <Clock size={14} style={{ color: planDaysLeft > 7 ? '#108981' : planDaysLeft > 0 ? '#F59E0B' : '#EF4444' }} />
+              <div>
+                <p className="font-heading font-bold text-xs text-white tracking-wider">
+                  {planDaysLeft > 0 ? `${planDaysLeft} DAYS LEFT TO MODIFY` : 'MODIFICATION WINDOW CLOSED'}
+                </p>
+                <p className="font-heading text-[10px] mt-0.5" style={{ color: '#64748B' }}>
+                  {planDaysLeft > 0
+                    ? 'Ask Ion in chat to adjust your nutrition or exercise plan.'
+                    : 'Request a new plan or renewal through Ion chat.'}
+                </p>
+              </div>
+            </div>
+            <MessageSquare size={14} style={{ color: '#475569', flexShrink: 0 }} />
+          </div>
+        </Link>
+      )}
 
       {/* Tab switcher */}
       <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -61,9 +101,9 @@ export default function PlanPage() {
           onClick={() => setTab('diet')}
           className="flex items-center gap-2 px-5 py-2 rounded-lg font-heading font-semibold text-sm transition-all"
           style={{
-            background: tab === 'diet' ? 'rgba(124,58,237,0.2)' : 'transparent',
-            color: tab === 'diet' ? '#A78BFA' : '#64748B',
-            border: tab === 'diet' ? '1px solid rgba(124,58,237,0.3)' : '1px solid transparent',
+            background: tab === 'diet' ? 'rgba(187,92,246,0.2)' : 'transparent',
+            color: tab === 'diet' ? '#D88BFF' : '#64748B',
+            border: tab === 'diet' ? '1px solid rgba(187,92,246,0.3)' : '1px solid transparent',
           }}
         >
           <Utensils size={14} /> Diet Plan
@@ -72,9 +112,9 @@ export default function PlanPage() {
           onClick={() => setTab('workout')}
           className="flex items-center gap-2 px-5 py-2 rounded-lg font-heading font-semibold text-sm transition-all"
           style={{
-            background: tab === 'workout' ? 'rgba(34,211,238,0.1)' : 'transparent',
-            color: tab === 'workout' ? '#22D3EE' : '#64748B',
-            border: tab === 'workout' ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent',
+            background: tab === 'workout' ? 'rgba(187,92,246,0.1)' : 'transparent',
+            color: tab === 'workout' ? '#BB5CF6' : '#64748B',
+            border: tab === 'workout' ? '1px solid rgba(187,92,246,0.25)' : '1px solid transparent',
           }}
         >
           <Dumbbell size={14} /> Workout Plan
@@ -104,7 +144,7 @@ function DietPlanView({ plan, expandedMeal, setExpandedMeal }: any) {
     { label: 'Calories', value: plan.daily_calories || plan.calories_per_day, unit: 'kcal', icon: <Flame size={14} />, color: '#F59E0B' },
     { label: 'Protein', value: plan.macros?.protein_g || plan.protein_g, unit: 'g', icon: <Beef size={14} />, color: '#EF4444' },
     { label: 'Carbs', value: plan.macros?.carbs_g || plan.carbs_g, unit: 'g', icon: <Wheat size={14} />, color: '#F59E0B' },
-    { label: 'Fat', value: plan.macros?.fat_g || plan.fat_g, unit: 'g', icon: <Droplets size={14} />, color: '#22D3EE' },
+    { label: 'Fat', value: plan.macros?.fat_g || plan.fat_g, unit: 'g', icon: <Droplets size={14} />, color: '#BB5CF6' },
   ]
 
   const weeks = plan.weeks || []
@@ -129,7 +169,7 @@ function DietPlanView({ plan, expandedMeal, setExpandedMeal }: any) {
 
       {/* Plan info */}
       {(plan.name || plan.description) && (
-        <div className="glass-card p-5" style={{ borderColor: 'rgba(124,58,237,0.15)' }}>
+        <div className="glass-card p-5" style={{ borderColor: 'rgba(187,92,246,0.15)' }}>
           {plan.name && <p className="font-heading font-bold text-white mb-1">{plan.name}</p>}
           {plan.description && <p className="font-heading text-sm leading-relaxed" style={{ color: '#94A3B8' }}>{plan.description}</p>}
         </div>
@@ -139,7 +179,7 @@ function DietPlanView({ plan, expandedMeal, setExpandedMeal }: any) {
       {weeks.length > 0 ? (
         weeks.map((week: any, wi: number) => (
           <div key={wi}>
-            <p className="font-heading font-bold text-xs tracking-widest uppercase mb-3" style={{ color: '#7C3AED', letterSpacing: '0.14em' }}>
+            <p className="font-heading font-bold text-xs tracking-widest uppercase mb-3" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>
               WEEK {week.week || wi + 1}
             </p>
             <div className="flex flex-col gap-3">
@@ -147,13 +187,13 @@ function DietPlanView({ plan, expandedMeal, setExpandedMeal }: any) {
                 const key = `w${wi}-d${di}`
                 const expanded = expandedMeal === key
                 return (
-                  <div key={di} className="rounded-2xl overflow-hidden" style={{ background: '#121220', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div key={di} className="rounded-2xl overflow-hidden" style={{ background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <button
                       onClick={() => setExpandedMeal(expanded ? null : key)}
                       className="w-full flex items-center justify-between p-4"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center font-heading font-bold text-xs" style={{ background: 'rgba(124,58,237,0.15)', color: '#A78BFA' }}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center font-heading font-bold text-xs" style={{ background: 'rgba(187,92,246,0.15)', color: '#D88BFF' }}>
                           {(day.day_name || day.day || `D${di+1}`).slice(0,3).toUpperCase()}
                         </div>
                         <div className="text-left">
@@ -186,8 +226,8 @@ function DietPlanView({ plan, expandedMeal, setExpandedMeal }: any) {
 
       {/* Hydration & notes */}
       {(plan.hydration_liters || plan.water_l) && (
-        <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)' }}>
-          <Droplets size={18} style={{ color: '#22D3EE' }} />
+        <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.15)' }}>
+          <Droplets size={18} style={{ color: '#BB5CF6' }} />
           <p className="font-heading text-sm" style={{ color: '#94A3B8' }}>
             Daily water target: <span className="text-white font-semibold">{plan.hydration_liters || plan.water_l}L</span>
           </p>
@@ -225,6 +265,9 @@ function MealCard({ meal }: { meal: any }) {
       </button>
       {expanded && foods.length > 0 && (
         <div className="px-4 pb-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+          <div className="flex justify-end pt-3">
+            <RecipeButton meal={meal} />
+          </div>
           <div className="flex flex-col gap-2 mt-3">
             {foods.map((food: any, fi: number) => {
               const name = food.item || food.name || food.food || (typeof food === 'string' ? food : '')
@@ -272,8 +315,8 @@ function WorkoutPlanView({ plan, expandedDay, setExpandedDay }: any) {
   )
 
   const stats = [
-    { label: 'Schedule', value: plan.schedule || plan.days_per_week ? `${plan.days_per_week}x/week` : '—', icon: <Calendar size={14} />, color: '#7C3AED' },
-    { label: 'Duration', value: plan.session_duration_min ? `${plan.session_duration_min} min` : plan.duration || '—', icon: <Clock size={14} />, color: '#22D3EE' },
+    { label: 'Schedule', value: plan.schedule || plan.days_per_week ? `${plan.days_per_week}x/week` : '—', icon: <Calendar size={14} />, color: '#BB5CF6' },
+    { label: 'Duration', value: plan.session_duration_min ? `${plan.session_duration_min} min` : plan.duration || '—', icon: <Clock size={14} />, color: '#BB5CF6' },
     { label: 'Type', value: plan.split_type?.replace(/_/g, ' ') || plan.plan_type || '—', icon: <Target size={14} />, color: '#10B981' },
     { label: 'Level', value: plan.level || plan.difficulty || '—', icon: <TrendingUp size={14} />, color: '#F59E0B' },
   ]
@@ -299,10 +342,10 @@ function WorkoutPlanView({ plan, expandedDay, setExpandedDay }: any) {
 
       {/* Plan description */}
       {plan.name && (
-        <div className="glass-card p-5" style={{ borderColor: 'rgba(34,211,238,0.15)' }}>
+        <div className="glass-card p-5" style={{ borderColor: 'rgba(187,92,246,0.15)' }}>
           <p className="font-heading font-bold text-white mb-1">{plan.name}</p>
           {plan.description && <p className="font-heading text-sm leading-relaxed" style={{ color: '#94A3B8' }}>{plan.description}</p>}
-          {plan.progressive_overload && <p className="font-heading text-xs mt-2" style={{ color: '#22D3EE' }}>⚡ {plan.progressive_overload}</p>}
+          {plan.progressive_overload && <p className="font-heading text-xs mt-2" style={{ color: '#BB5CF6' }}>⚡ {plan.progressive_overload}</p>}
         </div>
       )}
 
@@ -311,10 +354,10 @@ function WorkoutPlanView({ plan, expandedDay, setExpandedDay }: any) {
         weeks.map((week: any, wi: number) => (
           <div key={wi}>
             <div className="flex items-center gap-3 mb-3">
-              <p className="font-heading font-bold text-xs tracking-widest uppercase" style={{ color: '#22D3EE', letterSpacing: '0.14em' }}>
+              <p className="font-heading font-bold text-xs tracking-widest uppercase" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>
                 WEEK {week.week || wi + 1}
               </p>
-              {week.focus && <span className="font-heading text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.08)', color: '#22D3EE' }}>{week.focus}</span>}
+              {week.focus && <span className="font-heading text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(187,92,246,0.08)', color: '#BB5CF6' }}>{week.focus}</span>}
             </div>
             <DayList days={week.days || []} expandedDay={expandedDay} setExpandedDay={setExpandedDay} prefix={`w${wi}`} />
           </div>
@@ -342,14 +385,14 @@ function DayList({ days, expandedDay, setExpandedDay, prefix }: any) {
         const expanded = expandedDay === key
         const isRest = !day.exercises || day.exercises.length === 0
         return (
-          <div key={di} className="rounded-2xl overflow-hidden" style={{ background: '#121220', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div key={di} className="rounded-2xl overflow-hidden" style={{ background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.05)' }}>
             <button
               onClick={() => !isRest && setExpandedDay(expanded ? null : key)}
               className="w-full flex items-center justify-between p-4"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-bold text-xs"
-                  style={{ background: isRest ? 'rgba(255,255,255,0.04)' : 'rgba(34,211,238,0.1)', color: isRest ? '#475569' : '#22D3EE' }}>
+                  style={{ background: isRest ? 'rgba(255,255,255,0.04)' : 'rgba(187,92,246,0.1)', color: isRest ? '#475569' : '#BB5CF6' }}>
                   {(day.day_name || day.day || '').slice(0,3).toUpperCase() || `D${di+1}`}
                 </div>
                 <div className="text-left">
@@ -365,14 +408,15 @@ function DayList({ days, expandedDay, setExpandedDay, prefix }: any) {
               <div className="px-4 pb-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
                 <div className="flex flex-col gap-2.5 mt-3">
                   {day.exercises.map((ex: any, ei: number) => (
-                    <div key={ei} className="flex items-center justify-between py-2 px-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                      <div>
+                    <div key={ei} className="flex items-center gap-2 py-2 px-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <div className="flex-1 min-w-0">
                         <p className="font-heading font-semibold text-sm text-white">{ex.name}</p>
                         <p className="font-heading text-xs" style={{ color: '#64748B' }}>{ex.sets} sets × {ex.reps} · {ex.rest_sec}s rest</p>
                       </div>
-                      <span className="font-heading text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(124,58,237,0.1)', color: '#A78BFA' }}>
+                      <span className="font-heading text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'rgba(187,92,246,0.1)', color: '#D88BFF' }}>
                         {ex.muscle_group}
                       </span>
+                      <VideoButton exerciseName={ex.name} videoId={ex.video_id} />
                     </div>
                   ))}
                 </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame } from 'lucide-react'
 import IonAvatar from '@/components/ui/IonAvatar'
+import { RecipeButton } from '@/components/ui/RecipeModal'
 
 export const dynamic = 'force-dynamic'
 
@@ -197,13 +198,16 @@ export default function NutritionPage() {
                 </button>
               </div>
 
-              {expanded && meal.foods && (
+              {expanded && (
                 <div className="px-4 pb-4 flex flex-col gap-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
-                  {meal.foods.map((food: any, fi: number) => (
+                  <div className="flex justify-end pt-3">
+                    <RecipeButton meal={meal} />
+                  </div>
+                  {meal.foods?.map((food: any, fi: number) => (
                     <div key={fi} className="flex items-center justify-between py-2 px-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                      <div>
-                        <p className="font-heading text-xs font-semibold text-white">{food.item}</p>
-                        <p className="font-heading text-[10px]" style={{ color: '#475569' }}>{food.amount}</p>
+                      <div className="min-w-0">
+                        <p className="font-heading text-xs font-semibold text-white">{food.item || food.name || food.food}</p>
+                        <p className="font-heading text-[10px]" style={{ color: '#475569' }}>{food.amount || food.quantity || food.serving}</p>
                       </div>
                       <p className="font-heading text-xs font-bold" style={{ color: '#F97316' }}>{food.calories} kcal</p>
                     </div>
