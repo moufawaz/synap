@@ -58,7 +58,6 @@ function YouTubeEmbed({ videoId, title }: { videoId: string; title: string }) {
       width="100%"
       height="100%"
       frameBorder="0"
-      loading="lazy"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
       allowFullScreen
       style={{ display: 'block', width: '100%', height: '100%' }}
@@ -71,34 +70,31 @@ function YouTubeEmbed({ videoId, title }: { videoId: string; title: string }) {
 
 interface ModalProps {
   exerciseName: string
-  videoId?: string | null
   onClose: () => void
 }
 
 export default function ExerciseVideoModal({
   exerciseName,
-  videoId: propVideoId,
   onClose,
 }: ModalProps) {
-  // Normalise the incoming prop — could be a full URL or a bare ID
-  const resolvedPropId = extractVideoId(propVideoId)
-
-  const [videoId,  setVideoId]  = useState<string | null>(resolvedPropId)
-  const [loading,  setLoading]  = useState(!resolvedPropId)
-  const [fetched,  setFetched]  = useState(!!resolvedPropId)
+  const [videoId, setVideoId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [fetched, setFetched] = useState(false)
 
   const moreVideosUrl = getSearchUrl(exerciseName)
 
-  // Fetch a video ID when we don't already have a valid one
+  // Always go through the API — it validates embeddability server-side
+  // (oEmbed check) before returning an ID, so we never show a black iframe.
+  // The API has a 30-day DB cache so repeat opens are instant.
   const fetchVideo = useCallback(() => {
     setLoading(true)
+    setFetched(false)
     const params = new URLSearchParams({ name: exerciseName })
 
     fetch(`/api/exercise-video?${params.toString()}`)
       .then(r => r.json())
       .then((d: { videoId?: string | null }) => {
-        const id = extractVideoId(d.videoId)
-        setVideoId(id)
+        setVideoId(extractVideoId(d.videoId))
       })
       .catch(() => setVideoId(null))
       .finally(() => {
@@ -108,16 +104,8 @@ export default function ExerciseVideoModal({
   }, [exerciseName])
 
   useEffect(() => {
-    if (resolvedPropId) {
-      // Valid ID passed from parent — use it directly
-      setVideoId(resolvedPropId)
-      setLoading(false)
-      setFetched(true)
-      return
-    }
-    // No valid ID — ask the API (which checks DB cache first)
     fetchVideo()
-  }, [exerciseName, resolvedPropId, fetchVideo])
+  }, [fetchVideo])
 
   // Keyboard close
   useEffect(() => {
@@ -243,13 +231,7 @@ export default function ExerciseVideoModal({
 
 // ── VideoButton — inline trigger ──────────────────────────────────────────────
 
-export function VideoButton({
-  exerciseName,
-  videoId,
-}: {
-  exerciseName: string
-  videoId?: string | null
-}) {
+export function VideoButton({ exerciseName }: { exerciseName: string }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -271,7 +253,6 @@ export function VideoButton({
       {open && (
         <ExerciseVideoModal
           exerciseName={exerciseName}
-          videoId={videoId}
           onClose={() => setOpen(false)}
         />
       )}

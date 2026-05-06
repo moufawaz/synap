@@ -233,7 +233,7 @@ export default function WorkoutPage() {
                         </span>
                       </div>
                     </div>
-                    <VideoButton exerciseName={ex.name} videoId={ex.video_id} />
+                    <VideoButton exerciseName={ex.name} />
                     <button onClick={() => toggleExpand(key)} className="flex-shrink-0 p-1">
                       {expanded ? <ChevronUp size={14} style={{ color: '#475569' }} /> : <ChevronDown size={14} style={{ color: '#475569' }} />}
                     </button>

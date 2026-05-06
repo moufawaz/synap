@@ -362,7 +362,7 @@ export default function WorkoutTodayPage() {
                 </div>
 
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <VideoButton exerciseName={ex.name} videoId={ex.video_id} />
+                  <VideoButton exerciseName={ex.name} />
 
                   <button onClick={() => setExpandedExercise(isExpanded ? null : i)} className="p-1.5">
                     {isExpanded

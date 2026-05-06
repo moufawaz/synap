@@ -416,7 +416,7 @@ function DayList({ days, expandedDay, setExpandedDay, prefix }: any) {
                       <span className="font-heading text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'rgba(187,92,246,0.1)', color: '#D88BFF' }}>
                         {ex.muscle_group}
                       </span>
-                      <VideoButton exerciseName={ex.name} videoId={ex.video_id} />
+                      <VideoButton exerciseName={ex.name} />
                     </div>
                   ))}
                 </div>
