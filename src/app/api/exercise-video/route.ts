@@ -27,6 +27,9 @@ export async function GET(req: Request) {
   if (!rawName) return NextResponse.json({ videoId: null })
 
   const name = rawName.toLowerCase().trim()
+  const hasApiKey = !!process.env.YOUTUBE_API_KEY
+
+  console.log(`[exercise-video] "${name}" | api_key=${hasApiKey}`)
 
   const supabase = createServerClient()
 
@@ -40,48 +43,68 @@ export async function GET(req: Request) {
   if (cached) {
     const age = Date.now() - new Date(cached.searched_at).getTime()
     if (cached.verified || age < CACHE_TTL_MS) {
-      // Re-validate cached IDs that have never been verified so bad IDs
-      // from a previous scraper run don't persist forever.
       if (cached.video_id && !cached.verified) {
+        // Re-validate unverified cached IDs — video may have been deleted since
         const ok = await isEmbeddable(cached.video_id)
-        if (ok) return NextResponse.json({ videoId: cached.video_id })
-        // Stale bad ID — fall through to search fresh
+        if (ok) {
+          console.log(`[exercise-video] "${name}" → cache hit ${cached.video_id}`)
+          return NextResponse.json({ videoId: cached.video_id })
+        }
+        console.log(`[exercise-video] "${name}" → cached ID ${cached.video_id} no longer embeddable, re-searching`)
+        // Fall through to fresh search
       } else {
+        console.log(`[exercise-video] "${name}" → cache hit ${cached.video_id ?? 'null'}`)
         return NextResponse.json({ videoId: cached.video_id ?? null })
       }
     }
   }
 
   // ── 2. Resolve + validate — waterfall ────────────────────────────────────
-  //  a) YouTube Data API v3 (most reliable when YOUTUBE_API_KEY is set)
-  //  b) Static curated map  (instant — but we validate before trusting)
-  //  c) YouTube HTML scraper (no key needed)
+  //  a) YouTube Data API v3  ← reliable, uses YOUTUBE_API_KEY
+  //  b) Static curated map   ← ~100 common exercises (validated via oEmbed)
+  //  c) YouTube HTML scraper ← no key needed, Vercel may be rate-limited
 
   let videoId: string | null = null
+  let source = 'none'
 
-  // 2a — YouTube Data API
-  videoId = await searchYouTubeAPI(rawName)
-  if (videoId) {
-    const ok = await isEmbeddable(videoId)
-    if (!ok) videoId = null
+  // 2a — YouTube Data API v3
+  if (hasApiKey) {
+    videoId = await searchYouTubeAPI(rawName)
+    if (videoId) {
+      const ok = await isEmbeddable(videoId)
+      if (ok) {
+        source = 'youtube-api'
+      } else {
+        console.log(`[exercise-video] YouTube API returned ${videoId} but oEmbed failed`)
+        videoId = null
+      }
+    }
   }
 
-  // 2b — Static map (validated via oEmbed)
+  // 2b — Static curated map (validated via oEmbed)
   if (!videoId) {
     const staticId = getYouTubeId(rawName)
     if (staticId) {
       const ok = await isEmbeddable(staticId)
-      videoId = ok ? staticId : null
+      if (ok) {
+        videoId = staticId
+        source  = 'static-map'
+      } else {
+        console.log(`[exercise-video] Static map ID ${staticId} no longer embeddable`)
+      }
     }
   }
 
-  // 2c — Scraper fallback: search YouTube and pick first embeddable result
+  // 2c — HTML scraper fallback
   if (!videoId) {
     videoId = await searchAndValidate(rawName)
+    if (videoId) source = 'scraper'
   }
 
-  // Ensure it's always a bare ID, never a full URL
+  // Normalise to bare ID (should already be, but guard anyway)
   if (videoId) videoId = extractVideoId(videoId) ?? null
+
+  console.log(`[exercise-video] "${name}" → ${videoId ?? 'not found'} (${source})`)
 
   // ── 3. Persist to DB cache ────────────────────────────────────────────────
   try {
@@ -96,7 +119,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ videoId: videoId ?? null })
 }
 
-// ── Scraper search with embedded oEmbed validation ───────────────────────────
+// ── Scraper: search YouTube HTML and pick first embeddable result ─────────────
 
 async function searchAndValidate(exerciseName: string): Promise<string | null> {
   try {
@@ -114,7 +137,7 @@ async function searchAndValidate(exerciseName: string): Promise<string | null> {
     )
     if (!res.ok) return null
 
-    const html = await res.text()
+    const html       = await res.text()
     const candidates = extractCandidates(html)
 
     for (const candidate of candidates.slice(0, 8)) {
