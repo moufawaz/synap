@@ -95,21 +95,47 @@ async function fetchRate(targetCurrency: string): Promise<number> {
     }
   } catch {}
 
-  const res = await fetch(
-    `https://api.frankfurter.app/latest?base=SAR&symbols=${targetCurrency}`
-  )
-  const data = await res.json()
-  const rate = data?.rates?.[targetCurrency] ?? 1
-
-  // Cache this rate
+  // open.er-api.com supports SAR as base (Frankfurter only covers ECB currencies)
+  // One call fetches ALL rates → cache everything in a single request
   try {
-    const cached = localStorage.getItem(RATE_CACHE_KEY)
-    const existing = cached ? JSON.parse(cached) : { rates: {}, expiry: Date.now() + RATE_CACHE_TTL }
-    existing.rates[targetCurrency] = rate
-    localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(existing))
+    const res = await fetch('https://open.er-api.com/v6/latest/SAR', {
+      signal: AbortSignal.timeout(5000),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      const allRates: Record<string, number> = data?.rates ?? {}
+      const rate = allRates[targetCurrency] ?? 1
+      // Cache all rates at once so subsequent calls for other currencies are instant
+      try {
+        localStorage.setItem(
+          RATE_CACHE_KEY,
+          JSON.stringify({ rates: allRates, expiry: Date.now() + RATE_CACHE_TTL })
+        )
+      } catch {}
+      return rate
+    }
   } catch {}
 
-  return rate
+  // Static fallback — approximate pegged/semi-fixed rates relative to SAR
+  // (used when the API is unreachable; accurate enough for pricing display)
+  const STATIC_RATES: Record<string, number> = {
+    SAR: 1,
+    AED: 0.979,  // 1 USD ≈ 3.67 AED, 1 USD ≈ 3.75 SAR → 1 SAR ≈ 0.979 AED
+    KWD: 0.082,
+    QAR: 0.972,
+    BHD: 0.101,
+    OMR: 0.103,
+    JOD: 0.189,
+    EGP: 16.2,
+    MAD: 2.67,
+    USD: 0.267,
+    EUR: 0.245,
+    GBP: 0.210,
+    TRY: 8.9,
+    INR: 22.3,
+    PKR: 74.5,
+  }
+  return STATIC_RATES[targetCurrency] ?? 1
 }
 
 // ── Detect country — always fresh, never cached ───────────────

@@ -180,7 +180,7 @@ async function maybeApplyPlanEdit({
 
     const editResponse = await client.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: intent === 'workout' ? 5000 : 3500,
+      max_tokens: intent === 'workout' ? 10000 : 6000,
       messages: [{ role: 'user', content: prompt }],
     })
 

@@ -31,21 +31,28 @@ export async function POST(req: Request) {
 
     const message = await client.messages.create({
       model: 'claude-opus-4-5',
-      max_tokens: 8000,
+      max_tokens: 16000,   // 8 000 was too low — full plans with recipes easily exceed it
+      system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only — no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
     })
 
+    // Log finish_reason so truncation is visible in Vercel logs
+    const finishReason = message.stop_reason
+    console.log('[generate-plan] finish_reason:', finishReason, '| tokens:', message.usage)
+    if (finishReason === 'max_tokens') {
+      console.error('[generate-plan] Response was truncated — increase max_tokens further if this persists')
+    }
+
     const rawContent = message.content[0].type === 'text' ? message.content[0].text : ''
 
-    // Extract JSON from response
+    // Extract JSON — try multiple strategies in order
     let plan: any
     try {
-      // Try to find a JSON block, handle markdown code fences
-      const cleaned = rawContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
-      const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-      plan = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned)
+      plan = extractJSON(rawContent)
+      if (!plan) throw new Error('no valid JSON found')
     } catch {
-      console.error('JSON parse error. Raw response (first 500 chars):', rawContent.slice(0, 500))
+      console.error('[generate-plan] JSON parse failed. finish_reason:', finishReason)
+      console.error('[generate-plan] Raw response (first 800 chars):', rawContent.slice(0, 800))
       return NextResponse.json({ error: 'Ion returned an invalid plan format. Please try again.' }, { status: 500 })
     }
 
@@ -132,6 +139,71 @@ export async function POST(req: Request) {
       friendly = "Ion is busy right now. Wait a moment and try again."
     }
     return NextResponse.json({ error: friendly }, { status: 500 })
+  }
+}
+
+// ── JSON extraction — multiple strategies ─────────────────────────────────────
+function extractJSON(raw: string): any {
+  // 1. Strip markdown code fences if present
+  const stripped = raw
+    .replace(/^```(?:json)?\s*/im, '')
+    .replace(/\s*```\s*$/im, '')
+    .trim()
+
+  // 2. Direct parse (ideal: model returned pure JSON)
+  try { return JSON.parse(stripped) } catch {}
+
+  // 3. Find the outermost { ... } block by tracking bracket depth
+  //    This handles text before/after the JSON object.
+  const start = stripped.indexOf('{')
+  if (start !== -1) {
+    let depth = 0
+    let inString = false
+    let escaped  = false
+    for (let i = start; i < stripped.length; i++) {
+      const ch = stripped[i]
+      if (escaped)            { escaped = false; continue }
+      if (ch === '\\')        { escaped = true;  continue }
+      if (ch === '"')         { inString = !inString; continue }
+      if (inString)           { continue }
+      if (ch === '{')         { depth++ }
+      if (ch === '}')         { depth--
+        if (depth === 0) {
+          try { return JSON.parse(stripped.slice(start, i + 1)) } catch {}
+          break  // found the closing brace but it's still invalid — give up
+        }
+      }
+    }
+  }
+
+  // 4. If truncated (max_tokens hit), attempt recovery by closing open brackets
+  try {
+    const recovered = repairTruncatedJSON(stripped.slice(stripped.indexOf('{')))
+    if (recovered) return JSON.parse(recovered)
+  } catch {}
+
+  return null
+}
+
+/** Close any unclosed brackets/braces so a truncated JSON can be parsed. */
+function repairTruncatedJSON(s: string): string | null {
+  try {
+    // Remove trailing partial string / comma / whitespace
+    const trimmed = s.replace(/,\s*$/, '').replace(/"[^"]*$/, '"TRUNCATED"').trim()
+    const stack: string[] = []
+    let inString = false
+    let escaped  = false
+    for (const ch of trimmed) {
+      if (escaped)            { escaped = false; continue }
+      if (ch === '\\')        { escaped = true;  continue }
+      if (ch === '"')         { inString = !inString; continue }
+      if (inString)           { continue }
+      if (ch === '{' || ch === '[') stack.push(ch === '{' ? '}' : ']')
+      if (ch === '}' || ch === ']') stack.pop()
+    }
+    return trimmed + stack.reverse().join('')
+  } catch {
+    return null
   }
 }
 
