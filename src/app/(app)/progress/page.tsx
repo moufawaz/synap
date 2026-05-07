@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { TrendingDown, TrendingUp, Minus, Sparkles, Flame, Target, Lock } from 'lucide-react'
+import { TrendingDown, TrendingUp, Minus, Sparkles, Flame, Target, Lock, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase'
 import Link from 'next/link'
 
@@ -24,6 +24,9 @@ export default function ProgressPage() {
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [planTier, setPlanTier] = useState<'starter' | 'pro' | 'elite' | 'trial'>('starter')
   const [goalTarget, setGoalTarget] = useState<number | null>(null)
+  const [weeklyReports, setWeeklyReports] = useState<any[]>([])
+  const [reportsLoading, setReportsLoading] = useState(false)
+  const [expandedReport, setExpandedReport] = useState<string | null>(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -52,6 +55,14 @@ export default function ProgressPage() {
       if (profileRes.data?.goal_target) {
         const parsed = parseFloat(profileRes.data.goal_target)
         if (!isNaN(parsed)) setGoalTarget(parsed)
+      }
+      // Load weekly reports for Elite users
+      if (tier === 'elite') {
+        setReportsLoading(true)
+        fetch('/api/weekly-report')
+          .then(r => r.json())
+          .then(d => { setWeeklyReports(d.reports || []); setReportsLoading(false) })
+          .catch(() => setReportsLoading(false))
       }
     }
 
@@ -293,6 +304,73 @@ export default function ProgressPage() {
         goalTarget={goalTarget}
         planTier={planTier}
       />
+
+      {/* ── Weekly Body Composition Reports (Elite) ──────────── */}
+      {planTier === 'elite' && (
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(187,92,246,0.15)', border: '1px solid rgba(187,92,246,0.25)' }}>
+              <FileText size={16} style={{ color: '#BB5CF6' }} />
+            </div>
+            <div>
+              <p className="font-heading font-black text-xs text-white tracking-wider" style={{ letterSpacing: '0.1em' }}>WEEKLY REPORTS</p>
+              <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE ⭐ · Every Friday</span>
+            </div>
+          </div>
+
+          {reportsLoading && (
+            <div className="glass-card p-5 flex items-center gap-3">
+              <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
+              <p className="font-heading text-xs" style={{ color: '#64748B' }}>Loading reports...</p>
+            </div>
+          )}
+
+          {!reportsLoading && weeklyReports.length === 0 && (
+            <div className="glass-card p-5 text-center">
+              <FileText size={24} style={{ color: '#2D3748', margin: '0 auto 8px' }} />
+              <p className="font-heading font-bold text-sm text-white mb-1">No reports yet</p>
+              <p className="font-heading text-xs" style={{ color: '#64748B' }}>
+                Ion generates your first report on the next Friday. Log your measurements and workouts to get started.
+              </p>
+            </div>
+          )}
+
+          {!reportsLoading && weeklyReports.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {weeklyReports.map((report: any) => {
+                const isExpanded = expandedReport === report.id
+                const weekLabel = new Date(report.week_start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                return (
+                  <div key={report.id} className="glass-card overflow-hidden" style={{ border: '1px solid rgba(187,92,246,0.15)' }}>
+                    <button
+                      onClick={() => setExpandedReport(isExpanded ? null : report.id)}
+                      className="w-full flex items-center justify-between p-5"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText size={14} style={{ color: '#BB5CF6' }} />
+                        <div className="text-left">
+                          <p className="font-heading font-bold text-sm text-white">Week of {weekLabel}</p>
+                          <p className="font-heading text-xs" style={{ color: '#475569' }}>Ion's body composition analysis</p>
+                        </div>
+                      </div>
+                      {isExpanded
+                        ? <ChevronUp size={14} style={{ color: '#475569' }} />
+                        : <ChevronDown size={14} style={{ color: '#475569' }} />}
+                    </button>
+                    {isExpanded && (
+                      <div className="px-5 pb-5 border-t" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+                        <div className="pt-4 font-heading text-xs leading-relaxed whitespace-pre-wrap" style={{ color: '#94A3B8' }}>
+                          {report.report_md}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Measurement history table */}
       {measurements.length > 0 && (
