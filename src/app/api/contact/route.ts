@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     }
 
     await resend.emails.send({
-      from:    'SYNAP Contact <onboarding@resend.dev>',
+      from:    'SYNAP Contact <ion@synapfit.app>',
       to:      'ion@synapfit.app',
       replyTo: email,
       subject: subject ? `[Contact] ${subject}` : `[Contact] Message from ${name}`,

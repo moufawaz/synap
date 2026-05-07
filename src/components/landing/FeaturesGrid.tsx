@@ -56,9 +56,20 @@ export default function FeaturesGrid({ lang }: Props) {
           <span className="font-heading text-xs tracking-widest uppercase text-violet/80 mb-4 block">
             {copy.label}
           </span>
-          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl text-light">
+          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl text-light mb-4">
             {copy.headline}
           </h2>
+          <div className="inline-block px-5 py-2 rounded-full mb-4"
+            style={{ background: 'rgba(187,92,246,0.08)', border: '1px solid rgba(187,92,246,0.2)' }}>
+            <p className="font-heading font-bold text-sm" style={{ color: '#BB5CF6', letterSpacing: '0.06em' }}>
+              {isRTL ? 'مبني كنظام تدريب حقيقي' : 'Built like a real coaching system'}
+            </p>
+          </div>
+          <p className="text-light-muted text-base max-w-xl mx-auto">
+            {isRTL
+              ? 'كل ما يفعله مدرب عالمي المستوى — تلقائي، مخصص، دائم.'
+              : 'Everything a world-class trainer would do — automated, personalized, always on.'}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
