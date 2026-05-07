@@ -35,11 +35,11 @@ export default function PlanPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const [dietRes, workoutRes, profileRes, subRes] = await Promise.all([
+    const [dietRes, workoutRes, profileRes, tierRes] = await Promise.all([
       supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
-      supabase.from('subscriptions').select('plan_name,status,trial_end_date').eq('user_id', user.id).maybeSingle(),
+      fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),
     ])
 
     setDietPlan(dietRes.data?.plan_json || null)
@@ -51,15 +51,8 @@ export default function PlanPage() {
       setPlanDaysLeft(Math.max(0, PLAN_MODIFY_WINDOW_DAYS - age))
     }
 
-    // Derive tier client-side
-    const sub = subRes.data
-    const tier = (() => {
-      if (!sub) return 'starter'
-      const name = (sub.plan_name || '').toLowerCase()
-      if (name === 'elite') return 'elite'
-      if (name === 'pro' || name === 'unlimited') return 'pro'
-      return 'starter'
-    })()
+    // Tier comes from the server (service-role — never blocked by RLS)
+    const tier: string = tierRes.tier || 'starter'
     setPlanTier(tier)
 
     // Fetch supplement recommendations for Elite

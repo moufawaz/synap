@@ -2,8 +2,10 @@
 // Import ONLY in Server Components or Route Handlers.
 
 import { createServerClient as createSSRServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
+// Anon key + user JWT — respects RLS.  Use for auth-gated reads/writes.
 export function createServerClient() {
   const cookieStore = cookies()
   return createSSRServerClient(
@@ -21,5 +23,15 @@ export function createServerClient() {
         },
       },
     }
+  )
+}
+
+// Service-role key — bypasses RLS entirely.
+// Use ONLY in Route Handlers / cron jobs — NEVER expose to the browser.
+export function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
   )
 }

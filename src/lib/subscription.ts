@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-server'
 
 // ── Daily message limits by tier ──────────────────────────────
 // Starter: 5/day for first 7 days, then upgrade wall (see canSendMessage)
@@ -21,9 +21,10 @@ export function isLaunchMode(): boolean {
 }
 
 // ── Get subscription row for a user ───────────────────────────
+// Uses service-role key — bypasses RLS, always returns real data.
 export async function getUserSubscription(userId: string) {
-  const supabase = createServerClient()
-  const { data } = await supabase
+  const admin = createAdminClient()
+  const { data } = await admin
     .from('subscriptions')
     .select('*')
     .eq('user_id', userId)
@@ -65,7 +66,7 @@ export function effectivePlan(sub: any): 'starter' | 'trial' | 'pro' | 'elite' {
 
 // ── Get today's message count ──────────────────────────────────
 export async function getTodayMessageCount(userId: string): Promise<number> {
-  const supabase = createServerClient()
+  const supabase = createAdminClient()
   const today = new Date().toISOString().split('T')[0]
   const { data } = await supabase
     .from('message_usage')
@@ -78,7 +79,7 @@ export async function getTodayMessageCount(userId: string): Promise<number> {
 
 // ── Increment daily message count ─────────────────────────────
 export async function incrementMessageCount(userId: string): Promise<void> {
-  const supabase = createServerClient()
+  const supabase = createAdminClient()
   const today = new Date().toISOString().split('T')[0]
   await supabase.rpc('increment_message_usage', { p_user_id: userId, p_date: today })
 }
