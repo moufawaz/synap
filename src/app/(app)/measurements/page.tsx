@@ -63,6 +63,8 @@ export default function MeasurementsPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState<'stats' | 'symmetry' | 'photos' | 'inbody'>('stats')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [compareMode, setCompareMode] = useState(false)
+  const [compareSelected, setCompareSelected] = useState<number[]>([])
   const [inbodyUrl, setInbodyUrl] = useState<string | null>(null)
   const [uploadingInbody, setUploadingInbody] = useState(false)
   const [analyzingInbody, setAnalyzingInbody] = useState(false)
@@ -447,26 +449,158 @@ export default function MeasurementsPage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {photos.map((m: any, i: number) => (
-                <div key={i} className="relative rounded-2xl overflow-hidden" style={{ aspectRatio: '3/4' }}>
-                  <img src={m.photo_url} alt={m.date} className="w-full h-full object-cover" />
-                  <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.8))' }}>
-                    <p className="font-heading text-xs text-white">
-                      {new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                    </p>
-                    {m.weight_kg && <p className="font-heading text-[10px]" style={{ color: '#D88BFF' }}>{m.weight_kg} kg</p>}
-                  </div>
+            <div className="flex flex-col gap-4">
+              {/* ── Compare mode header ── */}
+              <div className="flex items-center justify-between">
+                <p className="font-heading text-xs tracking-widest uppercase" style={{ color: '#475569', letterSpacing: '0.12em' }}>
+                  {compareMode
+                    ? compareSelected.length === 0
+                      ? 'SELECT FIRST PHOTO'
+                      : compareSelected.length === 1
+                      ? 'SELECT SECOND PHOTO'
+                      : 'COMPARING 2 PHOTOS'
+                    : `${photos.length} PHOTO${photos.length !== 1 ? 'S' : ''}`}
+                </p>
+                <div className="flex gap-2">
+                  {!compareMode ? (
+                    photos.length >= 2 && (
+                      <button
+                        onClick={() => { setCompareMode(true); setCompareSelected([]) }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-heading font-bold text-xs transition-all"
+                        style={{ background: 'rgba(187,92,246,0.12)', border: '1px solid rgba(187,92,246,0.25)', color: '#BB5CF6' }}
+                      >
+                        <ArrowLeftRight size={11} /> Compare
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={() => { setCompareMode(false); setCompareSelected([]) }}
+                      className="px-3 py-1.5 rounded-lg font-heading font-bold text-xs transition-all"
+                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
-              ))}
-              <button
-                onClick={() => photoInputRef.current?.click()}
-                className="rounded-2xl flex flex-col items-center justify-center gap-2 transition-all"
-                style={{ aspectRatio: '3/4', background: 'rgba(187,92,246,0.06)', border: '2px dashed rgba(187,92,246,0.2)' }}
-              >
-                <Camera size={20} style={{ color: '#BB5CF6' }} />
-                <span className="font-heading text-xs" style={{ color: '#BB5CF6' }}>Add photo</span>
-              </button>
+              </div>
+
+              {/* ── Side-by-side comparison view ── */}
+              {compareMode && compareSelected.length === 2 && (() => {
+                const a = photos[compareSelected[0]]
+                const b = photos[compareSelected[1]]
+                const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                const weightDiff = a.weight_kg && b.weight_kg ? parseFloat((b.weight_kg - a.weight_kg).toFixed(1)) : null
+
+                return (
+                  <div className="glass-card p-4" style={{ border: '1px solid rgba(187,92,246,0.2)' }}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ArrowLeftRight size={14} style={{ color: '#BB5CF6' }} />
+                      <p className="font-heading font-bold text-xs text-white tracking-wider" style={{ letterSpacing: '0.08em' }}>BEFORE vs AFTER</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      {[{ photo: a, label: 'Before', idx: 0 }, { photo: b, label: 'After', idx: 1 }].map(({ photo, label, idx }) => (
+                        <div key={idx} className="flex flex-col gap-1.5">
+                          <p className="font-heading text-[10px] tracking-widest uppercase" style={{ color: idx === 0 ? '#F59E0B' : '#10B981' }}>{label}</p>
+                          <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: '3/4' }}>
+                            <img src={photo.photo_url} alt={photo.date} className="w-full h-full object-cover" />
+                            <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}>
+                              <p className="font-heading text-[10px] text-white">{fmtDate(photo.date)}</p>
+                              {photo.weight_kg && <p className="font-heading text-[10px]" style={{ color: '#D88BFF' }}>{photo.weight_kg} kg</p>}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Delta row */}
+                    {weightDiff != null && (
+                      <div className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl"
+                        style={{ background: weightDiff < 0 ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)', border: `1px solid ${weightDiff < 0 ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}` }}>
+                        {weightDiff < 0
+                          ? <TrendingDown size={13} style={{ color: '#10B981' }} />
+                          : <TrendingUp size={13} style={{ color: '#F59E0B' }} />}
+                        <p className="font-heading font-bold text-xs" style={{ color: weightDiff < 0 ? '#10B981' : '#F59E0B' }}>
+                          {weightDiff > 0 ? '+' : ''}{weightDiff} kg since {fmtDate(a.date)}
+                        </p>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => { setCompareSelected([]); }}
+                      className="w-full mt-3 py-2 rounded-xl font-heading text-xs font-semibold transition-all"
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', color: '#64748B' }}
+                    >
+                      Choose Different Photos
+                    </button>
+                  </div>
+                )
+              })()}
+
+              {/* ── Photo grid ── */}
+              {(!compareMode || compareSelected.length < 2) && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {photos.map((m: any, i: number) => {
+                    const isSelected = compareSelected.includes(i)
+                    const selIndex = compareSelected.indexOf(i)
+
+                    return (
+                      <div
+                        key={i}
+                        className="relative rounded-2xl overflow-hidden cursor-pointer"
+                        style={{ aspectRatio: '3/4', outline: isSelected ? '2.5px solid #BB5CF6' : 'none', outlineOffset: '2px' }}
+                        onClick={() => {
+                          if (!compareMode) return
+                          if (isSelected) {
+                            setCompareSelected(prev => prev.filter(x => x !== i))
+                          } else if (compareSelected.length < 2) {
+                            setCompareSelected(prev => [...prev, i])
+                          }
+                        }}
+                      >
+                        <img src={m.photo_url} alt={m.date} className="w-full h-full object-cover" />
+
+                        {/* Selection badge */}
+                        {compareMode && isSelected && (
+                          <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center font-heading font-black text-xs text-white"
+                            style={{ background: '#BB5CF6', boxShadow: '0 0 10px rgba(187,92,246,0.5)' }}>
+                            {selIndex + 1}
+                          </div>
+                        )}
+
+                        {/* Compare mode overlay hint */}
+                        {compareMode && !isSelected && (
+                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <div className="w-7 h-7 rounded-full border-2 flex items-center justify-center"
+                              style={{ borderColor: 'rgba(187,92,246,0.6)' }}>
+                              <span className="font-heading text-xs" style={{ color: '#BB5CF6' }}>{compareSelected.length + 1}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.8))' }}>
+                          <p className="font-heading text-xs text-white">
+                            {new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </p>
+                          {m.weight_kg && <p className="font-heading text-[10px]" style={{ color: '#D88BFF' }}>{m.weight_kg} kg</p>}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Add photo tile */}
+                  {!compareMode && (
+                    <button
+                      onClick={() => photoInputRef.current?.click()}
+                      className="rounded-2xl flex flex-col items-center justify-center gap-2 transition-all"
+                      style={{ aspectRatio: '3/4', background: 'rgba(187,92,246,0.06)', border: '2px dashed rgba(187,92,246,0.2)' }}
+                    >
+                      <Camera size={20} style={{ color: '#BB5CF6' }} />
+                      <span className="font-heading text-xs" style={{ color: '#BB5CF6' }}>Add photo</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
