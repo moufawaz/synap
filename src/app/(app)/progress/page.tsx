@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { TrendingDown, TrendingUp, Minus, Sparkles, Flame } from 'lucide-react'
+import { TrendingDown, TrendingUp, Minus, Sparkles, Flame, Target, Lock } from 'lucide-react'
+import { createBrowserClient } from '@/lib/supabase'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,10 +22,15 @@ export default function ProgressPage() {
   const [loading, setLoading] = useState(true)
   const [monthlySummary, setMonthlySummary] = useState<{ summary: string; stats: any } | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [planTier, setPlanTier] = useState<'starter' | 'pro' | 'elite' | 'trial'>('starter')
+  const [goalTarget, setGoalTarget] = useState<number | null>(null)
 
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
+    const supabase = createBrowserClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
     const [mRes, wRes] = await Promise.all([
       fetch('/api/measurements'),
       fetch('/api/log-workout'),
@@ -32,6 +39,22 @@ export default function ProgressPage() {
     const wData = await wRes.json()
     setMeasurements((mData.measurements || []).reverse())
     setWorkoutLogs(wData.logs || [])
+
+    // Fetch subscription tier + goal target
+    if (user) {
+      const [subRes, profileRes] = await Promise.all([
+        supabase.from('subscriptions').select('plan_type, status, trial_ends_at, current_period_ends_at').eq('user_id', user.id).maybeSingle(),
+        supabase.from('profiles').select('goal_target').eq('user_id', user.id).single(),
+      ])
+      const sub = subRes.data
+      const tier = deriveClientTier(sub)
+      setPlanTier(tier)
+      if (profileRes.data?.goal_target) {
+        const parsed = parseFloat(profileRes.data.goal_target)
+        if (!isNaN(parsed)) setGoalTarget(parsed)
+      }
+    }
+
     setLoading(false)
   }
 
@@ -264,6 +287,13 @@ export default function ProgressPage() {
         )}
       </div>
 
+      {/* ── Goal Timeline Prediction (Elite) ─────────────────── */}
+      <GoalTimelinePrediction
+        measurements={measurements}
+        goalTarget={goalTarget}
+        planTier={planTier}
+      />
+
       {/* Measurement history table */}
       {measurements.length > 0 && (
         <div className="glass-card overflow-hidden">
@@ -302,6 +332,177 @@ export default function ProgressPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Client-side tier derivation (no server call needed) ────────
+function deriveClientTier(sub: any): 'starter' | 'pro' | 'elite' | 'trial' {
+  if (!sub) return 'starter'
+  if (sub.status === 'trial') {
+    const end = sub.trial_ends_at ? new Date(sub.trial_ends_at) : null
+    return (!end || end > new Date()) ? 'trial' : 'starter'
+  }
+  if (sub.status === 'active' || (sub.status === 'cancelled' && sub.current_period_ends_at && new Date(sub.current_period_ends_at) > new Date())) {
+    const name = (sub.plan_type || '').toLowerCase()
+    if (name === 'elite') return 'elite'
+    if (name === 'pro' || name === 'unlimited') return 'pro'
+  }
+  return 'starter'
+}
+
+// ── Goal Timeline Prediction card ──────────────────────────────
+function GoalTimelinePrediction({
+  measurements, goalTarget, planTier,
+}: {
+  measurements: any[]
+  goalTarget: number | null
+  planTier: 'starter' | 'pro' | 'elite' | 'trial'
+}) {
+  const isElite = planTier === 'elite'
+
+  // Always show a card — locked for non-elite
+  if (!isElite) {
+    return (
+      <div className="glass-card p-6 mb-6 relative overflow-hidden" style={{ border: '1px solid rgba(187,92,246,0.15)' }}>
+        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3 z-10 backdrop-blur-sm rounded-2xl">
+          <Lock size={22} style={{ color: '#BB5CF6' }} />
+          <div className="text-center">
+            <p className="font-heading font-bold text-sm text-white mb-1">Goal Timeline Prediction</p>
+            <p className="font-heading text-xs mb-3" style={{ color: '#64748B' }}>Ion calculates exactly when you'll hit your goal — Elite only.</p>
+            <Link href="/pricing"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-heading font-black text-xs tracking-wider"
+              style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.1em', boxShadow: '0 0 16px rgba(187,92,246,0.35)' }}>
+              Upgrade to Elite ⭐
+            </Link>
+          </div>
+        </div>
+        {/* Blurred preview behind */}
+        <div className="flex items-center gap-3 mb-4 opacity-30">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(187,92,246,0.15)' }}>
+            <Target size={18} style={{ color: '#BB5CF6' }} />
+          </div>
+          <div>
+            <p className="font-heading font-black text-xs text-white tracking-wider" style={{ letterSpacing: '0.1em' }}>GOAL TIMELINE PREDICTION</p>
+            <p className="font-heading text-xs" style={{ color: '#64748B' }}>Elite ⭐ feature</p>
+          </div>
+        </div>
+        <div className="h-16 rounded-xl opacity-20" style={{ background: 'rgba(187,92,246,0.1)' }} />
+      </div>
+    )
+  }
+
+  // Need at least 3 weight data points for a meaningful trend
+  const weightData = measurements
+    .filter(m => m.weight_kg != null && m.date)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+  if (weightData.length < 3) {
+    return (
+      <div className="glass-card p-6 mb-6" style={{ border: '1px solid rgba(187,92,246,0.2)' }}>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(187,92,246,0.15)' }}>
+            <Target size={18} style={{ color: '#BB5CF6' }} />
+          </div>
+          <div>
+            <p className="font-heading font-black text-xs text-white tracking-wider" style={{ letterSpacing: '0.1em' }}>GOAL TIMELINE PREDICTION</p>
+            <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE ⭐</span>
+          </div>
+        </div>
+        <p className="font-heading text-xs" style={{ color: '#64748B' }}>
+          Log at least 3 weight measurements and Ion will calculate exactly when you'll hit your goal.
+        </p>
+      </div>
+    )
+  }
+
+  // ── Linear regression on weight vs day index ───────────────
+  const n = weightData.length
+  const x = weightData.map((_, i) => i)
+  const y = weightData.map(m => parseFloat(m.weight_kg))
+  const xMean = x.reduce((s, v) => s + v, 0) / n
+  const yMean = y.reduce((s, v) => s + v, 0) / n
+  const slope = x.reduce((s, xi, i) => s + (xi - xMean) * (y[i] - yMean), 0) /
+                x.reduce((s, xi) => s + (xi - xMean) ** 2, 0)
+
+  const currentWeight = y[y.length - 1]
+  const firstDate = new Date(weightData[0].date)
+  const lastDate  = new Date(weightData[weightData.length - 1].date)
+  const daySpan   = Math.max(1, (lastDate.getTime() - firstDate.getTime()) / 86400000)
+  const kgPerDay  = slope / Math.max(1, (n - 1) / daySpan)   // slope per calendar day
+
+  const target = goalTarget ?? (kgPerDay < 0 ? currentWeight - 10 : currentWeight + 10)
+  const deltaNeeded = target - currentWeight
+
+  let prediction: string
+  let daysLeft: number | null = null
+  let confidence: 'high' | 'medium' | 'low' = 'medium'
+
+  if (Math.abs(kgPerDay) < 0.001) {
+    prediction = 'Your weight is stable — no clear trend yet.'
+    confidence = 'low'
+  } else if (Math.sign(deltaNeeded) !== Math.sign(kgPerDay)) {
+    prediction = 'Your current trend is moving away from your goal. Talk to Ion.'
+    confidence = 'low'
+  } else {
+    daysLeft = Math.round(Math.abs(deltaNeeded) / Math.abs(kgPerDay))
+    const eta = new Date()
+    eta.setDate(eta.getDate() + daysLeft)
+    const etaStr = eta.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    prediction = etaStr
+    confidence = n >= 8 ? 'high' : n >= 5 ? 'medium' : 'low'
+  }
+
+  const weeklyRate = parseFloat((kgPerDay * 7).toFixed(2))
+  const trendLabel = weeklyRate === 0 ? 'Stable' : weeklyRate > 0 ? `+${weeklyRate} kg/wk` : `${weeklyRate} kg/wk`
+  const trendColor = kgPerDay < 0 ? '#10B981' : kgPerDay > 0 ? '#F59E0B' : '#475569'
+  const confidenceLabel = confidence === 'high' ? '● High confidence' : confidence === 'medium' ? '◐ Medium confidence' : '○ Low confidence (log more data)'
+  const confidenceColor = confidence === 'high' ? '#10B981' : confidence === 'medium' ? '#F59E0B' : '#64748B'
+
+  return (
+    <div className="glass-card p-6 mb-6" style={{ border: '1px solid rgba(187,92,246,0.25)', boxShadow: '0 0 30px rgba(187,92,246,0.08)' }}>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(187,92,246,0.15)', border: '1px solid rgba(187,92,246,0.25)' }}>
+          <Target size={18} style={{ color: '#BB5CF6' }} />
+        </div>
+        <div>
+          <p className="font-heading font-black text-xs text-white tracking-wider" style={{ letterSpacing: '0.1em' }}>GOAL TIMELINE PREDICTION</p>
+          <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE ⭐</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <p className="font-heading text-[10px] tracking-wider mb-1" style={{ color: '#475569' }}>CURRENT WEIGHT</p>
+          <p className="font-heading font-black text-2xl text-white">{currentWeight}<span className="text-sm font-normal ml-1" style={{ color: '#475569' }}>kg</span></p>
+        </div>
+        <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <p className="font-heading text-[10px] tracking-wider mb-1" style={{ color: '#475569' }}>GOAL TARGET</p>
+          <p className="font-heading font-black text-2xl text-white">{target}<span className="text-sm font-normal ml-1" style={{ color: '#475569' }}>kg</span></p>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-xl mb-4" style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.15)' }}>
+        <p className="font-heading text-[10px] tracking-widest uppercase mb-1" style={{ color: '#475569' }}>
+          {daysLeft != null ? 'ESTIMATED GOAL DATE' : 'PREDICTION'}
+        </p>
+        <p className="font-heading font-black text-lg text-white">
+          {daysLeft != null ? prediction : prediction}
+        </p>
+        {daysLeft != null && (
+          <p className="font-heading text-xs mt-1" style={{ color: '#D88BFF' }}>
+            {daysLeft} days from now at current pace
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-heading text-[10px] tracking-wider mb-0.5" style={{ color: '#475569' }}>WEEKLY RATE</p>
+          <p className="font-heading font-bold text-sm" style={{ color: trendColor }}>{trendLabel}</p>
+        </div>
+        <p className="font-heading text-[10px]" style={{ color: confidenceColor }}>{confidenceLabel}</p>
+      </div>
     </div>
   )
 }
