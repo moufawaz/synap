@@ -61,8 +61,9 @@ export async function POST(req: Request) {
   const lsSubId: string = data?.id || attrs?.subscription_id || ''
   const variantId = String(attrs?.variant_id || attrs?.first_order_item?.variant_id || '')
   const planMeta = VARIANT_TO_PLAN[variantId]
-  const planName = planMeta?.plan || 'pro'
+  const planName: 'pro' | 'elite' = planMeta?.plan || 'pro'
   const billingPeriod = planMeta?.billing || 'monthly'
+  const isElite = planName === 'elite'
 
   const trialEndsAt: string | null = attrs?.trial_ends_at || null
   const renewsAt: string | null = attrs?.renews_at || null
@@ -78,6 +79,7 @@ export async function POST(req: Request) {
         lemon_squeezy_subscription_id: lsSubId,
         lemon_squeezy_customer_id: String(attrs?.customer_id || ''),
         variant_id: variantId,
+        plan_type: planName,
         plan_name: planName,
         billing_period: billingPeriod,
         status,
@@ -89,15 +91,19 @@ export async function POST(req: Request) {
         sendEmail({ to: userEmail, type: 'trial_started', data: { name: userName, trialDays: 7 } }).catch(() => {})
       }
 
-      // Ion trial day-1 message
-      if (isInTrial) {
-        await supabase.from('chat_messages').insert({
-          user_id: userId,
-          role: 'assistant',
-          content: `🎉 Your 7-day free trial has started, ${userName}! You now have full Pro access. Remember: if you cancel before day 7, you will never be charged — not even a single riyal. I'll remind you before the trial ends. Let's make these 7 days count!`,
-          message_type: 'text',
-        })
-      }
+      // Ion welcome message
+      const welcomeMsg = isElite
+        ? `🌟 Welcome to Elite, ${userName}! You now have access to everything — unlimited Ion messages, weekly body composition reports, personalised supplement recommendations, and goal timeline predictions. This is the full package. Let's build something exceptional.`
+        : isInTrial
+          ? `🎉 Your 7-day free trial has started, ${userName}! You now have full Pro access. Remember: if you cancel before day 7, you will never be charged — not even a single riyal. I'll remind you before the trial ends. Let's make these 7 days count!`
+          : `🚀 Welcome to Pro, ${userName}! You now have unlimited access to Ion, your full diet and workout plans, and all tracking features. Let's get to work.`
+
+      await supabase.from('chat_messages').insert({
+        user_id: userId,
+        role: 'assistant',
+        content: welcomeMsg,
+        message_type: 'text',
+      })
       break
     }
 
@@ -108,6 +114,7 @@ export async function POST(req: Request) {
       await upsertSubscription(supabase, userId, {
         lemon_squeezy_subscription_id: lsSubId,
         variant_id: variantId,
+        plan_type: planName,
         plan_name: planName,
         billing_period: billingPeriod,
         status: newStatus,
@@ -133,11 +140,12 @@ export async function POST(req: Request) {
       await supabase
         .from('subscriptions')
         .update({
-          status: cancelledInTrial ? 'free' : 'cancelled',
+          status: cancelledInTrial ? 'starter' : 'cancelled',
           cancelled_at: new Date().toISOString(),
-          // If cancelled during trial → wipe trial data immediately
+          // If cancelled during trial → revert to Starter immediately
           ...(cancelledInTrial ? {
-            plan_name: 'free',
+            plan_type: 'starter',
+            plan_name: 'starter',
             trial_ends_at: null,
             lemon_squeezy_subscription_id: null,
           } : {
@@ -154,7 +162,7 @@ export async function POST(req: Request) {
         await supabase.from('chat_messages').insert({
           user_id: userId,
           role: 'assistant',
-          content: `✅ Your trial has been cancelled successfully, ${userName}. As promised — zero charges, ever. You'll revert to the free plan now. You're always welcome back whenever you're ready. 💪`,
+          content: `✅ Your trial has been cancelled successfully, ${userName}. As promised — zero charges, ever. You've reverted to the Starter plan. You're always welcome back whenever you're ready. 💪`,
           message_type: 'text',
         })
       } else if (userEmail) {
@@ -178,7 +186,7 @@ export async function POST(req: Request) {
     case 'subscription_expired': {
       await supabase
         .from('subscriptions')
-        .update({ status: 'expired', plan_name: 'free', updated_at: new Date().toISOString() })
+        .update({ status: 'expired', plan_type: 'starter', plan_name: 'starter', updated_at: new Date().toISOString() })
         .eq('user_id', userId)
       break
     }
@@ -204,28 +212,6 @@ export async function POST(req: Request) {
         .from('subscriptions')
         .update({ status: 'past_due', updated_at: new Date().toISOString() })
         .eq('user_id', userId)
-      break
-    }
-
-    // ─────────────────────────────────────────────────────────
-    case 'order_created': {
-      // Handle one-time add-on purchase (Extra Chat)
-      const orderVariantId = String(attrs?.first_order_item?.variant_id || '')
-      if (orderVariantId === (process.env.LEMON_SQUEEZY_EXTRA_CHAT_VARIANT_ID || '1600640')) {
-        await supabase.from('add_ons').insert({
-          user_id: userId,
-          variant_id: orderVariantId,
-          addon_type: 'extra_chat',
-          active: true,
-        })
-
-        await supabase.from('chat_messages').insert({
-          user_id: userId,
-          role: 'assistant',
-          content: `🚀 Extra Chat Add-on activated! You now have +20 messages per day on top of your plan. Use them wisely, ${userName}!`,
-          message_type: 'text',
-        })
-      }
       break
     }
 

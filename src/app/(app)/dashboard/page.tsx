@@ -57,7 +57,10 @@ export default async function DashboardPage() {
   const plan = effectivePlan(subscription)
   const isTrial = subscription?.status === 'trial'
   const trialDaysLeft = getTrialDaysRemaining(subscription)
-  const isFree = plan === 'free' && !isLaunchMode
+  const isStarter = plan === 'starter' && !isLaunchMode
+  const isElite = plan === 'elite'
+  // legacy compat
+  const isFree = isStarter
 
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const todayName = days[new Date().getDay()]
@@ -156,8 +159,8 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* ── Upgrade CTA ─────────────────────────────── */}
-      {isFree && (
+      {/* ── Upgrade CTA (Starter) ───────────────────── */}
+      {isStarter && (
         <Link href="/pricing">
           <div
             className="mb-5 p-3.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:opacity-90"
@@ -166,9 +169,9 @@ export default async function DashboardPage() {
             <div className="flex items-center gap-2.5">
               <Crown size={14} style={{ color: C.spark }} />
               <div>
-                <p className="font-heading font-bold text-xs text-white tracking-wider">YOU&apos;RE ON THE FREE PLAN</p>
+                <p className="font-heading font-bold text-xs text-white tracking-wider">YOU&apos;RE ON THE STARTER PLAN</p>
                 <p className="font-heading text-[10px] mt-0.5" style={{ color: C.silverDim }}>
-                  5 messages/day. Upgrade for unlimited access — 7-day free trial.
+                  5 messages/day for 7 days, then pause. Upgrade to Pro or Elite for unlimited.
                 </p>
               </div>
             </div>
@@ -185,6 +188,19 @@ export default async function DashboardPage() {
             </span>
           </div>
         </Link>
+      )}
+
+      {/* ── Elite badge ─────────────────────────────── */}
+      {isElite && !isLaunchMode && (
+        <div
+          className="mb-5 p-3 rounded-2xl flex items-center gap-2.5"
+          style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.15)' }}
+        >
+          <Crown size={13} style={{ color: C.spark }} />
+          <p className="font-heading text-xs font-semibold" style={{ color: C.sparkLight }}>
+            Elite member — weekly reports, supplement stack &amp; goal predictions active
+          </p>
+        </div>
       )}
 
       {/* ── Header ──────────────────────────────────── */}

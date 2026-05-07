@@ -12,6 +12,7 @@ export const FROM_EMAIL = 'Ion at SYNAP <ion@synapfit.app>'
 export type EmailType =
   | 'welcome'
   | 'weekly_summary'
+  | 'weekly_report'
   | 'plan_renewal_warning'
   | 'new_plan'
   | 'milestone'
@@ -117,7 +118,7 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
         <p style="color:#94A3B8;font-size:15px;line-height:1.6">${data.name}, your trial has been cancelled. As promised — you will never be charged, not even a penny.</p>
         <div style="margin:24px 0;padding:20px;background:#0A1628;border-radius:12px;border:1px solid rgba(16,185,129,0.2)">
           <p style="color:#10B981;font-weight:700;margin:0 0 4px;font-size:14px">✅ Charge status: ZERO</p>
-          <p style="color:#64748B;font-size:13px;margin:0">Your free plan remains active with 5 messages/day.</p>
+          <p style="color:#64748B;font-size:13px;margin:0">Your Starter plan remains active. You can upgrade to Pro or Elite anytime.</p>
         </div>
         <p style="color:#64748B;font-size:14px">You're always welcome back whenever you're ready. SYNAP will be here.</p>
         ${btn('Return to SYNAP', `${APP_URL}/dashboard`)}
@@ -129,8 +130,8 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
       html: layout(`
         <h1 style="color:#94A3B8;font-size:24px;font-weight:900;margin:0 0 8px">Subscription Cancelled</h1>
         <p style="color:#94A3B8;font-size:15px;line-height:1.6">${data.name}, your subscription has been cancelled. You keep full access until <strong style="color:white">${data.endsAt || 'end of period'}</strong>.</p>
-        <p style="color:#64748B;font-size:14px">After that, you'll revert to the free plan (5 messages/day). You can re-subscribe anytime.</p>
-        ${btn('Resubscribe', `${APP_URL}/pricing`)}
+        <p style="color:#64748B;font-size:14px">After that, you'll revert to the Starter plan. You can re-subscribe to Pro or Elite anytime.</p>
+        ${btn('View Plans', `${APP_URL}/pricing`)}
       `),
     },
 
@@ -157,7 +158,27 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
       html: layout(`
         <h1 style="color:#BB5CF6;font-size:26px;font-weight:900;margin:0 0 8px">You're on ${data.planName}!</h1>
         <p style="color:#94A3B8;font-size:15px;line-height:1.6">${data.name}, your subscription is now active. Ion is ready to take your training to the next level.</p>
+        ${data.planName === 'Elite' ? `
+        <div style="margin:24px 0;padding:20px;background:#0A0A1A;border-radius:12px;border:1px solid rgba(187,92,246,0.2)">
+          <p style="color:#D88BFF;font-weight:700;margin:0 0 12px;font-size:14px">⭐ ELITE FEATURES NOW ACTIVE</p>
+          <p style="color:#64748B;font-size:13px;margin:0 0 6px">✓ Weekly body composition reports (every Friday)</p>
+          <p style="color:#64748B;font-size:13px;margin:0 0 6px">✓ Personalised supplement recommendations</p>
+          <p style="color:#64748B;font-size:13px;margin:0">✓ Goal timeline predictions with confidence score</p>
+        </div>` : ''}
         ${btn('Start Training', `${APP_URL}/dashboard`)}
+      `),
+    },
+
+    weekly_report: {
+      subject: `📊 Your weekly body composition report is ready`,
+      html: layout(`
+        <h1 style="color:#BB5CF6;font-size:24px;font-weight:900;margin:0 0 8px">Weekly Report Ready</h1>
+        <p style="color:#94A3B8;font-size:15px;line-height:1.6">${data.name}, Ion has analysed your week and your body composition report is ready in the app.</p>
+        <div style="margin:24px 0;padding:20px;background:#0A0A1A;border-radius:12px;border:1px solid rgba(187,92,246,0.15)">
+          <p style="color:#D88BFF;font-weight:700;margin:0 0 8px;font-size:13px">WEEK OF ${data.weekStart || ''}</p>
+          <p style="color:#64748B;font-size:13px;margin:0">Your personalised analysis covers body weight trends, workout adherence, nutrition consistency, and Ion's recommendations for next week.</p>
+        </div>
+        ${btn('View Full Report', `${APP_URL}/progress`)}
       `),
     },
 

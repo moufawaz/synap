@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
 import Link from 'next/link'
-import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp, MessageSquare } from 'lucide-react'
+import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp, MessageSquare, FlaskConical, Lock, Zap, ShieldCheck, Sparkles } from 'lucide-react'
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
 import { RecipeButton } from '@/components/ui/RecipeModal'
 
@@ -23,6 +23,10 @@ export default function PlanPage() {
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [expandedMeal, setExpandedMeal] = useState<string | null>(null)
   const [planDaysLeft, setPlanDaysLeft] = useState<number | null>(null)
+  const [planTier, setPlanTier] = useState<string>('starter')
+  const [supplementRec, setSupplementRec] = useState<any>(null)
+  const [suppLoading, setSuppLoading] = useState(false)
+  const [suppExpanded, setSuppExpanded] = useState(false)
 
   useEffect(() => { loadPlans() }, [])
 
@@ -31,10 +35,11 @@ export default function PlanPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const [dietRes, workoutRes, profileRes] = await Promise.all([
+    const [dietRes, workoutRes, profileRes, subRes] = await Promise.all([
       supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
+      supabase.from('subscriptions').select('plan_type,status,trial_end_date').eq('user_id', user.id).maybeSingle(),
     ])
 
     setDietPlan(dietRes.data?.plan_json || null)
@@ -44,6 +49,30 @@ export default function PlanPage() {
     if (workoutRes.data?.created_at) {
       const age = Math.floor((Date.now() - new Date(workoutRes.data.created_at).getTime()) / 86400000)
       setPlanDaysLeft(Math.max(0, PLAN_MODIFY_WINDOW_DAYS - age))
+    }
+
+    // Derive tier client-side
+    const sub = subRes.data
+    const tier = (() => {
+      if (!sub) return 'starter'
+      const name = (sub.plan_type || '').toLowerCase()
+      if (name === 'elite') return 'elite'
+      if (name === 'pro' || name === 'unlimited') return 'pro'
+      return 'starter'
+    })()
+    setPlanTier(tier)
+
+    // Fetch supplement recommendations for Elite
+    if (tier === 'elite') {
+      setSuppLoading(true)
+      try {
+        const res = await fetch('/api/supplement-recommendations')
+        if (res.ok) {
+          const { recommendation } = await res.json()
+          setSupplementRec(recommendation)
+        }
+      } catch { /* silent */ }
+      setSuppLoading(false)
     }
 
     setLoading(false)
@@ -94,6 +123,15 @@ export default function PlanPage() {
           </div>
         </Link>
       )}
+
+      {/* Supplement Recommendations */}
+      <SupplementCard
+        tier={planTier}
+        recommendation={supplementRec}
+        loading={suppLoading}
+        expanded={suppExpanded}
+        onToggle={() => setSuppExpanded(e => !e)}
+      />
 
       {/* Tab switcher */}
       <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -425,6 +463,224 @@ function DayList({ days, expandedDay, setExpandedDay, prefix }: any) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ── Supplement Recommendations Card ───────────────────────────────────────────
+const EVIDENCE_COLORS: Record<string, string> = {
+  strong:   '#10B981',
+  moderate: '#F59E0B',
+  emerging: '#64748B',
+}
+const PRIORITY_COLORS: Record<string, string> = {
+  essential:   '#EF4444',
+  recommended: '#BB5CF6',
+  optional:    '#475569',
+}
+const CATEGORY_ICONS: Record<string, string> = {
+  Performance: '⚡',
+  Recovery:    '🔄',
+  Health:      '🛡️',
+  Cognition:   '🧠',
+}
+
+function SupplementCard({ tier, recommendation, loading, expanded, onToggle }: {
+  tier: string
+  recommendation: any
+  loading: boolean
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const isElite = tier === 'elite'
+  const recs: any[] = recommendation?.recommendations?.supplements || []
+  const hasData = recs.length > 0
+
+  // Non-elite locked state
+  if (!isElite) {
+    return (
+      <div className="mb-5 rounded-2xl overflow-hidden relative" style={{ background: '#0E0E0E', border: '1px solid rgba(187,92,246,0.15)' }}>
+        <div className="p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(187,92,246,0.12)' }}>
+            <FlaskConical size={18} style={{ color: '#BB5CF6' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="font-heading font-bold text-sm text-white">Ion Supplement Stack</p>
+              <Lock size={12} style={{ color: '#475569' }} />
+            </div>
+            <p className="font-heading text-xs" style={{ color: '#64748B' }}>Personalised evidence-based supplement recommendations — Elite only</p>
+          </div>
+          <Link href="/pricing">
+            <button className="font-heading font-bold text-xs px-3 py-1.5 rounded-lg flex-shrink-0 transition-all hover:opacity-90" style={{ background: 'rgba(187,92,246,0.2)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.3)' }}>
+              Upgrade
+            </button>
+          </Link>
+        </div>
+        {/* Blurred preview */}
+        <div className="relative px-5 pb-5" style={{ filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none' }}>
+          {['Creatine Monohydrate', 'Whey Protein', 'Vitamin D3'].map((name, i) => (
+            <div key={i} className="flex items-center gap-3 mb-2 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <span className="text-base">⚡</span>
+              <div>
+                <p className="font-heading font-semibold text-sm text-white">{name}</p>
+                <p className="font-heading text-xs" style={{ color: '#64748B' }}>5g · Post-workout · Strong evidence</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="mb-5 p-5 rounded-2xl flex items-center gap-3" style={{ background: '#0E0E0E', border: '1px solid rgba(187,92,246,0.15)' }}>
+        <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
+        <p className="font-heading text-sm" style={{ color: '#64748B' }}>Loading your supplement recommendations…</p>
+      </div>
+    )
+  }
+
+  // No data yet — plan hasn't been renewed since feature launch
+  if (!hasData) {
+    return (
+      <div className="mb-5 p-5 rounded-2xl flex items-center gap-4" style={{ background: '#0E0E0E', border: '1px solid rgba(187,92,246,0.15)' }}>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(187,92,246,0.12)' }}>
+          <FlaskConical size={18} style={{ color: '#BB5CF6' }} />
+        </div>
+        <div>
+          <p className="font-heading font-bold text-sm text-white mb-0.5">Ion Supplement Stack</p>
+          <p className="font-heading text-xs" style={{ color: '#64748B' }}>Supplement recommendations will appear after your next plan renewal cycle.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const rec = recommendation.recommendations
+  const essentials = recs.filter((s: any) => s.priority === 'essential')
+  const others = recs.filter((s: any) => s.priority !== 'essential')
+
+  return (
+    <div className="mb-5 rounded-2xl overflow-hidden" style={{ background: '#0E0E0E', border: '1px solid rgba(187,92,246,0.2)' }}>
+      {/* Header */}
+      <button onClick={onToggle} className="w-full flex items-center justify-between p-5 text-left">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(187,92,246,0.12)' }}>
+            <FlaskConical size={18} style={{ color: '#BB5CF6' }} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="font-heading font-bold text-sm text-white">Ion Supplement Stack</p>
+              <span className="font-heading text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(187,92,246,0.15)', color: '#D88BFF' }}>
+                Cycle {rec.cycle || recommendation.cycle_number}
+              </span>
+            </div>
+            <p className="font-heading text-xs" style={{ color: '#64748B' }}>{rec.headline || `${recs.length} personalised recommendations`}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="font-heading text-xs" style={{ color: '#475569' }}>{recs.length} supplements</span>
+          {expanded ? <ChevronUp size={14} style={{ color: '#475569' }} /> : <ChevronDown size={14} style={{ color: '#475569' }} />}
+        </div>
+      </button>
+
+      {/* Collapsed summary — show essentials inline */}
+      {!expanded && (
+        <div className="px-5 pb-4 flex flex-wrap gap-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+          <div className="pt-3 flex flex-wrap gap-2 w-full">
+            {essentials.slice(0, 4).map((s: any, i: number) => (
+              <span key={i} className="font-heading text-xs px-2.5 py-1 rounded-full" style={{ background: 'rgba(187,92,246,0.08)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.15)' }}>
+                {CATEGORY_ICONS[s.category] || '💊'} {s.name}
+              </span>
+            ))}
+            {recs.length > 4 && (
+              <span className="font-heading text-xs px-2.5 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', color: '#475569' }}>
+                +{recs.length - 4} more
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Expanded — full list */}
+      {expanded && (
+        <div className="px-5 pb-5 border-t" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+          {/* Essentials */}
+          {essentials.length > 0 && (
+            <>
+              <p className="font-heading text-[10px] font-bold uppercase tracking-widest mt-4 mb-2" style={{ color: '#EF4444' }}>ESSENTIAL</p>
+              <div className="flex flex-col gap-2">
+                {essentials.map((s: any, i: number) => <SupplementRow key={i} s={s} />)}
+              </div>
+            </>
+          )}
+          {/* Recommended + Optional */}
+          {others.length > 0 && (
+            <>
+              <p className="font-heading text-[10px] font-bold uppercase tracking-widest mt-4 mb-2" style={{ color: '#BB5CF6' }}>RECOMMENDED & OPTIONAL</p>
+              <div className="flex flex-col gap-2">
+                {others.map((s: any, i: number) => <SupplementRow key={i} s={s} />)}
+              </div>
+            </>
+          )}
+          {/* Stack notes */}
+          {rec.stack_notes && (
+            <div className="mt-4 p-4 rounded-xl" style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.12)' }}>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Sparkles size={12} style={{ color: '#BB5CF6' }} />
+                <p className="font-heading text-[10px] font-bold uppercase tracking-widest" style={{ color: '#BB5CF6' }}>ION'S TAKE</p>
+              </div>
+              <p className="font-heading text-sm leading-relaxed" style={{ color: '#94A3B8' }}>{rec.stack_notes}</p>
+            </div>
+          )}
+          {/* Generated timestamp */}
+          {recommendation.generated_at && (
+            <p className="font-heading text-[10px] mt-3 text-right" style={{ color: '#334155' }}>
+              Generated {new Date(recommendation.generated_at).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SupplementRow({ s }: { s: any }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-3 px-4 py-3 text-left">
+        <span className="text-lg flex-shrink-0">{CATEGORY_ICONS[s.category] || '💊'}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-heading font-semibold text-sm text-white">{s.name}</p>
+            <span className="font-heading text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: `${PRIORITY_COLORS[s.priority]}20`, color: PRIORITY_COLORS[s.priority] }}>
+              {s.priority}
+            </span>
+          </div>
+          <p className="font-heading text-xs mt-0.5" style={{ color: '#64748B' }}>
+            {s.dose} · {s.timing}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="font-heading text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: `${EVIDENCE_COLORS[s.evidence] || '#64748B'}18`, color: EVIDENCE_COLORS[s.evidence] || '#64748B' }}>
+            {s.evidence}
+          </span>
+          {open ? <ChevronUp size={12} style={{ color: '#475569' }} /> : <ChevronDown size={12} style={{ color: '#475569' }} />}
+        </div>
+      </button>
+      {open && (
+        <div className="px-4 pb-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+          <p className="font-heading text-sm mt-2 leading-relaxed" style={{ color: '#94A3B8' }}>{s.benefit}</p>
+          {s.notes && (
+            <p className="font-heading text-xs mt-2 leading-relaxed" style={{ color: '#475569' }}>
+              <span style={{ color: '#BB5CF6' }}>Note: </span>{s.notes}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
 import { sendPushNotification } from '@/lib/onesignal'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
+import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 
 // POST /api/renew-plan — called by the adaptation-check job when a plan is expiring
 export async function POST(req: Request) {
@@ -186,9 +187,97 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
       sendPushNotification({ userId: user.id, type: 'plan_renewal' }),
     ])
 
+    // ── Supplement recommendations for Elite users ────────────
+    // Fire-and-forget — don't block plan renewal response
+    generateSupplementRecsIfElite(supabase, client, user.id, profile, planJson, planType).catch(
+      e => console.error('[renew-plan] supplement gen failed:', e)
+    )
+
     return NextResponse.json({ ok: true, plan: planJson })
   } catch (err: any) {
     console.error('[renew-plan]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
+}
+
+// ── Supplement Recommendations (Elite only) ───────────────────────────────────
+async function generateSupplementRecsIfElite(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  client: Anthropic,
+  userId: string,
+  profile: any,
+  planJson: any,
+  planType: 'diet' | 'workout',
+) {
+  // Check Elite status
+  const sub = await getUserSubscription(userId)
+  const plan = effectivePlan(sub)
+  if (plan !== 'elite') return
+
+  // Count existing cycles so we can number this one
+  const { count } = await supabase
+    .from('supplement_recommendations')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+  const cycleNumber = (count ?? 0) + 1
+
+  // Build context from the new plan
+  const dietContext = planType === 'diet'
+    ? `Daily calories: ${planJson.daily_calories}, Protein: ${planJson.macros?.protein_g}g, Carbs: ${planJson.macros?.carbs_g}g, Fat: ${planJson.macros?.fat_g}g. Dietary preference: ${profile.dietary_preference || 'balanced'}. Allergies: ${profile.allergies || 'none'}.`
+    : `No new diet plan — using existing nutrition. Dietary preference: ${profile.dietary_preference || 'balanced'}.`
+
+  const workoutContext = planType === 'workout'
+    ? `New ${planJson.weeks?.length || 6}-week ${planJson.split_type?.replace(/_/g, ' ') || 'training'} programme. ${planJson.days_per_week} sessions/week, ${planJson.session_duration_min} min each. Progressive overload: ${planJson.progressive_overload || 'standard'}.`
+    : `Using existing workout plan.`
+
+  const prompt = `You are Ion, an elite AI personal trainer and sports nutritionist. Based on this user's new plan cycle, recommend a precise, evidence-based supplement stack.
+
+USER:
+Name: ${profile.name}, ${profile.age}yr ${profile.gender}
+Goal: ${profile.goal}
+Weight: ${profile.weight_kg}kg | Height: ${profile.height_cm}cm
+
+NUTRITION CONTEXT:
+${dietContext}
+
+TRAINING CONTEXT:
+${workoutContext}
+
+Generate personalised supplement recommendations as JSON. Return ONLY valid JSON:
+{
+  "headline": "One-line summary of the stack rationale",
+  "supplements": [
+    {
+      "name": "Supplement name",
+      "category": "Performance|Recovery|Health|Cognition",
+      "dose": "Exact dose (e.g. 5g, 200mg)",
+      "timing": "When to take (e.g. Pre-workout, Post-workout, Morning with food)",
+      "benefit": "Specific benefit for this user's goal and plan",
+      "evidence": "strong|moderate|emerging",
+      "priority": "essential|recommended|optional",
+      "notes": "Any important interactions, cycling advice, or food sources if preferred over supplements"
+    }
+  ],
+  "stack_notes": "Ion's overall coaching note about this supplement stack — 2-3 sentences max",
+  "cycle": ${cycleNumber}
+}`
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1200,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const raw = (message.content[0] as any).text
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('Failed to parse supplement recommendations JSON')
+  const recommendations = JSON.parse(match[0])
+
+  await supabase.from('supplement_recommendations').insert({
+    user_id:         userId,
+    cycle_number:    cycleNumber,
+    recommendations: recommendations,
+    generated_at:    new Date().toISOString(),
+  })
 }

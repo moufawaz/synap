@@ -59,7 +59,8 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
         }
 
         // Poll for barcodes every 500ms
-        reader.decodeFromVideoElement(videoRef.current!, async (result, err) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(reader as any).decodeFromVideoElement(videoRef.current!, async (result: any) => {
           if (result && mounted && scanState === 'scanning') {
             await handleBarcode(result.getText())
           }
@@ -139,7 +140,8 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
           await videoRef.current.play()
         }
 
-        reader.decodeFromVideoElement(videoRef.current!, async (result) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(reader as any).decodeFromVideoElement(videoRef.current!, async (result: any) => {
           if (result) await handleBarcode(result.getText())
         })
       } catch {}

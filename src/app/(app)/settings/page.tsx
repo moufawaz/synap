@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
-import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap } from 'lucide-react'
+import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/lib/useLanguage'
@@ -94,6 +94,7 @@ export default function SettingsPage() {
     { id: 'training', label: t(lang, 'settings_training'), icon: Dumbbell },
     { id: 'preferences', label: t(lang, 'settings_preferences'), icon: Globe },
     { id: 'billing', label: t(lang, 'settings_billing'), icon: CreditCard },
+    { id: 'integrations', label: 'Integrations', icon: Zap },
   ]
 
   if (!profile) return (
@@ -104,12 +105,20 @@ export default function SettingsPage() {
 
   // ── Subscription state helpers ─────────────────────────
   const sub = subscription
-  const status = sub?.status || 'free'
-  const planName = sub?.plan_name || 'free'
+  const status = sub?.status || 'starter'
+  const rawPlanName = (sub?.plan_type || sub?.plan_name || 'starter').toLowerCase()
   const isTrial = status === 'trial'
   const isActive = status === 'active'
   const isCancelled = status === 'cancelled'
-  const isFree = !sub || status === 'free' || status === 'expired'
+  const isStarter = !sub || status === 'starter' || status === 'free' || status === 'expired'
+  // legacy compat
+  const isFree = isStarter
+
+  // Map raw plan names to display labels
+  const planLabel = rawPlanName === 'elite' ? 'Elite'
+    : rawPlanName === 'pro' || rawPlanName === 'unlimited' ? 'Pro'
+    : 'Starter'
+  const planName = rawPlanName  // keep for MessageUsage compat
 
   const trialEnd = sub?.trial_ends_at ? new Date(sub.trial_ends_at) : null
   const trialDaysLeft = trialEnd
@@ -118,7 +127,6 @@ export default function SettingsPage() {
 
   const periodEnd = sub?.current_period_ends_at ? new Date(sub.current_period_ends_at) : null
 
-  const planLabel = planName === 'unlimited' ? 'Pro + Unlimited' : planName === 'pro' ? 'Pro' : 'Free'
   const billingLabel = sub?.billing_period === 'annual' ? 'Annual' : sub?.billing_period === 'monthly' ? 'Monthly' : ''
   const canCancel = (isTrial || isActive) && sub?.lemon_squeezy_subscription_id
 
@@ -293,7 +301,8 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  {planName === 'unlimited' && <InfinityIcon size={14} style={{ color: '#BB5CF6' }} />}
+                  {planLabel === 'Elite' && <Crown size={14} style={{ color: '#BB5CF6' }} />}
+                  {planLabel === 'Pro' && <InfinityIcon size={14} style={{ color: '#BB5CF6' }} />}
                   <p className="font-heading font-black text-xl text-white tracking-wider" style={{ letterSpacing: '0.06em' }}>
                     {planLabel}
                   </p>
@@ -361,12 +370,21 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Upgrade CTA if free */}
-            {isFree && !isLaunchMode && (
+            {/* Upgrade CTA if Starter */}
+            {isStarter && !isLaunchMode && (
               <Link href="/pricing">
                 <button className="w-full py-3 rounded-xl font-heading font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all mt-2"
                   style={{ background: '#BB5CF6', color: 'white', boxShadow: '0 0 20px rgba(187,92,246,0.3)', letterSpacing: '0.08em' }}>
-                  Upgrade to Pro <ChevronRight size={14} />
+                  View Pro &amp; Elite Plans <ChevronRight size={14} />
+                </button>
+              </Link>
+            )}
+            {/* Upgrade to Elite CTA if Pro */}
+            {planLabel === 'Pro' && isActive && !isLaunchMode && (
+              <Link href="/pricing">
+                <button className="w-full py-3 rounded-xl font-heading font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all mt-2"
+                  style={{ background: 'rgba(187,92,246,0.12)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.25)', letterSpacing: '0.08em' }}>
+                  Upgrade to Elite <ChevronRight size={14} />
                 </button>
               </Link>
             )}
@@ -395,14 +413,14 @@ export default function SettingsPage() {
                     <div className="p-3 rounded-xl mb-4 flex items-start gap-2" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
                       <Shield size={13} style={{ color: '#10B981', marginTop: 2 }} />
                       <p className="font-heading text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
-                        Cancelling during trial = <strong style={{ color: '#10B981' }}>zero charges, ever</strong>. Not a single riyal. You'll revert to the free plan immediately.
+                        Cancelling during trial = <strong style={{ color: '#10B981' }}>zero charges, ever</strong>. Not a single riyal. You'll revert to the Starter plan immediately.
                       </p>
                     </div>
                   )}
 
                   {!isTrial && (
                     <p className="font-heading text-xs mb-4 leading-relaxed" style={{ color: '#64748B' }}>
-                      You'll keep access until {periodEnd?.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) || 'end of period'}, then revert to the free plan.
+                      You'll keep access until {periodEnd?.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) || 'end of period'}, then revert to the Starter plan.
                     </p>
                   )}
 
@@ -454,8 +472,54 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ── Integrations (Coming Soon) ───────────────────────── */}
+      {activeSection === 'integrations' && (
+        <div className="flex flex-col gap-4">
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#475569', letterSpacing: '0.14em' }}>WEARABLES & INTEGRATIONS</p>
+            <p className="font-heading text-xs mb-5" style={{ color: '#64748B' }}>Connect your devices to automatically sync workouts and health data.</p>
+
+            {[
+              { name: 'Apple Health', logo: '🍎', desc: 'Sync steps, heart rate & sleep from Apple Health.' },
+              { name: 'Google Fit', logo: '🟢', desc: 'Import activity data from Google Fit.' },
+              { name: 'Garmin', logo: '⌚', desc: 'Connect your Garmin device for workout data.' },
+              { name: 'Fitbit', logo: '💜', desc: 'Sync Fitbit daily activity and sleep tracking.' },
+              { name: 'Whoop', logo: '🔴', desc: 'Import recovery and strain data from Whoop.' },
+              { name: 'MyFitnessPal', logo: '🥗', desc: 'Import nutrition logs from MyFitnessPal.' },
+            ].map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between py-3 border-b"
+                style={{ borderColor: 'rgba(255,255,255,0.04)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{item.logo}</span>
+                  <div>
+                    <p className="font-heading font-semibold text-sm text-white">{item.name}</p>
+                    <p className="font-heading text-xs" style={{ color: '#475569' }}>{item.desc}</p>
+                  </div>
+                </div>
+                <span
+                  className="font-heading font-bold text-[10px] px-2.5 py-1 rounded-lg flex-shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.04)', color: '#334155', border: '1px solid rgba(255,255,255,0.06)', letterSpacing: '0.1em' }}
+                >
+                  SOON
+                </span>
+              </div>
+            ))}
+
+            <div className="mt-5 p-4 rounded-xl flex items-center gap-3" style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.12)' }}>
+              <Zap size={14} style={{ color: '#BB5CF6', flexShrink: 0 }} />
+              <p className="font-heading text-xs" style={{ color: '#64748B' }}>
+                Wearable integrations are in development. Elite members get first access when they launch.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Save button (only for profile/training/preferences) */}
-      {activeSection !== 'billing' && (
+      {activeSection !== 'billing' && activeSection !== 'integrations' && (
         <div className="mt-6 flex flex-col gap-3">
           <button
             onClick={saveProfile}
@@ -482,7 +546,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {activeSection === 'billing' && (
+      {(activeSection === 'billing' || activeSection === 'integrations') && (
         <div className="mt-4 flex flex-col gap-3">
           <button
             onClick={signOut}
@@ -512,8 +576,11 @@ function MessageUsage({ userId, plan, status }: { userId?: string; plan: string;
       .eq('date', today)
       .single()
       .then(({ data }) => {
-        const limits: Record<string, number> = { free: 5, trial: 30, pro: 30, unlimited: Infinity }
-        const limit = plan === 'unlimited' || status === 'unlimited' ? Infinity : (limits[plan] || limits[status] || 5)
+        const limits: Record<string, number> = {
+          starter: 5, free: 5,
+          trial: Infinity, pro: Infinity, unlimited: Infinity, elite: Infinity,
+        }
+        const limit = limits[plan] ?? limits[status] ?? 5
         setUsage({ count: data?.count || 0, limit })
       })
   }, [userId, plan, status])

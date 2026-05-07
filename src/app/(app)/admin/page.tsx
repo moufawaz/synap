@@ -10,10 +10,13 @@ import {
 export const dynamic = 'force-dynamic'
 
 const PLAN_PRICES: Record<string, number> = {
-  'pro-monthly':        34.99,
-  'pro-annual':        289.99,
-  'unlimited-monthly':  44.99,
-  'unlimited-annual':  369.99,
+  'pro-monthly':           39.99,
+  'pro-annual':           319.99,
+  'elite-monthly':         69.99,
+  'elite-annual':         559.99,
+  // Legacy
+  'unlimited-monthly':     39.99,
+  'unlimited-annual':     319.99,
 }
 
 const EVENT_LABELS: Record<string, { label: string; color: string }> = {
@@ -24,7 +27,6 @@ const EVENT_LABELS: Record<string, { label: string; color: string }> = {
   subscription_expired:         { label: 'Expired',            color: '#F59E0B' },
   subscription_payment_success: { label: 'Payment received',   color: '#10B981' },
   subscription_payment_failed:  { label: 'Payment failed',     color: '#EF4444' },
-  order_created:                { label: 'Add-on purchased',   color: '#D88BFF' },
 }
 
 const GOAL_LABELS: Record<string, string> = {
@@ -83,13 +85,23 @@ export default async function AdminPage() {
   const activeSubs    = subs.filter(s => s.status === 'active')
   const trialSubs     = subs.filter(s => s.status === 'trial')
   const cancelledSubs = subs.filter(s => s.status === 'cancelled' || s.status === 'expired')
-  const freeSubs      = subs.filter(s => !s.status || s.status === 'free')
   const totalUsers    = authUsers.length
+
+  // Plan tier splits
+  const getPlanTier = (s: any) => {
+    const p = (s.plan_type || s.plan_name || '').toLowerCase()
+    if (p === 'elite') return 'elite'
+    if (p === 'pro' || p === 'unlimited') return 'pro'
+    return 'starter'
+  }
+  const eliteSubs = activeSubs.filter(s => getPlanTier(s) === 'elite')
+  const proSubs   = activeSubs.filter(s => getPlanTier(s) === 'pro')
 
   // ── Revenue ───────────────────────────────────────────────
   let mrr = 0
   for (const s of activeSubs) {
-    const key = `${s.plan_name}-${s.billing_period}`
+    const tier = getPlanTier(s)
+    const key = `${tier}-${s.billing_period || 'monthly'}`
     const price = PLAN_PRICES[key]
     if (price) mrr += s.billing_period === 'annual' ? price / 12 : price
   }
@@ -102,10 +114,34 @@ export default async function AdminPage() {
   const conversionRate  = trialsStarted > 0
     ? Math.round(((trialsStarted - trialsCancelled) / trialsStarted) * 100) : 0
 
-  // ── Plan breakdown ────────────────────────────────────────
+  // ── Plan distribution (for pie-style breakdown) ───────────
+  const starterCount = totalUsers - activeSubs.length - trialSubs.length - cancelledSubs.length
+  const planDistribution = [
+    { label: 'Elite',     count: eliteSubs.length,   color: '#D88BFF' },
+    { label: 'Pro',       count: proSubs.length,      color: '#BB5CF6' },
+    { label: 'Trial',     count: trialSubs.length,    color: '#F59E0B' },
+    { label: 'Starter',   count: Math.max(0, starterCount), color: '#334155' },
+    { label: 'Cancelled', count: cancelledSubs.length, color: '#EF4444' },
+  ]
+  const totalForPie = planDistribution.reduce((s, p) => s + p.count, 0) || 1
+
+  // ── Upgrade funnel ────────────────────────────────────────
+  const signups     = totalUsers
+  const trialCount  = trialSubs.length + activeSubs.length + cancelledSubs.length
+  const paidCount   = activeSubs.length
+  const eliteCount  = eliteSubs.length
+  const funnelSteps = [
+    { label: 'Signed Up',          count: signups,    color: '#BB5CF6' },
+    { label: 'Started Trial',      count: trialCount, color: '#F59E0B' },
+    { label: 'Converted to Paid',  count: paidCount,  color: '#10B981' },
+    { label: 'Upgraded to Elite',  count: eliteCount, color: '#D88BFF' },
+  ]
+
+  // ── Plan breakdown table ──────────────────────────────────
   const planBreakdown: Record<string, number> = {}
   for (const s of activeSubs) {
-    const key = `${s.plan_name} (${s.billing_period})`
+    const tier = getPlanTier(s)
+    const key = `${tier} (${s.billing_period || 'monthly'})`
     planBreakdown[key] = (planBreakdown[key] || 0) + 1
   }
 
@@ -151,18 +187,92 @@ export default async function AdminPage() {
 
       {/* ── Top KPIs ───────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total Users"     value={totalUsers}            sub={`+${newThisWeek} this week · +${newThisMonth} this month`} icon={Users}         color="#BB5CF6" />
-        <StatCard label="MRR"             value={`SAR ${mrr.toFixed(0)}`} sub={`ARR: SAR ${arr.toFixed(0)} · ARPU: SAR ${arpu.toFixed(0)}`} icon={DollarSign}   color="#10B981" />
-        <StatCard label="Paid / Trial"    value={`${activeSubs.length} / ${trialSubs.length}`} sub={`Conversion: ${conversionRate}%`} icon={Crown}  color="#F59E0B" />
-        <StatCard label="Today"           value={`${todayMsgs} msgs`}   sub={`${activeToday} active users`}                           icon={Activity}      color="#3B82F6" />
+        <StatCard label="Total Users"     value={totalUsers}              sub={`+${newThisWeek} this week · +${newThisMonth} this month`} icon={Users}         color="#BB5CF6" />
+        <StatCard label="MRR"             value={`SAR ${mrr.toFixed(0)}`} sub={`ARR: SAR ${arr.toFixed(0)} · ARPU: SAR ${arpu.toFixed(0)}`} icon={DollarSign}  color="#10B981" />
+        <StatCard label="Elite / Pro"     value={`${eliteSubs.length} / ${proSubs.length}`} sub={`${trialSubs.length} in trial · conv. ${conversionRate}%`} icon={Crown} color="#D88BFF" />
+        <StatCard label="Today"           value={`${todayMsgs} msgs`}     sub={`${activeToday} active users`}                             icon={Activity}      color="#3B82F6" />
       </div>
 
       {/* ── Second row KPIs ────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total Chats"     value={chatCountRes.count || 0}   sub="all time"            icon={MessageCircle} color="#D88BFF" />
-        <StatCard label="Workouts Logged" value={workoutLogRes.count || 0}  sub="all time"            icon={TrendingUp}    color="#BB5CF6" />
-        <StatCard label="Cancelled"       value={cancelledSubs.length}       sub="total cancelled"     icon={XCircle}       color="#EF4444" />
-        <StatCard label="Free Users"      value={totalUsers - activeSubs.length - trialSubs.length} sub="no subscription" icon={BarChart3} color="#475569" />
+        <StatCard label="Total Chats"     value={chatCountRes.count || 0}   sub="all time"                                                     icon={MessageCircle} color="#D88BFF" />
+        <StatCard label="Workouts Logged" value={workoutLogRes.count || 0}  sub="all time"                                                     icon={TrendingUp}    color="#BB5CF6" />
+        <StatCard label="Cancelled"       value={cancelledSubs.length}       sub="total cancelled"                                             icon={XCircle}       color="#EF4444" />
+        <StatCard label="Starter Users"   value={Math.max(0, totalUsers - activeSubs.length - trialSubs.length - cancelledSubs.length)} sub="no subscription" icon={BarChart3} color="#475569" />
+      </div>
+
+      {/* ── Upgrade Funnel + Plan Distribution side by side ─── */}
+      <div className="grid sm:grid-cols-2 gap-5">
+
+        {/* Upgrade funnel */}
+        <div className="glass-card p-5">
+          <SectionTitle>UPGRADE FUNNEL</SectionTitle>
+          <div className="flex flex-col gap-4">
+            {funnelSteps.map((step, i) => {
+              const pct = funnelSteps[0].count > 0 ? Math.round((step.count / funnelSteps[0].count) * 100) : 0
+              const barW = funnelSteps[0].count > 0 ? (step.count / funnelSteps[0].count) * 100 : 0
+              return (
+                <div key={i}>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-heading text-[10px] font-bold w-4 text-center" style={{ color: step.color }}>{i + 1}</span>
+                      <span className="font-heading text-xs text-white">{step.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-heading font-bold text-sm text-white">{step.count}</span>
+                      <span className="font-heading text-[10px]" style={{ color: '#475569' }}>{pct}%</span>
+                    </div>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${barW}%`, background: step.color }} />
+                  </div>
+                  {i < funnelSteps.length - 1 && step.count > 0 && (
+                    <p className="font-heading text-[10px] text-right mt-0.5" style={{ color: '#334155' }}>
+                      → {Math.round((funnelSteps[i + 1].count / step.count) * 100)}% proceed
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Plan distribution */}
+        <div className="glass-card p-5">
+          <SectionTitle>PLAN DISTRIBUTION</SectionTitle>
+          <div className="flex flex-col gap-3">
+            {planDistribution.filter(p => p.count > 0 || p.label !== 'Cancelled').map(p => {
+              const pct = Math.round((p.count / totalForPie) * 100)
+              return (
+                <div key={p.label}>
+                  <div className="flex justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
+                      <span className="font-heading text-xs text-white">{p.label}</span>
+                    </div>
+                    <span className="font-heading text-xs" style={{ color: '#475569' }}>{p.count} ({pct}%)</span>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: p.color }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {/* Visual bar chart */}
+          <div className="mt-5 flex items-end gap-1 h-20">
+            {planDistribution.filter(p => p.count > 0).map((p, i) => {
+              const heightPct = Math.round((p.count / Math.max(...planDistribution.map(x => x.count), 1)) * 100)
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="font-heading text-[9px] font-bold" style={{ color: p.color }}>{p.count}</span>
+                  <div className="w-full rounded-t-md transition-all" style={{ height: `${heightPct}%`, background: `${p.color}60`, border: `1px solid ${p.color}40`, minHeight: 4 }} />
+                  <span className="font-heading text-[8px]" style={{ color: '#475569' }}>{p.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ── Revenue + Status side by side ───────────────────── */}
@@ -275,12 +385,15 @@ export default async function AdminPage() {
               {authUsers.map(u => {
                 const profile = profiles.find(p => p.user_id === u.id)
                 const sub = subs.find(s => s.user_id === u.id)
+                const tier = sub ? getPlanTier(sub) : 'starter'
                 const planDisplay = sub?.status === 'trial' ? 'Trial'
-                  : sub?.status === 'active' ? (sub.plan_name === 'unlimited' ? 'Unlimited' : 'Pro')
-                  : 'Free'
-                const planColor = planDisplay === 'Trial' ? '#BB5CF6'
-                  : planDisplay === 'Unlimited' ? '#BB5CF6'
-                  : planDisplay === 'Pro' ? '#10B981' : '#475569'
+                  : sub?.status === 'active' ? (tier === 'elite' ? 'Elite' : tier === 'pro' ? 'Pro' : 'Starter')
+                  : sub?.status === 'cancelled' ? 'Cancelled'
+                  : 'Starter'
+                const planColor = planDisplay === 'Elite' ? '#D88BFF'
+                  : planDisplay === 'Trial' ? '#F59E0B'
+                  : planDisplay === 'Pro' ? '#10B981'
+                  : planDisplay === 'Cancelled' ? '#EF4444' : '#475569'
 
                 return (
                   <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>

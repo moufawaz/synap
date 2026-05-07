@@ -10,27 +10,32 @@ function getApiKey() {
 
 // ── Variant IDs ────────────────────────────────────────────────
 export const VARIANT_IDS = {
-  PRO_MONTHLY:           process.env.LEMON_SQUEEZY_PRO_MONTHLY_VARIANT_ID           || '1600605',
+  PRO_MONTHLY:     process.env.LEMON_SQUEEZY_PRO_MONTHLY_VARIANT_ID     || '1600605',
+  PRO_ANNUAL:      process.env.LEMON_SQUEEZY_PRO_ANNUAL_VARIANT_ID      || '1602045',
+  ELITE_MONTHLY:   process.env.LEMON_SQUEEZY_ELITE_MONTHLY_VARIANT_ID   || '',
+  ELITE_ANNUAL:    process.env.LEMON_SQUEEZY_ELITE_ANNUAL_VARIANT_ID    || '',
+  // Legacy (kept for backwards-compat with existing LS subscriptions)
   PRO_UNLIMITED_MONTHLY: process.env.LEMON_SQUEEZY_PRO_UNLIMITED_MONTHLY_VARIANT_ID || '1602017',
-  PRO_ANNUAL:            process.env.LEMON_SQUEEZY_PRO_ANNUAL_VARIANT_ID            || '1602045',
   PRO_UNLIMITED_ANNUAL:  process.env.LEMON_SQUEEZY_PRO_UNLIMITED_ANNUAL_VARIANT_ID  || '1602053',
-  EXTRA_CHAT:            process.env.LEMON_SQUEEZY_EXTRA_CHAT_VARIANT_ID            || '1600640',
 } as const
 
 // ── Plan metadata by variant ID ────────────────────────────────
 export interface PlanMeta {
-  plan: 'pro' | 'unlimited'
+  plan: 'pro' | 'elite'
   billing: 'monthly' | 'annual'
-  unlimited: boolean
   priceSAR: number
   label: string
 }
 
 export const VARIANT_TO_PLAN: Record<string, PlanMeta> = {
-  [VARIANT_IDS.PRO_MONTHLY]:           { plan: 'pro',       billing: 'monthly', unlimited: false, priceSAR: 34.99, label: 'Pro Monthly' },
-  [VARIANT_IDS.PRO_UNLIMITED_MONTHLY]: { plan: 'unlimited', billing: 'monthly', unlimited: true,  priceSAR: 44.99, label: 'Pro+Unlimited Monthly' },
-  [VARIANT_IDS.PRO_ANNUAL]:            { plan: 'pro',       billing: 'annual',  unlimited: false, priceSAR: 289.99, label: 'Pro Annual' },
-  [VARIANT_IDS.PRO_UNLIMITED_ANNUAL]:  { plan: 'unlimited', billing: 'annual',  unlimited: true,  priceSAR: 369.99, label: 'Pro+Unlimited Annual' },
+  [VARIANT_IDS.PRO_MONTHLY]:            { plan: 'pro',   billing: 'monthly', priceSAR: 39.99,  label: 'Pro Monthly' },
+  [VARIANT_IDS.PRO_ANNUAL]:             { plan: 'pro',   billing: 'annual',  priceSAR: 319.99, label: 'Pro Annual' },
+  // Elite — IDs filled in via env vars when LS variants are created
+  ...(VARIANT_IDS.ELITE_MONTHLY ? { [VARIANT_IDS.ELITE_MONTHLY]: { plan: 'elite' as const, billing: 'monthly' as const, priceSAR: 69.99,  label: 'Elite Monthly' } } : {}),
+  ...(VARIANT_IDS.ELITE_ANNUAL  ? { [VARIANT_IDS.ELITE_ANNUAL]:  { plan: 'elite' as const, billing: 'annual' as const,  priceSAR: 559.99, label: 'Elite Annual'  } } : {}),
+  // Legacy Pro+Unlimited → map to 'pro' for backward compat
+  [VARIANT_IDS.PRO_UNLIMITED_MONTHLY]:  { plan: 'pro',   billing: 'monthly', priceSAR: 39.99,  label: 'Pro Monthly (legacy)' },
+  [VARIANT_IDS.PRO_UNLIMITED_ANNUAL]:   { plan: 'pro',   billing: 'annual',  priceSAR: 319.99, label: 'Pro Annual (legacy)' },
 }
 
 // ── Fetch store ID lazily ──────────────────────────────────────

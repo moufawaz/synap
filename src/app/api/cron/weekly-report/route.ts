@@ -52,8 +52,9 @@ export async function GET(req: Request) {
   return NextResponse.json({ ok: true, generated, errors, week: `${weekStartStr} → ${weekEndStr}` })
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function generateReportForUser(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   anthropic: Anthropic,
   userId: string,
   weekStart: string,
