@@ -167,7 +167,8 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
   // ── Nutrition helpers ────────────────────────────────────────
   function calcNutrition(per100: number | undefined, g: number) {
     if (!per100) return null
-    return Math.round((per100 * g) / 100)
+    const v = (per100 * g) / 100
+    return v < 1 ? parseFloat(v.toFixed(1)) : Math.round(v)
   }
 
   function handleLog() {
@@ -460,8 +461,8 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
                   <label className="font-heading text-xs tracking-wider block mb-2" style={{ color: '#64748B' }}>
                     SERVING SIZE (grams)
                   </label>
-                  <input type="number" min="1" max="2000" value={servingG}
-                    onChange={e => setServingG(Math.max(1, parseInt(e.target.value) || 1))}
+                  <input type="number" min="0.1" max="2000" step="0.1" value={servingG}
+                    onChange={e => setServingG(Math.max(0.1, parseFloat(e.target.value) || 1))}
                     className="w-full px-4 py-3 rounded-xl font-heading text-sm text-white bg-transparent outline-none"
                     style={{ border: '1px solid rgba(249,115,22,0.3)', background: 'rgba(249,115,22,0.05)' }} />
                 </div>
