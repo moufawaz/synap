@@ -34,24 +34,26 @@ export default function CTA({ lang, isLoggedIn = false }: CTAProps) {
               <Zap size={28} className="text-violet" />
             </div>
 
-            {/* Copy */}
+            {/* Copy — spec 1F */}
             <div className="flex flex-col gap-3">
               <h2 className="font-heading font-bold text-3xl sm:text-4xl lg:text-5xl text-light">
-                {t(lang, 'cta_title')}
+                {isRTL ? 'آيون مستعد لمقابلتك.' : 'Ion is ready to meet you.'}
               </h2>
               <p className="text-light-muted text-lg max-w-xl mx-auto">
-                {t(lang, 'cta_sub')}
+                {isRTL
+                  ? 'أخبر آيون كل شيء — وشاهد ما سيُبنى لك.'
+                  : 'Tell Ion everything — and watch what gets built.'}
               </p>
             </div>
 
             {/* CTA button */}
             {isLoggedIn ? (
               <Link href="/dashboard" className="btn-primary text-lg px-10 py-5 group mt-2">
-                OPEN MY DASHBOARD →
+                {isRTL ? 'افتح لوحتي ←' : 'OPEN MY DASHBOARD →'}
               </Link>
             ) : (
               <Link href="/auth/signup" className="btn-primary text-lg px-10 py-5 group mt-2">
-                {t(lang, 'cta_btn')}
+                {isRTL ? 'ابدأ مجاناً — قابل آيون الآن' : 'Start Free — Meet Ion Now'}
                 <ArrowRight
                   size={20}
                   className={`transition-transform group-hover:translate-x-1 ${isRTL ? 'rotate-180 group-hover:-translate-x-1 group-hover:translate-x-0' : ''}`}
@@ -59,16 +61,12 @@ export default function CTA({ lang, isLoggedIn = false }: CTAProps) {
               </Link>
             )}
 
-            {/* Pricing link */}
-            {!isLoggedIn && (
-              <Link href="/pricing" className="font-heading text-sm font-semibold tracking-widest transition-colors duration-200" style={{ color: '#BB5CF6' }} onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#D88BFF' }} onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#BB5CF6' }}>
-                {lang === 'ar' ? 'عرض الخطط والأسعار ←' : 'VIEW PLANS & PRICING →'}
-              </Link>
-            )}
-            {/* Note */}
+            {/* Trust line */}
             {!isLoggedIn && (
               <p className="text-light-muted/60 text-sm">
-                {t(lang, 'cta_note')}
+                {isRTL
+                  ? '7 أيام مجاناً · لا بطاقة ائتمان · لا رسوم إذا ألغيت'
+                  : '7 days free · No credit card · Zero charges if you cancel'}
               </p>
             )}
 
