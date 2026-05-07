@@ -18,7 +18,8 @@ const SCANNED_KEY = `synap_nutrition_scanned_${TODAY}`
 const WATER_KEY   = `synap_nutrition_water_${TODAY}`
 
 interface ScannedItem {
-  id: string
+  id: string        // local temp ID
+  dbId?: string     // UUID from DB (for delete)
   name: string
   calories: number
   protein_g: number
@@ -47,17 +48,18 @@ function saveWater(n: number) {
 }
 
 export default function NutritionPage() {
-  const [plan,          setPlan]          = useState<any>(null)
-  const [gender,        setGender]        = useState<'male' | 'female'>('male')
-  const [checkedMeals,  setCheckedMeals]  = useState<Set<number>>(new Set())
-  const [expandedMeals, setExpandedMeals] = useState<Set<number>>(new Set())
-  const [water,         setWater]         = useState(0)
-  const [scannedItems,  setScannedItems]  = useState<ScannedItem[]>([])
-  const [loading,       setLoading]       = useState(true)
-  const [scannerOpen,   setScannerOpen]   = useState(false)
+  const [plan,              setPlan]              = useState<any>(null)
+  const [gender,            setGender]            = useState<'male' | 'female'>('male')
+  const [checkedMeals,      setCheckedMeals]      = useState<Set<number>>(new Set())
+  const [checkedMealDbIds,  setCheckedMealDbIds]  = useState<Map<number, string>>(new Map())
+  const [expandedMeals,     setExpandedMeals]     = useState<Set<number>>(new Set())
+  const [water,             setWater]             = useState(0)
+  const [scannedItems,      setScannedItems]      = useState<ScannedItem[]>([])
+  const [loading,           setLoading]           = useState(true)
+  const [scannerOpen,       setScannerOpen]       = useState(false)
 
   useEffect(() => {
-    // Restore today's state instantly from localStorage
+    // Restore today's state instantly from localStorage while DB loads
     setCheckedMeals(loadChecked())
     setScannedItems(loadScanned())
     setWater(loadWater())
@@ -67,43 +69,109 @@ export default function NutritionPage() {
   async function loadData() {
     const supabase = createBrowserClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setLoading(false); return }
 
-    const [planRes, profileRes] = await Promise.all([
+    const [planRes, profileRes, logsRes] = await Promise.all([
       supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
+      fetch(`/api/log-meal?date=${TODAY}`).then(r => r.json()).catch(() => ({ logs: [] })),
     ])
 
-    setPlan(planRes.data?.plan_json || null)
+    const planData = planRes.data?.plan_json || null
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
+    setPlan(planData)
+
+    // ── Rebuild checked + scanned from DB (cross-device source of truth) ──
+    const logs: any[] = logsRes.logs || []
+    if (logs.length > 0) {
+      const meals: any[] = planData?.meals || []
+      const newChecked  = new Set<number>()
+      const newDbIds    = new Map<number, string>()
+      const unmatched: ScannedItem[] = []
+
+      logs.forEach(log => {
+        const logName = log.meal_name || ''
+        // Try to match against a plan meal by exact name prefix
+        const matchIdx = meals.findIndex((m: any) => {
+          const name = (m.name || m.meal_name || '').trim()
+          return name && (logName === name || logName.startsWith(name))
+        })
+        if (matchIdx >= 0 && !newChecked.has(matchIdx)) {
+          newChecked.add(matchIdx)
+          newDbIds.set(matchIdx, log.id)
+        } else {
+          // Scanned/extra food — parse "Name — 150g" format
+          const servingMatch = logName.match(/— (\d+(?:\.\d+)?)g$/)
+          const servingG = servingMatch ? parseFloat(servingMatch[1]) : 100
+          unmatched.push({
+            id:        log.id,
+            dbId:      log.id,
+            name:      logName.replace(/ — \d+(?:\.\d+)?g$/, '') || logName,
+            calories:  log.calories_estimated || 0,
+            protein_g: log.protein_g         || 0,
+            carbs_g:   log.carbs_g           || 0,
+            fat_g:     log.fats_g            || 0,
+            servingG,
+          })
+        }
+      })
+
+      setCheckedMeals(newChecked)
+      setCheckedMealDbIds(newDbIds)
+      setScannedItems(unmatched)
+      saveChecked(newChecked)
+      saveScanned(unmatched)
+    }
+
     setLoading(false)
   }
 
   // ── Toggle plan meal checked state ──────────────────────────
   async function toggleMeal(index: number, meal: any) {
-    setCheckedMeals(prev => {
-      const next = new Set(prev)
-      if (next.has(index)) {
-        next.delete(index)
-      } else {
-        next.add(index)
-        // Log to DB (fire-and-forget)
+    const isChecked = checkedMeals.has(index)
+
+    if (isChecked) {
+      // Uncheck — remove from state + DB
+      const next = new Set(checkedMeals)
+      next.delete(index)
+      setCheckedMeals(next)
+      saveChecked(next)
+
+      const dbId = checkedMealDbIds.get(index)
+      if (dbId) {
+        const newIds = new Map(checkedMealDbIds)
+        newIds.delete(index)
+        setCheckedMealDbIds(newIds)
         fetch('/api/log-meal', {
-          method: 'POST',
+          method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            meal_name:          meal.name || meal.meal_name,
-            meal_time:          meal.time,
-            calories_estimated: meal.calories,
-            protein_g:          meal.protein_g,
-            carbs_g:            meal.carbs_g,
-            fats_g:             meal.fat_g,
-          }),
+          body: JSON.stringify({ id: dbId }),
         }).catch(() => {})
       }
+    } else {
+      // Check — add to state + DB
+      const next = new Set(checkedMeals)
+      next.add(index)
+      setCheckedMeals(next)
       saveChecked(next)
-      return next
-    })
+
+      fetch('/api/log-meal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meal_name:          meal.name || meal.meal_name,
+          meal_time:          meal.time,
+          calories_estimated: meal.calories,
+          protein_g:          meal.protein_g,
+          carbs_g:            meal.carbs_g,
+          fats_g:             meal.fat_g,
+        }),
+      }).then(r => r.json()).then(data => {
+        if (data.log?.id) {
+          setCheckedMealDbIds(prev => new Map(prev).set(index, data.log.id))
+        }
+      }).catch(() => {})
+    }
   }
 
   // ── Water tracker ────────────────────────────────────────────
@@ -125,28 +193,43 @@ export default function NutritionPage() {
       fat_g:     round(product.fat_per_100g),
       servingG,
     }
+
+    // Log to DB and capture DB id for later delete
+    try {
+      const res = await fetch('/api/log-meal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meal_name:          `${item.name} — ${servingG}g`,
+          calories_estimated: item.calories,
+          protein_g:          item.protein_g,
+          carbs_g:            item.carbs_g,
+          fats_g:             item.fat_g,
+        }),
+      })
+      const data = await res.json()
+      if (data.log?.id) item.dbId = data.log.id
+    } catch {}
+
     const updated = [...scannedItems, item]
     setScannedItems(updated)
     saveScanned(updated)
-
-    // Log to DB
-    fetch('/api/log-meal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        meal_name:          `${item.name} — ${servingG}g`,
-        calories_estimated: item.calories,
-        protein_g:          item.protein_g,
-        carbs_g:            item.carbs_g,
-        fats_g:             item.fat_g,
-      }),
-    }).catch(() => {})
   }
 
-  function removeScanned(id: string) {
+  async function removeScanned(id: string) {
+    const item = scannedItems.find(i => i.id === id)
     const updated = scannedItems.filter(i => i.id !== id)
     setScannedItems(updated)
     saveScanned(updated)
+
+    const dbId = item?.dbId
+    if (dbId) {
+      fetch('/api/log-meal', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: dbId }),
+      }).catch(() => {})
+    }
   }
 
   // ── Macro totals ─────────────────────────────────────────────
