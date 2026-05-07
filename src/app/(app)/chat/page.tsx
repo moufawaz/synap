@@ -95,10 +95,9 @@ export default function ChatPage() {
         }])
       } else {
         // API returned an error — show it in the chat as an alert
-        // Use human-readable message if available (e.g. daily limit), fallback to error code
-        const isDailyLimit = data.error === 'daily_limit_reached'
-        const errMsg = isDailyLimit
-          ? `${data.message} [Upgrade for more →](/pricing)`
+        const isLimitError = data.error === 'daily_limit_reached' || data.error === 'starter_expired'
+        const errMsg = isLimitError
+          ? `${data.message} [Upgrade to Pro →](/pricing)`
           : (data.message || data.error || 'Something went wrong. Try again.')
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),

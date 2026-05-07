@@ -28,14 +28,24 @@ export async function POST(req: Request) {
 
     // ── Check message limits (skip in launch mode) ────────
     if (!isLaunchMode()) {
-      const { allowed, used, limit, plan } = await canSendMessage(user.id)
+      const { allowed, used, limit, plan, reason } = await canSendMessage(user.id, user.created_at)
 
       if (!allowed) {
-        const planLabel = plan === 'free' ? 'Free' : plan.charAt(0).toUpperCase() + plan.slice(1)
+        if (reason === 'starter_expired') {
+          return NextResponse.json({
+            error: 'starter_expired',
+            message: "Your 7-day free trial has ended. Upgrade to Pro or Elite to keep chatting with Ion.",
+            used,
+            limit,
+            plan,
+          }, { status: 429 })
+        }
+
+        const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1)
         const limitLabel = limit === Infinity ? 'unlimited' : String(limit)
         return NextResponse.json({
-          error: `daily_limit_reached`,
-          message: `You've used all ${limitLabel} messages today on the ${planLabel} plan. Upgrade for more.`,
+          error: 'daily_limit_reached',
+          message: `You've used all ${limitLabel} messages today on the ${planLabel} plan. Upgrade for unlimited messages.`,
           used,
           limit,
           plan,
