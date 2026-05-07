@@ -1,10 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame } from 'lucide-react'
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame, Camera } from 'lucide-react'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { RecipeButton } from '@/components/ui/RecipeModal'
+import type { FoodProduct } from '@/components/ui/BarcodeScanner'
+
+// Lazy-load the scanner (contains dynamic imports for @zxing/library)
+const BarcodeScanner = lazy(() => import('@/components/ui/BarcodeScanner'))
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +19,7 @@ export default function NutritionPage() {
   const [expandedMeals, setExpandedMeals] = useState<Set<number>>(new Set())
   const [water, setWater] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [scannerOpen, setScannerOpen] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
@@ -64,21 +69,62 @@ export default function NutritionPage() {
   const totalCalories = plan?.daily_calories || 1
   const caloriesPct = Math.min((consumedCalories / totalCalories) * 100, 100)
 
+  // ── Barcode scan handler ─────────────────────────────────────
+  async function handleScanResult(product: FoodProduct, servingG: number) {
+    const cal = product.calories_per_100g ? Math.round((product.calories_per_100g * servingG) / 100) : undefined
+    const pro = product.protein_per_100g  ? Math.round((product.protein_per_100g  * servingG) / 100) : undefined
+    const carb = product.carbs_per_100g   ? Math.round((product.carbs_per_100g   * servingG) / 100) : undefined
+    const fat  = product.fat_per_100g     ? Math.round((product.fat_per_100g     * servingG) / 100) : undefined
+
+    await fetch('/api/log-meal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        meal_name: `${product.name}${product.brand ? ` (${product.brand})` : ''} — ${servingG}g`,
+        calories: cal,
+        protein_g: pro,
+        carbs_g: carb,
+        fat_g: fat,
+      }),
+    })
+  }
+
   if (loading) return <LoadingState />
   if (!plan) return <NoPlanState gender={gender} />
 
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-3xl mx-auto">
 
+      {/* Scanner overlay */}
+      {scannerOpen && (
+        <Suspense fallback={null}>
+          <BarcodeScanner
+            onScan={handleScanResult}
+            onClose={() => setScannerOpen(false)}
+          />
+        </Suspense>
+      )}
+
       {/* Header */}
-      <div className="mb-6">
-        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#F97316', letterSpacing: '0.14em' }}>NUTRITION PLAN</p>
-        <h1 className="font-heading font-black text-2xl text-white tracking-wider" style={{ letterSpacing: '0.06em' }}>
-          Today's Meals
-        </h1>
-        <p className="font-heading text-sm mt-1" style={{ color: '#475569' }}>
-          {plan.daily_calories} kcal • {plan.protein_g}g protein • {plan.approach}
-        </p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#F97316', letterSpacing: '0.14em' }}>NUTRITION PLAN</p>
+          <h1 className="font-heading font-black text-2xl text-white tracking-wider" style={{ letterSpacing: '0.06em' }}>
+            Today's Meals
+          </h1>
+          <p className="font-heading text-sm mt-1" style={{ color: '#475569' }}>
+            {plan.daily_calories} kcal • {plan.protein_g}g protein • {plan.approach}
+          </p>
+        </div>
+        {/* Barcode scanner button */}
+        <button
+          onClick={() => setScannerOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-heading font-bold text-xs tracking-wider flex-shrink-0 mt-1"
+          style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)', color: '#F97316' }}
+        >
+          <Camera size={14} />
+          SCAN FOOD
+        </button>
       </div>
 
       {/* Macro Summary */}
