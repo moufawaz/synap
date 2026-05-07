@@ -28,72 +28,27 @@ type ScanState = 'scanning' | 'loading' | 'found' | 'not_found' | 'error'
 
 export default function BarcodeScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
   const readerRef = useRef<any>(null)
+  const scanningRef = useRef(false)   // guard against double-fire
+  const mountedRef = useRef(true)
+
   const [scanState, setScanState] = useState<ScanState>('scanning')
   const [product, setProduct] = useState<FoodProduct | null>(null)
   const [servingG, setServingG] = useState(100)
   const [error, setError] = useState('')
   const [cameraError, setCameraError] = useState('')
 
-  // Start camera & ZXing reader
-  useEffect(() => {
-    let mounted = true
-
-    async function startCamera() {
-      try {
-        const { BrowserMultiFormatReader } = await import('@zxing/library')
-        const reader = new BrowserMultiFormatReader()
-        readerRef.current = reader
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        })
-
-        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return }
-        streamRef.current = stream
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play()
-        }
-
-        // Poll for barcodes every 500ms
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(reader as any).decodeFromVideoElement(videoRef.current!, async (result: any) => {
-          if (result && mounted && scanState === 'scanning') {
-            await handleBarcode(result.getText())
-          }
-        })
-      } catch (err: any) {
-        if (mounted) {
-          setCameraError(err?.message?.includes('Permission') ? 'Camera permission denied. Please allow camera access and try again.' : 'Could not access camera.')
-        }
-      }
-    }
-
-    startCamera()
-
-    return () => {
-      mounted = false
-      stopCamera()
-    }
-  }, []) // eslint-disable-line
-
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-    readerRef.current?.reset?.()
-  }
-
   const handleBarcode = useCallback(async (barcode: string) => {
+    if (!mountedRef.current) return
     setScanState('loading')
-    stopCamera()
+    // Stop the reader so camera light turns off
+    readerRef.current?.reset?.()
 
     try {
       const res = await fetch(`/api/barcode?code=${encodeURIComponent(barcode)}`)
       const data = await res.json()
 
+      if (!mountedRef.current) return
       if (data.product) {
         setProduct(data.product)
         setServingG(data.product.serving_size_g || 100)
@@ -102,10 +57,75 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
         setScanState('not_found')
       }
     } catch {
+      if (!mountedRef.current) return
       setScanState('error')
       setError('Network error. Please try again.')
     }
   }, [])
+
+  // Starts ZXing continuous decode — ZXing manages the camera stream itself
+  const startScanner = useCallback(async () => {
+    if (!videoRef.current) return
+    try {
+      const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import('@zxing/library')
+
+      const hints = new Map()
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.DATA_MATRIX,
+      ])
+      hints.set(DecodeHintType.TRY_HARDER, true)
+
+      const reader = new BrowserMultiFormatReader(hints)
+      readerRef.current = reader
+      scanningRef.current = false
+
+      // decodeFromConstraints handles getUserMedia AND attaches to the video element
+      await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width:  { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
+        videoRef.current,
+        (result: any, err: any) => {
+          // err is thrown every frame when no barcode found — ignore it
+          if (!result) return
+          if (!mountedRef.current) return
+          if (scanningRef.current) return   // already processing a barcode
+          scanningRef.current = true
+          handleBarcode(result.getText())
+        }
+      )
+    } catch (err: any) {
+      if (!mountedRef.current) return
+      const msg = err?.message || ''
+      if (msg.includes('Permission') || msg.includes('NotAllowed')) {
+        setCameraError('Camera permission denied. Please allow camera access and try again.')
+      } else if (msg.includes('NotFound') || msg.includes('DevicesNotFound')) {
+        setCameraError('No camera found on this device.')
+      } else {
+        setCameraError('Could not access camera.')
+      }
+    }
+  }, [handleBarcode])
+
+  useEffect(() => {
+    mountedRef.current = true
+    startScanner()
+    return () => {
+      mountedRef.current = false
+      readerRef.current?.reset?.()
+    }
+  }, [startScanner])
 
   function calcNutrition(per100: number | undefined, g: number) {
     if (!per100) return null
@@ -122,37 +142,17 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
     setProduct(null)
     setServingG(100)
     setError('')
+    setCameraError('')
     setScanState('scanning')
-    // Restart camera
-    async function restart() {
-      try {
-        const { BrowserMultiFormatReader } = await import('@zxing/library')
-        const reader = new BrowserMultiFormatReader()
-        readerRef.current = reader
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        })
-        streamRef.current = stream
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play()
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(reader as any).decodeFromVideoElement(videoRef.current!, async (result: any) => {
-          if (result) await handleBarcode(result.getText())
-        })
-      } catch {}
-    }
-    restart()
+    scanningRef.current = false
+    // Small delay so the video element is visible before we attach
+    setTimeout(() => startScanner(), 50)
   }
 
-  const cal = product ? calcNutrition(product.calories_per_100g, servingG) : null
-  const pro = product ? calcNutrition(product.protein_per_100g, servingG) : null
-  const carb = product ? calcNutrition(product.carbs_per_100g, servingG) : null
-  const fat = product ? calcNutrition(product.fat_per_100g, servingG) : null
+  const cal  = product ? calcNutrition(product.calories_per_100g, servingG) : null
+  const pro  = product ? calcNutrition(product.protein_per_100g,  servingG) : null
+  const carb = product ? calcNutrition(product.carbs_per_100g,    servingG) : null
+  const fat  = product ? calcNutrition(product.fat_per_100g,      servingG) : null
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#080808' }}>
@@ -176,6 +176,7 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
 
         {/* Camera view */}
         <div className="relative bg-black flex-shrink-0" style={{ height: '55vw', maxHeight: 340, minHeight: 200 }}>
+          {/* Always render video so ZXing can attach to it */}
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
@@ -192,14 +193,15 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
                   <div key={i} className={`absolute ${pos} w-8 h-8`}
                     style={{
                       borderColor: '#F97316',
-                      borderTopWidth: i < 2 ? 3 : 0,
-                      borderBottomWidth: i >= 2 ? 3 : 0,
-                      borderLeftWidth: i % 2 === 0 ? 3 : 0,
-                      borderRightWidth: i % 2 === 1 ? 3 : 0,
+                      borderTopWidth:    i < 2   ? 3 : 0,
+                      borderBottomWidth: i >= 2  ? 3 : 0,
+                      borderLeftWidth:   i % 2 === 0 ? 3 : 0,
+                      borderRightWidth:  i % 2 === 1 ? 3 : 0,
                     }} />
                 ))}
                 {/* Scan line */}
-                <div className="absolute inset-x-2 h-0.5 animate-pulse" style={{ top: '50%', background: 'rgba(249,115,22,0.7)' }} />
+                <div className="absolute inset-x-2 h-0.5 animate-pulse"
+                  style={{ top: '50%', background: 'rgba(249,115,22,0.7)' }} />
               </div>
             </div>
           )}
@@ -240,7 +242,7 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
               <AlertCircle size={28} style={{ color: '#F59E0B' }} className="mx-auto mb-3" />
               <p className="font-heading font-bold text-sm text-white mb-1">Product Not Found</p>
               <p className="font-heading text-xs mb-4" style={{ color: '#64748B' }}>
-                This barcode isn't in our database yet. Try another product.
+                This barcode isn&apos;t in our database yet. Try another product.
               </p>
               <button onClick={rescan}
                 className="px-5 py-2.5 rounded-xl font-heading font-bold text-sm"
@@ -270,11 +272,15 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
               <div className="glass-card p-5">
                 <div className="flex items-start gap-3 mb-4">
                   {product.image_url && (
-                    <img src={product.image_url} alt={product.name} className="w-14 h-14 object-contain rounded-lg flex-shrink-0" style={{ background: 'rgba(255,255,255,0.05)' }} />
+                    <img src={product.image_url} alt={product.name}
+                      className="w-14 h-14 object-contain rounded-lg flex-shrink-0"
+                      style={{ background: 'rgba(255,255,255,0.05)' }} />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-heading font-bold text-sm text-white leading-tight">{product.name}</p>
-                    {product.brand && <p className="font-heading text-xs mt-0.5" style={{ color: '#64748B' }}>{product.brand}</p>}
+                    {product.brand && (
+                      <p className="font-heading text-xs mt-0.5" style={{ color: '#64748B' }}>{product.brand}</p>
+                    )}
                     <div className="flex items-center gap-1.5 mt-1.5">
                       <CheckCircle2 size={12} style={{ color: '#10B981' }} />
                       <p className="font-heading text-[10px]" style={{ color: '#10B981' }}>Product found</p>
@@ -301,12 +307,13 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
                 {/* Nutrition preview */}
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { label: 'Calories', value: cal, unit: 'kcal', color: '#F97316' },
-                    { label: 'Protein', value: pro, unit: 'g', color: '#BB5CF6' },
-                    { label: 'Carbs', value: carb, unit: 'g', color: '#3B82F6' },
-                    { label: 'Fat', value: fat, unit: 'g', color: '#F59E0B' },
+                    { label: 'Calories', value: cal,  unit: 'kcal', color: '#F97316' },
+                    { label: 'Protein',  value: pro,  unit: 'g',    color: '#BB5CF6' },
+                    { label: 'Carbs',    value: carb, unit: 'g',    color: '#3B82F6' },
+                    { label: 'Fat',      value: fat,  unit: 'g',    color: '#F59E0B' },
                   ].map(({ label, value, unit, color }) => (
-                    <div key={label} className="text-center p-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div key={label} className="text-center p-2 rounded-xl"
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                       <p className="font-heading font-black text-base" style={{ color }}>{value ?? '—'}</p>
                       <p className="font-heading text-[9px] mt-0.5" style={{ color: '#475569' }}>{unit}</p>
                       <p className="font-heading text-[9px]" style={{ color: '#334155' }}>{label}</p>

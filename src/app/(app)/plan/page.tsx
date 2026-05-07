@@ -39,7 +39,7 @@ export default function PlanPage() {
       supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
-      supabase.from('subscriptions').select('plan_type,status,trial_end_date').eq('user_id', user.id).maybeSingle(),
+      supabase.from('subscriptions').select('plan_type,plan_name,status,trial_end_date').eq('user_id', user.id).maybeSingle(),
     ])
 
     setDietPlan(dietRes.data?.plan_json || null)
@@ -55,7 +55,7 @@ export default function PlanPage() {
     const sub = subRes.data
     const tier = (() => {
       if (!sub) return 'starter'
-      const name = (sub.plan_type || '').toLowerCase()
+      const name = (sub.plan_type || sub.plan_name || '').toLowerCase()
       if (name === 'elite') return 'elite'
       if (name === 'pro' || name === 'unlimited') return 'pro'
       return 'starter'
