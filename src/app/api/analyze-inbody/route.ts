@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const client = new Anthropic({ apiKey })
 
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing inbody_url' }, { status: 400 })
     }
 
-    console.log('[analyze-inbody] Fetching file for user', user.id)
+    console.info('[analyze-inbody] Fetching uploaded InBody file')
 
     // Fetch the file from Supabase Storage public URL
     let fileResponse: Response
@@ -69,10 +69,10 @@ Look for and extract:
 7. Body Mass Index (BMI) if shown
 8. Total Body Water (kg) if shown
 9. InBody Score or fitness score if shown
-10. Segmental muscle analysis — left arm, right arm, left leg, right leg, trunk (kg each) if visible
+10. Segmental muscle analysis - left arm, right arm, left leg, right leg, trunk (kg each) if visible
 11. Any target/normal ranges shown alongside the values
 
-After extracting, write exactly 2–3 sentences as a coaching summary. Be direct, specific to the numbers, and motivating — like a real trainer would say.
+After extracting, write exactly 2-3 sentences as a coaching summary. Be direct, specific to the numbers, and motivating - like a real trainer would say.
 
 Return ONLY valid JSON (no markdown, no extra text) in this exact shape. Use null for anything not found:
 {
@@ -137,7 +137,7 @@ If this is NOT an InBody report, or the image/PDF is too blurry or unclear to re
       ]
     }
 
-    console.log('[analyze-inbody] Sending to Claude vision...')
+    console.info('[analyze-inbody] Sending scan to vision model')
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-5',
@@ -147,7 +147,7 @@ If this is NOT an InBody report, or the image/PDF is too blurry or unclear to re
 
     const rawText =
       response.content[0].type === 'text' ? response.content[0].text : ''
-    console.log('[analyze-inbody] Raw response (first 300 chars):', rawText.slice(0, 300))
+    console.info('[analyze-inbody] Vision response received')
 
     // Extract JSON object from response
     const jsonMatch = rawText.match(/\{[\s\S]*\}/)

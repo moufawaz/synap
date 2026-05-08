@@ -8,7 +8,7 @@ export async function GET() {
       return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
     }
     const client = new Anthropic()
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

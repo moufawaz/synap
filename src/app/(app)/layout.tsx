@@ -6,7 +6,7 @@ import AdaptationChecker from '@/components/dashboard/AdaptationChecker'
 import OneSignalInit from '@/components/OneSignalInit'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -31,7 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div
       className="flex min-h-screen"
-      style={{ background: '#0A0A0A' }}
+      style={{ background: 'var(--void)' }}
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
       lang={lang}
     >

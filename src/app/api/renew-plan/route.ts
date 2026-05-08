@@ -6,14 +6,14 @@ import { sendPushNotification } from '@/lib/onesignal'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 
-// POST /api/renew-plan — called by the adaptation-check job when a plan is expiring
+// POST /api/renew-plan â€” called by the adaptation-check job when a plan is expiring
 export async function POST(req: Request) {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
     }
     const client = new Anthropic()
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -187,8 +187,8 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
       sendPushNotification({ userId: user.id, type: 'plan_renewal' }),
     ])
 
-    // ── Supplement recommendations for Elite users ────────────
-    // Fire-and-forget — don't block plan renewal response
+    // â”€â”€ Supplement recommendations for Elite users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Fire-and-forget â€” don't block plan renewal response
     generateSupplementRecsIfElite(supabase, client, user.id, profile, planJson, planType).catch(
       e => console.error('[renew-plan] supplement gen failed:', e)
     )
@@ -200,9 +200,8 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
   }
 }
 
-// ── Supplement Recommendations (Elite only) ───────────────────────────────────
+// â”€â”€ Supplement Recommendations (Elite only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function generateSupplementRecsIfElite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   client: Anthropic,
   userId: string,
@@ -225,7 +224,7 @@ async function generateSupplementRecsIfElite(
   // Build context from the new plan
   const dietContext = planType === 'diet'
     ? `Daily calories: ${planJson.daily_calories}, Protein: ${planJson.macros?.protein_g}g, Carbs: ${planJson.macros?.carbs_g}g, Fat: ${planJson.macros?.fat_g}g. Dietary preference: ${profile.dietary_preference || 'balanced'}. Allergies: ${profile.allergies || 'none'}.`
-    : `No new diet plan — using existing nutrition. Dietary preference: ${profile.dietary_preference || 'balanced'}.`
+    : `No new diet plan - using existing nutrition. Dietary preference: ${profile.dietary_preference || 'balanced'}.`
 
   const workoutContext = planType === 'workout'
     ? `New ${planJson.weeks?.length || 6}-week ${planJson.split_type?.replace(/_/g, ' ') || 'training'} programme. ${planJson.days_per_week} sessions/week, ${planJson.session_duration_min} min each. Progressive overload: ${planJson.progressive_overload || 'standard'}.`
@@ -259,7 +258,7 @@ Generate personalised supplement recommendations as JSON. Return ONLY valid JSON
       "notes": "Any important interactions, cycling advice, or food sources if preferred over supplements"
     }
   ],
-  "stack_notes": "Ion's overall coaching note about this supplement stack — 2-3 sentences max",
+  "stack_notes": "Ion's overall coaching note about this supplement stack - 2-3 sentences max",
   "cycle": ${cycleNumber}
 }`
 

@@ -68,7 +68,7 @@ interface SendPushOptions {
 
 export async function sendPushNotification({ userId, type, overrides }: SendPushOptions) {
   if (!oneSignalEnabled) {
-    console.log('[OneSignal] Not configured — push skipped:', type)
+    console.info('[OneSignal] Not configured — push skipped:', type)
     return { ok: false, reason: 'not_configured' }
   }
 

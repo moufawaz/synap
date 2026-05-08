@@ -17,6 +17,9 @@ const config: Config = {
         'void-card':       '#0E0E0E',  // card bg
         'void-elevated':   '#121212',  // elevated surfaces
         'void-rim':        '#1A1A1A',  // rim / chip bg
+        'charcoal':        'var(--void)',
+        'charcoal-card':   'var(--void-card)',
+        'charcoal-light':  'var(--void-elevated)',
 
         // Violet spark
         'spark': {
@@ -26,6 +29,11 @@ const config: Config = {
           deep:    '#9B3CD6',
           core:    '#7B2FFF',
         },
+        'violet': {
+          DEFAULT: '#BB5CF6',
+          light:   '#D88BFF',
+        },
+        'cyan': '#06B6D4',
 
         // Silver/chrome neutrals
         'silver': {
@@ -33,6 +41,10 @@ const config: Config = {
           muted:   '#94A3B8',
           dim:     '#64748B',
           deep:    '#475569',
+        },
+        'light': {
+          DEFAULT: 'var(--silver)',
+          muted:   'var(--silver-muted)',
         },
 
         // System accents

@@ -35,20 +35,20 @@ const GOAL_LABELS: Record<string, string> = {
 }
 
 export default async function AdminPage() {
-  // ── Auth + admin gate ─────────────────────────────────────
-  const supabase = createServerClient()
+  // â”€â”€ Auth + admin gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
   if (user.email !== process.env.ADMIN_EMAIL) redirect('/dashboard')
 
-  // ── Service-role client for auth.admin.listUsers() ────────
+  // â”€â”€ Service-role client for auth.admin.listUsers() â”€â”€â”€â”€â”€â”€â”€â”€
   const adminClient = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  // ── Fetch all data in parallel ────────────────────────────
+  // â”€â”€ Fetch all data in parallel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [
     authUsersRes,
     profilesRes,
@@ -81,7 +81,7 @@ export default async function AdminPage() {
   const subs       = subsRes.data || []
   const events     = billingEventsRes.data || []
 
-  // ── Subscription buckets ──────────────────────────────────
+  // â”€â”€ Subscription buckets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const activeSubs    = subs.filter(s => s.status === 'active')
   const trialSubs     = subs.filter(s => s.status === 'trial')
   const cancelledSubs = subs.filter(s => s.status === 'cancelled' || s.status === 'expired')
@@ -97,7 +97,7 @@ export default async function AdminPage() {
   const eliteSubs = activeSubs.filter(s => getPlanTier(s) === 'elite')
   const proSubs   = activeSubs.filter(s => getPlanTier(s) === 'pro')
 
-  // ── Revenue ───────────────────────────────────────────────
+  // â”€â”€ Revenue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let mrr = 0
   for (const s of activeSubs) {
     const tier = getPlanTier(s)
@@ -108,13 +108,13 @@ export default async function AdminPage() {
   const arr = mrr * 12
   const arpu = activeSubs.length > 0 ? mrr / activeSubs.length : 0
 
-  // ── Conversion ────────────────────────────────────────────
+  // â”€â”€ Conversion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const trialsStarted   = events.filter(e => e.event_type === 'subscription_created').length
   const trialsCancelled = events.filter(e => e.event_type === 'subscription_cancelled').length
   const conversionRate  = trialsStarted > 0
     ? Math.round(((trialsStarted - trialsCancelled) / trialsStarted) * 100) : 0
 
-  // ── Plan distribution (for pie-style breakdown) ───────────
+  // â”€â”€ Plan distribution (for pie-style breakdown) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const starterCount = totalUsers - activeSubs.length - trialSubs.length - cancelledSubs.length
   const planDistribution = [
     { label: 'Elite',     count: eliteSubs.length,   color: '#D88BFF' },
@@ -125,7 +125,7 @@ export default async function AdminPage() {
   ]
   const totalForPie = planDistribution.reduce((s, p) => s + p.count, 0) || 1
 
-  // ── Upgrade funnel ────────────────────────────────────────
+  // â”€â”€ Upgrade funnel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const signups     = totalUsers
   const trialCount  = trialSubs.length + activeSubs.length + cancelledSubs.length
   const paidCount   = activeSubs.length
@@ -137,7 +137,7 @@ export default async function AdminPage() {
     { label: 'Upgraded to Elite',  count: eliteCount, color: '#D88BFF' },
   ]
 
-  // ── Plan breakdown table ──────────────────────────────────
+  // â”€â”€ Plan breakdown table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const planBreakdown: Record<string, number> = {}
   for (const s of activeSubs) {
     const tier = getPlanTier(s)
@@ -145,23 +145,23 @@ export default async function AdminPage() {
     planBreakdown[key] = (planBreakdown[key] || 0) + 1
   }
 
-  // ── Growth ────────────────────────────────────────────────
+  // â”€â”€ Growth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const weekAgo  = new Date(Date.now() - 7 * 86400000).toISOString()
   const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString()
   const newThisWeek  = authUsers.filter(u => u.created_at > weekAgo).length
   const newThisMonth = authUsers.filter(u => u.created_at > monthAgo).length
 
-  // ── Today's activity ──────────────────────────────────────
+  // â”€â”€ Today's activity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const todayMsgs = (todayMsgRes.data || []).reduce((sum: number, r: any) => sum + (r.count || 0), 0)
   const activeToday = activeUsersRes.count || 0
 
-  // ── Launch mode ───────────────────────────────────────────
+  // â”€â”€ Launch mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const launchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
 
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-6xl mx-auto space-y-6">
 
-      {/* ── Header ─────────────────────────────────────────── */}
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex items-start justify-between">
         <div>
           <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>ADMINISTRATION</p>
@@ -174,26 +174,26 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {/* ── Launch Mode banner ──────────────────────────────── */}
+      {/* â”€â”€ Launch Mode banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {launchMode && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
           style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
           <Zap size={14} style={{ color: '#10B981' }} />
           <p className="font-heading text-xs font-semibold" style={{ color: '#10B981' }}>
-            LAUNCH MODE is ON — all features free, payment system bypassed. Payments will not be collected.
+            LAUNCH MODE is ON - all features free, payment system bypassed. Payments will not be collected.
           </p>
         </div>
       )}
 
-      {/* ── Top KPIs ───────────────────────────────────────── */}
+      {/* â”€â”€ Top KPIs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total Users"     value={totalUsers}              sub={`+${newThisWeek} this week · +${newThisMonth} this month`} icon={Users}         color="#BB5CF6" />
-        <StatCard label="MRR"             value={`SAR ${mrr.toFixed(0)}`} sub={`ARR: SAR ${arr.toFixed(0)} · ARPU: SAR ${arpu.toFixed(0)}`} icon={DollarSign}  color="#10B981" />
-        <StatCard label="Elite / Pro"     value={`${eliteSubs.length} / ${proSubs.length}`} sub={`${trialSubs.length} in trial · conv. ${conversionRate}%`} icon={Crown} color="#D88BFF" />
+        <StatCard label="Total Users"     value={totalUsers}              sub={`+${newThisWeek} this week - +${newThisMonth} this month`} icon={Users}         color="#BB5CF6" />
+        <StatCard label="MRR"             value={`SAR ${mrr.toFixed(0)}`} sub={`ARR: SAR ${arr.toFixed(0)} - ARPU: SAR ${arpu.toFixed(0)}`} icon={DollarSign}  color="#10B981" />
+        <StatCard label="Elite / Pro"     value={`${eliteSubs.length} / ${proSubs.length}`} sub={`${trialSubs.length} in trial - conv. ${conversionRate}%`} icon={Crown} color="#D88BFF" />
         <StatCard label="Today"           value={`${todayMsgs} msgs`}     sub={`${activeToday} active users`}                             icon={Activity}      color="#3B82F6" />
       </div>
 
-      {/* ── Second row KPIs ────────────────────────────────── */}
+      {/* â”€â”€ Second row KPIs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Total Chats"     value={chatCountRes.count || 0}   sub="all time"                                                     icon={MessageCircle} color="#D88BFF" />
         <StatCard label="Workouts Logged" value={workoutLogRes.count || 0}  sub="all time"                                                     icon={TrendingUp}    color="#BB5CF6" />
@@ -201,7 +201,7 @@ export default async function AdminPage() {
         <StatCard label="Starter Users"   value={Math.max(0, totalUsers - activeSubs.length - trialSubs.length - cancelledSubs.length)} sub="no subscription" icon={BarChart3} color="#475569" />
       </div>
 
-      {/* ── Upgrade Funnel + Plan Distribution side by side ─── */}
+      {/* â”€â”€ Upgrade Funnel + Plan Distribution side by side â”€â”€â”€ */}
       <div className="grid sm:grid-cols-2 gap-5">
 
         {/* Upgrade funnel */}
@@ -228,7 +228,7 @@ export default async function AdminPage() {
                   </div>
                   {i < funnelSteps.length - 1 && step.count > 0 && (
                     <p className="font-heading text-[10px] text-right mt-0.5" style={{ color: '#334155' }}>
-                      → {Math.round((funnelSteps[i + 1].count / step.count) * 100)}% proceed
+                      Next step: {Math.round((funnelSteps[i + 1].count / step.count) * 100)}% proceed
                     </p>
                   )}
                 </div>
@@ -275,7 +275,7 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {/* ── Revenue + Status side by side ───────────────────── */}
+      {/* â”€â”€ Revenue + Status side by side â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid sm:grid-cols-2 gap-5">
 
         <div className="glass-card p-5">
@@ -316,7 +316,7 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {/* ── Plan breakdown ──────────────────────────────────── */}
+      {/* â”€â”€ Plan breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {Object.keys(planBreakdown).length > 0 && (
         <div className="glass-card p-5">
           <SectionTitle>ACTIVE PLAN BREAKDOWN</SectionTitle>
@@ -339,7 +339,7 @@ export default async function AdminPage() {
         </div>
       )}
 
-      {/* ── Recent billing events ───────────────────────────── */}
+      {/* â”€â”€ Recent billing events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {events.length > 0 && (
         <div className="glass-card overflow-hidden">
           <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
@@ -367,7 +367,7 @@ export default async function AdminPage() {
         </div>
       )}
 
-      {/* ── Users table ─────────────────────────────────────── */}
+      {/* â”€â”€ Users table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="glass-card overflow-hidden">
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
           <SectionTitle>ALL USERS ({totalUsers})</SectionTitle>
@@ -401,7 +401,7 @@ export default async function AdminPage() {
                       <p className="font-heading text-xs text-white">{u.email}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-heading text-xs" style={{ color: '#94A3B8' }}>{profile?.name || '—'}</p>
+                      <p className="font-heading text-xs" style={{ color: '#94A3B8' }}>{profile?.name || '-'}</p>
                     </td>
                     <td className="px-4 py-3">
                       {profile?.goal ? (
@@ -409,11 +409,11 @@ export default async function AdminPage() {
                           style={{ background: 'rgba(187,92,246,0.1)', color: '#BB5CF6' }}>
                           {GOAL_LABELS[profile.goal] || profile.goal}
                         </span>
-                      ) : <span style={{ color: '#2D3748' }}>—</span>}
+                      ) : <span style={{ color: '#2D3748' }}>-</span>}
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-heading text-xs capitalize" style={{ color: '#64748B' }}>
-                        {profile?.gender || '—'}
+                        {profile?.gender || '-'}
                       </p>
                     </td>
                     <td className="px-4 py-3">
@@ -435,7 +435,7 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {/* ── Goal breakdown ──────────────────────────────────── */}
+      {/* â”€â”€ Goal breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid sm:grid-cols-2 gap-5">
         <div className="glass-card p-5">
           <SectionTitle>GOAL BREAKDOWN</SectionTitle>
@@ -487,7 +487,7 @@ export default async function AdminPage() {
   )
 }
 
-// ── Sub-components ─────────────────────────────────────────────
+// â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (

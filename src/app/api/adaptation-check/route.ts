@@ -13,7 +13,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
     }
     const client = new Anthropic()
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -38,19 +38,19 @@ export async function POST(req: Request) {
 
     const issues: Array<{ type: string; message: string; priority: 'high' | 'medium' | 'low' }> = []
 
-    // ── Check 1: Weight plateau ────────────────────────────
+    // â”€â”€ Check 1: Weight plateau â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (measurements.length >= 4) {
       const recent = measurements.slice(0, 4).map((m: any) => m.weight_kg).filter(Boolean)
       if (recent.length >= 3) {
         const variance = Math.max(...recent) - Math.min(...recent)
         if (variance < 0.5 && profile.goal !== 'maintain') {
-          issues.push({ type: 'plateau', message: 'Weight plateau detected — no change in 3+ measurements.', priority: 'high' })
+          issues.push({ type: 'plateau', message: 'Weight plateau detected - no change in 3+ measurements.', priority: 'high' })
           checks.push('plateau')
         }
       }
     }
 
-    // ── Check 2: Diet plan expiring ────────────────────────
+    // â”€â”€ Check 2: Diet plan expiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (dietPlan?.end_date) {
       const daysLeft = Math.round((new Date(dietPlan.end_date).getTime() - Date.now()) / 86400000)
       if (daysLeft <= 3 && daysLeft >= 0) {
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Check 3: Workout plan expiring ─────────────────────
+    // â”€â”€ Check 3: Workout plan expiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (workoutPlan?.end_date) {
       const daysLeft = Math.round((new Date(workoutPlan.end_date).getTime() - Date.now()) / 86400000)
       if (daysLeft <= 3 && daysLeft >= 0) {
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Check 4: Low workout frequency ────────────────────
+    // â”€â”€ Check 4: Low workout frequency â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const lastWeekLogs = workoutLogs.filter((l: any) => {
       const logDate = new Date(l.logged_at)
       return Date.now() - logDate.getTime() < 7 * 86400000
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
       checks.push('low_frequency')
     }
 
-    // ── Check 5: No measurements in 2 weeks ───────────────
+    // â”€â”€ Check 5: No measurements in 2 weeks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (measurements.length > 0) {
       const lastMeas = new Date(measurements[0].date)
       const daysSince = Math.round((Date.now() - lastMeas.getTime()) / 86400000)
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Check 6: Symmetry gap ─────────────────────────────
+    // â”€â”€ Check 6: Symmetry gap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (measurements.length > 0) {
       const latest = measurements[0]
       const bicepGap = Math.abs((latest.bicep_left_cm || 0) - (latest.bicep_right_cm || 0))
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Check 7: Streak milestone ─────────────────────────
+    // â”€â”€ Check 7: Streak milestone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const uniqueDays = [...new Set(workoutLogs.map((l) =>
       new Date(l.logged_at).toDateString()
     ))]
@@ -120,18 +120,18 @@ export async function POST(req: Request) {
       }
     }
     if ([7, 14, 21, 30].includes(streak)) {
-      issues.push({ type: 'streak_milestone', message: `${streak}-day workout streak! 🔥`, priority: 'low' })
+      issues.push({ type: 'streak_milestone', message: `${streak}-day workout streak!`, priority: 'low' })
       checks.push('streak_milestone')
       await sendPushNotification({ userId: user.id, type: 'streak_milestone', overrides: { body: `You've trained ${streak} days in a row! Ion is tracking every session.` } })
       await sendEmail({ to: user.email!, type: 'milestone', data: { name: profile.name, milestone: `${streak}-Day Streak`, message: `You've trained ${streak} days consecutively. Consistency is what separates good from great.` } })
     }
 
-    // ── Generate Ion message if there are issues ───────────
+    // â”€â”€ Generate Ion message if there are issues â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (issues.length > 0) {
       const highPriority = issues.filter(i => i.priority === 'high')
       const issueText = issues.map(i => `- ${i.message}`).join('\n')
 
-      const ionPrompt = `You are Ion, an AI personal trainer. Based on the following observations about ${profile.name}'s progress, write a short, direct coaching message (2-3 sentences max). Be like a sharp, caring human coach — not a robot. Use the user's name.
+      const ionPrompt = `You are Ion, an AI personal trainer. Based on the following observations about ${profile.name}'s progress, write a short, direct coaching message (2-3 sentences max). Be like a sharp, caring human coach - not a robot. Use the user's name.
 
 Observations:
 ${issueText}

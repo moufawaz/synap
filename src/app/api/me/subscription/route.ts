@@ -6,7 +6,7 @@ import { effectivePlan } from '@/lib/subscription'
 // Returns the authenticated user's effective plan tier using the service-role
 // key so RLS never blocks the read.
 export async function GET() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

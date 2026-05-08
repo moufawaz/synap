@@ -123,6 +123,7 @@ export default function OnboardingPage() {
   const [inbodyPreview, setInbodyPreview] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const messageIdRef = useRef(0)
   const isRTL = lang === 'ar'
 
   // Active steps depend on collected data (conditional steps)
@@ -168,7 +169,7 @@ export default function OnboardingPage() {
   // ── Show Ion message ────────────────────────────────────
   function showIonMessage(step: OnboardingStep, ctx: OnboardingContext) {
     setIsTyping(true)
-    const delay = 800 + Math.random() * 600
+    const delay = 900
     setTimeout(() => {
       setIsTyping(false)
       const content = isRTL
@@ -189,7 +190,8 @@ export default function OnboardingPage() {
 
   // ── Add message ─────────────────────────────────────────
   function addMessage(msg: Omit<Message, 'id'>) {
-    setMessages(prev => [...prev, { ...msg, id: Date.now().toString() + Math.random() }])
+    messageIdRef.current += 1
+    setMessages(prev => [...prev, { ...msg, id: `msg-${messageIdRef.current}` }])
   }
 
   // ── Advance to next step ────────────────────────────────
@@ -362,6 +364,7 @@ export default function OnboardingPage() {
     setLang(savedProgress.lang)
     setIonGender(savedProgress.ionGender)
     setMessages(savedProgress.messages)
+    messageIdRef.current = savedProgress.messages.length
     setSavedProgress(null)
     setStarted(true)
     // Show the current step's Ion message

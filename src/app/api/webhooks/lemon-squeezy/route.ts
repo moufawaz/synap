@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const customData = attrs?.first_order_item?.custom_data || payload?.meta?.custom_data || {}
   const userId: string | null = customData?.user_id || null
 
-  console.log(`[LS Webhook] ${eventName} | user=${userId}`)
+  console.info(`[LS Webhook] ${eventName} | user=${userId}`)
 
   const supabase = getServiceClient()
 
@@ -216,7 +216,7 @@ export async function POST(req: Request) {
     }
 
     default:
-      console.log(`[LS Webhook] Unhandled event: ${eventName}`)
+      console.info(`[LS Webhook] Unhandled event: ${eventName}`)
   }
 
   return NextResponse.json({ ok: true })

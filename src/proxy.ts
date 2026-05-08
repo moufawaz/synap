@@ -3,9 +3,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 const PROTECTED_ROUTES = ['/dashboard', '/chat', '/plan', '/workout', '/nutrition', '/measurements', '/progress', '/settings', '/admin']
-const AUTH_ROUTES = ['/auth/login', '/auth/signup']
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   let res = NextResponse.next({ request: req })
 
   const supabase = createServerClient(
@@ -40,11 +39,6 @@ export async function middleware(req: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
   const path = req.nextUrl.pathname
-
-  // Redirect logged-in users away from auth pages
-  if (session && AUTH_ROUTES.some(r => path.startsWith(r))) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
-  }
 
   // Redirect unauthenticated users away from protected routes
   if (!session && PROTECTED_ROUTES.some(r => path.startsWith(r))) {

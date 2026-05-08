@@ -80,12 +80,11 @@ export default function AIComparison({ lang }: Props) {
         </div>
 
         {/* Table card */}
-        <div className="rounded-2xl overflow-hidden"
-          style={{ border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(10,10,10,0.8)', backdropFilter: 'blur(20px)' }}>
+        <div className="comparison-table rounded-2xl overflow-hidden">
 
           {/* Column headers */}
           <div className="grid grid-cols-3"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            style={{ borderBottom: '1px solid var(--comparison-border)' }}>
             {/* Capability label */}
             <div className="px-6 py-5">
               <span className="font-heading text-xs tracking-widest uppercase font-bold" style={{ color: '#334155' }}>
@@ -95,7 +94,7 @@ export default function AIComparison({ lang }: Props) {
 
             {/* General AI header */}
             <div className="px-4 py-5 text-center"
-              style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+              style={{ borderLeft: '1px solid var(--comparison-border)', borderRight: '1px solid var(--comparison-border)' }}>
               <p className="font-heading font-black text-xs tracking-widest uppercase" style={{ color: '#475569', letterSpacing: '0.12em' }}>
                 {isRTL ? 'الذكاء الاصطناعي العام' : 'General AI'}
               </p>
@@ -127,8 +126,8 @@ export default function AIComparison({ lang }: Props) {
               <div key={i}
                 className="grid grid-cols-3 group transition-colors duration-150"
                 style={{
-                  borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)',
-                  background: isEven ? 'transparent' : 'rgba(255,255,255,0.01)',
+                  borderBottom: isLast ? 'none' : '1px solid var(--comparison-border-soft)',
+                  background: isEven ? 'transparent' : 'var(--comparison-row-alt)',
                 }}>
 
                 {/* Feature label */}
@@ -140,13 +139,12 @@ export default function AIComparison({ lang }: Props) {
 
                 {/* General AI — always No */}
                 <div className="px-4 py-3.5 flex items-center justify-center"
-                  style={{ borderLeft: '1px solid rgba(255,255,255,0.04)', borderRight: '1px solid rgba(255,255,255,0.04)' }}>
+                  style={{ borderLeft: '1px solid var(--comparison-border-soft)', borderRight: '1px solid var(--comparison-border-soft)' }}>
                   <XIcon />
                 </div>
 
                 {/* Ion — always Yes */}
-                <div className="px-4 py-3.5 flex items-center justify-center"
-                  style={{ background: 'rgba(187,92,246,0.035)' }}>
+                <div className="comparison-ion-cell px-4 py-3.5 flex items-center justify-center">
                   <CheckIcon />
                 </div>
               </div>
@@ -157,7 +155,7 @@ export default function AIComparison({ lang }: Props) {
         {/* Bottom callout */}
         <div className="mt-10 p-6 rounded-2xl text-center"
           style={{ background: 'linear-gradient(135deg, rgba(187,92,246,0.1), rgba(123,47,255,0.06))', border: '1px solid rgba(187,92,246,0.2)' }}>
-          <p className="font-heading font-black text-lg sm:text-xl text-white mb-1">
+          <p className="font-heading font-black text-lg sm:text-xl mb-1" style={{ color: 'var(--silver)' }}>
             {isRTL
               ? 'الذكاء الاصطناعي العام يجيب على الأسئلة. آيون يدرّب الناس.'
               : 'General AI answers questions. Ion trains people.'}

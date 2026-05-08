@@ -19,6 +19,7 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
 # Vercel
 .vercel
@@ -32,3 +33,15 @@ next-env.d.ts
 Thumbs.db
 
 .vercel
+
+# Local workspace artifacts
+*.zip
+*.docx
+*.xlsx
+*.txt
+~$*
+ChatGPT Image*.png
+SYNAP_PROJECT_KNOWLEDGE.md
+fix_*.mjs
+handoff/
+patch-for-synap-app/

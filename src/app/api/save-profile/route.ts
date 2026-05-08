@@ -6,7 +6,7 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { data: profileData } = body
 
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {

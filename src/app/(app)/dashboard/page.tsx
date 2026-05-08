@@ -10,7 +10,7 @@ import { getTrialDaysRemaining, effectivePlan } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
 
-// ─── Brand palette tokens (mirrors globals.css) ────────────
+// â”€â”€â”€ Brand palette tokens (mirrors globals.css) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const C = {
   spark:       '#BB5CF6',
   sparkLight:  '#D88BFF',
@@ -29,7 +29,7 @@ const C = {
 }
 
 export default async function DashboardPage() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
@@ -91,16 +91,16 @@ export default async function DashboardPage() {
         style={{ background: 'radial-gradient(circle, rgba(187,92,246,0.10), transparent 60%)', filter: 'blur(60px)' }}
       />
 
-      {/* ── Launch mode banner ─────────────────────── */}
+      {/* â”€â”€ Launch mode banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isLaunchMode && (
         <Banner color={C.pulse} icon={<Zap size={14} />} bg="rgba(16,137,129,0.06)" border="rgba(16,137,129,0.2)">
           <p className="font-heading text-xs" style={{ color: C.pulse }}>
-            🎉 <strong>LAUNCH SPECIAL:</strong> All features unlocked for free during launch.
+            <strong>LAUNCH SPECIAL:</strong> All features unlocked for free during launch.
           </p>
         </Banner>
       )}
 
-      {/* ── Trial countdown banner ──────────────────── */}
+      {/* â”€â”€ Trial countdown banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isTrial && trialDaysLeft !== null && !isLaunchMode && (
         <Link href="/settings?tab=billing">
           <div
@@ -121,7 +121,7 @@ export default async function DashboardPage() {
               <Shield size={14} style={{ color: trialDaysLeft <= 1 ? C.danger : trialDaysLeft <= 2 ? C.alert : C.spark }} />
               <div>
                 <p className="font-heading font-bold text-xs text-white tracking-wider">
-                  FREE TRIAL — {trialDaysLeft} DAY{trialDaysLeft !== 1 ? 'S' : ''} LEFT
+                  FREE TRIAL - {trialDaysLeft} DAY{trialDaysLeft !== 1 ? 'S' : ''} LEFT
                 </p>
                 <p className="font-heading text-[10px] mt-0.5" style={{ color: C.silverDim }}>
                   Cancel before day 7 = zero charges. Tap to manage billing.
@@ -133,7 +133,7 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* ── InBody reminder ─────────────────────────── */}
+      {/* â”€â”€ InBody reminder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {!hasInbody && (
         <Link href="/measurements">
           <div
@@ -159,7 +159,7 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* ── Upgrade CTA (Starter) ───────────────────── */}
+      {/* â”€â”€ Upgrade CTA (Starter) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isStarter && (
         <Link href="/pricing">
           <div
@@ -190,7 +190,7 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* ── Elite badge ─────────────────────────────── */}
+      {/* â”€â”€ Elite badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isElite && !isLaunchMode && (
         <div
           className="mb-5 p-3 rounded-2xl flex items-center gap-2.5"
@@ -198,12 +198,12 @@ export default async function DashboardPage() {
         >
           <Crown size={13} style={{ color: C.spark }} />
           <p className="font-heading text-xs font-semibold" style={{ color: C.sparkLight }}>
-            Elite member — weekly reports, supplement stack &amp; goal predictions active
+            Elite member - weekly reports, supplement stack &amp; goal predictions active
           </p>
         </div>
       )}
 
-      {/* ── Header ──────────────────────────────────── */}
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex items-center justify-between mb-8 relative">
         <div>
           <p
@@ -233,7 +233,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* ── Ion Message Card ────────────────────────── */}
+      {/* â”€â”€ Ion Message Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {lastIonMessage && (
         <Link href="/chat" className="block mb-6">
           <div
@@ -265,10 +265,10 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* ── Stats Row ───────────────────────────────── */}
+      {/* â”€â”€ Stats Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <StatCard icon={<Target size={16} />} label="GOAL"      value={goalLabel(profile.goal)}                        color={C.spark} />
-        <StatCard icon={<Flame size={16} />}  label="CALORIES"  value={totalCalories ? `${totalCalories} kcal` : '—'}  color={C.flame} />
+        <StatCard icon={<Flame size={16} />}  label="CALORIES"  value={totalCalories ? `${totalCalories} kcal` : '-'}  color={C.flame} />
         <StatCard
           icon={<Dumbbell size={16} />}
           label="THIS WEEK"
@@ -278,7 +278,7 @@ export default async function DashboardPage() {
         <StatCard
           icon={<TrendingUp size={16} />}
           label="WEIGHT"
-          value={currentWeight ? `${currentWeight} kg` : '—'}
+          value={currentWeight ? `${currentWeight} kg` : '-'}
           sub={weightDelta ? `${Number(weightDelta) > 0 ? '+' : ''}${weightDelta} kg` : undefined}
           subColor={
             weightDelta
@@ -290,7 +290,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* ── Today's Workout / Nutrition ─────────────── */}
+      {/* â”€â”€ Today's Workout / Nutrition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid md:grid-cols-2 gap-5">
 
         {/* Today's Workout */}
@@ -311,14 +311,14 @@ export default async function DashboardPage() {
 
             {isRestDay ? (
               <div className="flex flex-col items-center justify-center py-6 gap-2">
-                <div className="text-3xl">😴</div>
+                <div className="text-3xl">REST</div>
                 <p className="font-heading font-bold text-white" style={{ letterSpacing: '0.14em' }}>REST DAY</p>
                 <p className="font-heading text-xs" style={{ color: C.silverDeep }}>Recovery is part of the plan</p>
               </div>
             ) : (
               <div>
                 <p className="font-heading font-bold text-[11px] mb-3 uppercase" style={{ color: C.silverMuted, letterSpacing: '0.12em' }}>
-                  {todayWorkout.muscle_focus} • {todayWorkout.duration_min} min
+                  {todayWorkout.muscle_focus} - {todayWorkout.duration_min} min
                 </p>
                 <div className="flex flex-col gap-2">
                   {(todayWorkout.exercises || []).slice(0, 4).map((ex: any, i: number) => (
@@ -328,7 +328,7 @@ export default async function DashboardPage() {
                       style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.04)' }}
                     >
                       <span className="font-heading text-xs text-white font-semibold">{ex.name}</span>
-                      <span className="font-mono text-xs" style={{ color: C.sparkLight }}>{ex.sets}×{ex.reps}</span>
+                      <span className="font-mono text-xs" style={{ color: C.sparkLight }}>{ex.sets}x{ex.reps}</span>
                     </div>
                   ))}
                   {(todayWorkout.exercises || []).length > 4 && (
@@ -385,7 +385,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* ── Weight Chart ────────────────────────────── */}
+      {/* â”€â”€ Weight Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {measurements.length > 1 && (
         <div className="mt-5">
           <Link href="/progress">
@@ -405,7 +405,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* ── Quick Actions ───────────────────────────── */}
+      {/* â”€â”€ Quick Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="mt-5 grid grid-cols-3 gap-3">
         <QuickAction href="/chat"          icon={<Zap size={18} />}        label="ASK ION"        color={C.spark} />
         <QuickAction href="/measurements"  icon={<TrendingUp size={18} />} label="LOG WEIGHT"     color={C.pulse} />
@@ -415,9 +415,9 @@ export default async function DashboardPage() {
   )
 }
 
-// ════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Sub-components
-// ════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function Banner({
   color, icon, bg, border, children,

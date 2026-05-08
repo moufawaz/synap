@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Webhook error: ${err.message}` }, { status: 400 })
   }
 
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   switch (event.type) {
     case 'checkout.session.completed': {

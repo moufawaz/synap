@@ -4,11 +4,11 @@ import { stripe, PLANS } from '@/lib/stripe'
 
 export async function POST(req: Request) {
   if (!stripe) {
-    return NextResponse.json({ error: 'Stripe not configured — all plans are currently free.' }, { status: 503 })
+    return NextResponse.json({ error: 'Stripe not configured - all plans are currently free.' }, { status: 503 })
   }
 
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

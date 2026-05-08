@@ -54,7 +54,7 @@ function btn(text: string, href: string, color = '#BB5CF6'): string {
 
 export async function sendEmail({ to, type, data }: SendEmailOptions) {
   if (!resend) {
-    console.log('[Resend] API key not set — email skipped:', type)
+    console.info('[Resend] API key not set — email skipped:', type)
     return { ok: false, reason: 'no_key' }
   }
 

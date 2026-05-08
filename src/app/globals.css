@@ -8,6 +8,7 @@
    ════════════════════════════════════════════════════════ */
 
 :root {
+  color-scheme: dark;
   /* ── Surfaces · void hierarchy ──────────────────────── */
   --void:           #0A0A0A;   /* page bg */
   --void-card:      #0E0E0E;   /* primary cards */
@@ -43,6 +44,48 @@
   --tracking-brand:       0.18em;
   --tracking-brand-wide:  0.28em;
   --tracking-brand-xwide: 0.32em;
+
+  --comparison-bg: rgba(10, 10, 10, 0.82);
+  --comparison-border: rgba(255, 255, 255, 0.07);
+  --comparison-border-soft: rgba(255, 255, 255, 0.04);
+  --comparison-row-alt: rgba(255, 255, 255, 0.01);
+  --comparison-ion-cell: rgba(187, 92, 246, 0.035);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --void:           #F8FAFC;
+  --void-card:      #FFFFFF;
+  --void-elevated:  #F1F5F9;
+  --void-rim:       #E2E8F0;
+  --void-deep:      #E5E7EB;
+
+  --spark:          #8B3FDB;
+  --spark-light:    #6D28D9;
+  --spark-glow:     #A855F7;
+  --spark-deep:     #7E22CE;
+  --spark-core:     #6D28D9;
+  --spark-faint:    rgba(139, 63, 219, 0.08);
+  --spark-soft:     rgba(139, 63, 219, 0.14);
+  --spark-mid:      rgba(139, 63, 219, 0.28);
+
+  --silver:         #111827;
+  --silver-muted:   #475569;
+  --silver-dim:     #64748B;
+  --silver-deep:    #94A3B8;
+  --silver-faint:   rgba(15, 23, 42, 0.04);
+  --silver-rim:     rgba(15, 23, 42, 0.10);
+
+  --pulse:          #0F766E;
+  --flame:          #EA580C;
+  --alert:          #B45309;
+  --danger:         #DC2626;
+
+  --comparison-bg: rgba(255, 255, 255, 0.92);
+  --comparison-border: rgba(139, 63, 219, 0.16);
+  --comparison-border-soft: rgba(15, 23, 42, 0.08);
+  --comparison-row-alt: rgba(15, 23, 42, 0.025);
+  --comparison-ion-cell: rgba(139, 63, 219, 0.07);
 }
 
 /* ── Reset ───────────────────────────────────────────── */
@@ -67,6 +110,12 @@ body {
   font-feature-settings: 'cv11', 'ss01', 'ss03';
 }
 
+body,
+.bg-charcoal,
+.bg-obsidian {
+  background-color: var(--void);
+}
+
 /* Headings inherit Exo 2 by default */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading), 'Exo 2', system-ui, sans-serif;
@@ -76,6 +125,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Numerals get JetBrains Mono via .font-mono utility */
 input, select, textarea {
   font-family: inherit;
+  color: var(--silver);
 }
 select option {
   background: var(--void-elevated);
@@ -296,6 +346,18 @@ select option {
     var(--void);
 }
 
+:root[data-theme="light"] .mesh-bg {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139, 63, 219, 0.10), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(6, 182, 212, 0.08), transparent 60%),
+    var(--void);
+}
+
+:root[data-theme="light"] .noise-overlay {
+  opacity: 0.018;
+  mix-blend-mode: multiply;
+}
+
 /* Scan line — animated horizontal sweep */
 .scan-line {
   position: absolute;
@@ -423,9 +485,13 @@ select option {
    ════════════════════════════════════════════════════════ */
 .text-silver        { color: var(--silver); }
 .text-silver-muted  { color: var(--silver-muted); }
+.text-light         { color: var(--silver); }
+.text-light-muted   { color: var(--silver-muted); }
 .text-neural-silver { color: var(--silver); }
 .bg-obsidian        { background-color: var(--void); }
 .bg-obsidian-card   { background-color: var(--void-card); }
+.bg-charcoal        { background-color: var(--void); }
+.bg-charcoal-card   { background-color: var(--void-card); }
 .gradient-text-ion  { /* old name → spark gradient */
   background: linear-gradient(135deg, #BB5CF6 0%, #7B2FFF 100%);
   -webkit-background-clip: text;
@@ -437,4 +503,197 @@ select option {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+:root[data-theme="light"] .gradient-text-chrome,
+:root[data-theme="light"] .gradient-text-silver,
+:root[data-theme="light"] .gradient-text-silver-dim {
+  background: linear-gradient(135deg, #111827 0%, #475569 55%, #0F172A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+:root[data-theme="light"] .glass-card,
+:root[data-theme="light"] .glass-card-hover,
+:root[data-theme="light"] .msg-card {
+  background-color: var(--void-card);
+  border-color: var(--silver-rim);
+  box-shadow:
+    0 8px 30px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+:root[data-theme="light"] .btn-secondary {
+  background: rgba(15, 23, 42, 0.03);
+  color: var(--silver);
+  border-color: var(--silver-rim);
+}
+
+.hero-ion-bubble {
+  background: #1A1A1A;
+  border: 1px solid rgba(255,255,255,0.05);
+  color: #E2E8F0;
+}
+
+.hero-user-bubble {
+  background: rgba(187,92,246,0.15);
+  border: 1px solid rgba(187,92,246,0.25);
+  color: #E2E8F0;
+}
+
+.hero-input {
+  background: #0A0A0A;
+  border-color: rgba(255,255,255,0.08);
+}
+
+.comparison-table {
+  background: var(--comparison-bg);
+  border: 1px solid var(--comparison-border);
+  backdrop-filter: blur(20px);
+}
+
+.comparison-ion-cell {
+  background: var(--comparison-ion-cell);
+}
+
+:root[data-theme="light"] .hero-ion-bubble {
+  background: #FFFFFF;
+  border-color: rgba(139, 63, 219, 0.18);
+  color: #111827;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="light"] .hero-user-bubble {
+  background: rgba(139, 63, 219, 0.10);
+  border-color: rgba(139, 63, 219, 0.24);
+  color: #111827;
+}
+
+:root[data-theme="light"] .hero-input {
+  background: #FFFFFF;
+  border-color: rgba(15, 23, 42, 0.10);
+}
+
+:root[data-theme="light"] body :not(aside):not(aside *).text-white,
+:root[data-theme="light"] [style*="#E2E8F0"],
+:root[data-theme="light"] [style*="#CBD5E1"],
+:root[data-theme="light"] [style*="#F8FAFC"],
+:root[data-theme="light"] [style*="#F0F0FF"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(255, 255, 255)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(248, 250, 252)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(241, 245, 249)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(240, 240, 255)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(226, 232, 240)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(203, 213, 225)"] {
+  color: var(--silver) !important;
+}
+
+:root[data-theme="light"] body :not(aside):not(aside *).text-slate-400,
+:root[data-theme="light"] body :not(aside):not(aside *).text-slate-500,
+:root[data-theme="light"] [style*="#94A3B8"],
+:root[data-theme="light"] [style*="#64748B"],
+:root[data-theme="light"] [style*="#475569"],
+:root[data-theme="light"] [style*="#334155"],
+:root[data-theme="light"] [style*="#2D3748"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(148, 163, 184)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(100, 116, 139)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(71, 85, 105)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(51, 65, 85)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="color: rgb(45, 55, 72)"] {
+  color: var(--silver-muted) !important;
+}
+
+:root[data-theme="light"] aside,
+:root[data-theme="light"] aside .text-white {
+  color: #E2E8F0 !important;
+}
+
+:root[data-theme="light"] aside [style*="#94A3B8"],
+:root[data-theme="light"] aside [style*="#64748B"],
+:root[data-theme="light"] aside [style*="#475569"],
+:root[data-theme="light"] aside [style*="#334155"],
+:root[data-theme="light"] aside [style*="color: rgb(148, 163, 184)"],
+:root[data-theme="light"] aside [style*="color: rgb(100, 116, 139)"],
+:root[data-theme="light"] aside [style*="color: rgb(71, 85, 105)"],
+:root[data-theme="light"] aside [style*="color: rgb(51, 65, 85)"] {
+  color: #94A3B8 !important;
+}
+
+:root[data-theme="light"] .btn-primary,
+:root[data-theme="light"] .btn-primary *,
+:root[data-theme="light"] [style*="background: '#BB5CF6'"],
+:root[data-theme="light"] [style*="background: '#BB5CF6'"] *,
+:root[data-theme="light"] [style*="background: '#F97316'"],
+:root[data-theme="light"] [style*="background: '#F97316'"] *,
+:root[data-theme="light"] [style*="linear-gradient(135deg,#BB5CF6"] {
+  color: white !important;
+}
+
+:root[data-theme="light"] ::-webkit-scrollbar-track {
+  background: var(--void);
+}
+
+:root[data-theme="light"] [style*="#050505"],
+:root[data-theme="light"] [style*="#060606"],
+:root[data-theme="light"] [style*="#080808"],
+:root[data-theme="light"] [style*="#0A0A0A"],
+:root[data-theme="light"] [style*="#0D0D0D"],
+:root[data-theme="light"] [style*="#0E0E0E"],
+:root[data-theme="light"] [style*="#111"],
+:root[data-theme="light"] [style*="#121212"],
+:root[data-theme="light"] [style*="#141414"],
+:root[data-theme="light"] [style*="rgba(8,8,16"],
+:root[data-theme="light"] [style*="rgba(10,10,10"],
+:root[data-theme="light"] [style*="rgba(12,12,12"] {
+  background: var(--void-card) !important;
+}
+
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(5, 5, 5)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(6, 6, 6)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(8, 8, 8)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(10, 10, 10)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(10, 10, 20)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(13, 13, 13)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(14, 14, 14)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(17, 17, 17)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(18, 18, 18)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(20, 20, 20)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgb(26, 26, 26)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(5, 5, 5)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(6, 6, 6)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(8, 8, 8)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(10, 10, 10)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(10, 10, 20)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(13, 13, 13)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(14, 14, 14)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(17, 17, 17)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(18, 18, 18)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(20, 20, 20)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgb(26, 26, 26)"] {
+  background: var(--void-card) !important;
+  border-color: var(--silver-rim) !important;
+  color: var(--silver) !important;
+}
+
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgba(255, 255, 255, 0.02)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgba(255, 255, 255, 0.03)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgba(255, 255, 255, 0.04)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background: rgba(255, 255, 255, 0.05)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgba(255, 255, 255, 0.02)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgba(255, 255, 255, 0.03)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgba(255, 255, 255, 0.04)"],
+:root[data-theme="light"] body :not(aside):not(aside *)[style*="background-color: rgba(255, 255, 255, 0.05)"] {
+  background: rgba(15, 23, 42, 0.035) !important;
+  border-color: var(--silver-rim) !important;
+}
+
+:root[data-theme="light"] [style*="rgba(0,0,0,0.75"],
+:root[data-theme="light"] [style*="rgba(0,0,0,0.88"] {
+  background: rgba(15, 23, 42, 0.42) !important;
+}
+
+:root[data-theme="light"] .border-white\/5,
+:root[data-theme="light"] .border-white\/10 {
+  border-color: var(--silver-rim) !important;
 }

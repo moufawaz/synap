@@ -4,7 +4,7 @@ import { cancelSubscription } from '@/lib/lemon-squeezy'
 
 export async function POST(_req: Request) {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -52,7 +52,7 @@ export async function POST(_req: Request) {
       ok: true,
       isTrialCancel: isInTrial,
       message: isInTrial
-        ? 'Trial cancelled — you will never be charged.'
+        ? 'Trial cancelled - you will never be charged.'
         : 'Subscription cancelled. You keep access until the period ends.',
     })
   } catch (err: any) {

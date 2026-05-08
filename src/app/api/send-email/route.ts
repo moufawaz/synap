@@ -4,7 +4,7 @@ import { sendEmail, type EmailType } from '@/lib/resend'
 
 export async function POST(req: Request) {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

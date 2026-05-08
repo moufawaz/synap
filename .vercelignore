@@ -1,0 +1,11 @@
+*.log
+*.zip
+*.docx
+*.xlsx
+*.txt
+~$*
+ChatGPT Image*.png
+SYNAP_PROJECT_KNOWLEDGE.md
+fix_*.mjs
+handoff/
+patch-for-synap-app/

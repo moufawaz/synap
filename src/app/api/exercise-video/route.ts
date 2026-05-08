@@ -8,7 +8,7 @@ export const maxDuration = 20
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000  // 30 days
 
-/** Quick YouTube oEmbed check — returns true if the video is public + embeddable. */
+/** Quick YouTube oEmbed check â€” returns true if the video is public + embeddable. */
 async function isEmbeddable(videoId: string): Promise<boolean> {
   try {
     const res = await fetch(
@@ -29,11 +29,11 @@ export async function GET(req: Request) {
   const name = rawName.toLowerCase().trim()
   const hasApiKey = !!process.env.YOUTUBE_API_KEY
 
-  console.log(`[exercise-video] "${name}" | api_key=${hasApiKey}`)
+  console.info(`[exercise-video] "${name}" | api_key=${hasApiKey}`)
 
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
-  // ── 1. DB cache ───────────────────────────────────────────────────────────
+  // â”€â”€ 1. DB cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { data: cached } = await supabase
     .from('exercise_videos')
     .select('video_id, searched_at, verified')
@@ -44,30 +44,30 @@ export async function GET(req: Request) {
     const age = Date.now() - new Date(cached.searched_at).getTime()
     if (cached.verified || age < CACHE_TTL_MS) {
       if (cached.video_id && !cached.verified) {
-        // Re-validate unverified cached IDs — video may have been deleted since
+        // Re-validate unverified cached IDs â€” video may have been deleted since
         const ok = await isEmbeddable(cached.video_id)
         if (ok) {
-          console.log(`[exercise-video] "${name}" → cache hit ${cached.video_id}`)
+          console.info(`[exercise-video] "${name}" â†’ cache hit ${cached.video_id}`)
           return NextResponse.json({ videoId: cached.video_id })
         }
-        console.log(`[exercise-video] "${name}" → cached ID ${cached.video_id} no longer embeddable, re-searching`)
+        console.info(`[exercise-video] "${name}" â†’ cached ID ${cached.video_id} no longer embeddable, re-searching`)
         // Fall through to fresh search
       } else {
-        console.log(`[exercise-video] "${name}" → cache hit ${cached.video_id ?? 'null'}`)
+        console.info(`[exercise-video] "${name}" â†’ cache hit ${cached.video_id ?? 'null'}`)
         return NextResponse.json({ videoId: cached.video_id ?? null })
       }
     }
   }
 
-  // ── 2. Resolve + validate — waterfall ────────────────────────────────────
-  //  a) YouTube Data API v3  ← reliable, uses YOUTUBE_API_KEY
-  //  b) Static curated map   ← ~100 common exercises (validated via oEmbed)
-  //  c) YouTube HTML scraper ← no key needed, Vercel may be rate-limited
+  // â”€â”€ 2. Resolve + validate â€” waterfall â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  //  a) YouTube Data API v3  â† reliable, uses YOUTUBE_API_KEY
+  //  b) Static curated map   â† ~100 common exercises (validated via oEmbed)
+  //  c) YouTube HTML scraper â† no key needed, Vercel may be rate-limited
 
   let videoId: string | null = null
   let source = 'none'
 
-  // 2a — YouTube Data API v3
+  // 2a â€” YouTube Data API v3
   if (hasApiKey) {
     videoId = await searchYouTubeAPI(rawName)
     if (videoId) {
@@ -75,13 +75,13 @@ export async function GET(req: Request) {
       if (ok) {
         source = 'youtube-api'
       } else {
-        console.log(`[exercise-video] YouTube API returned ${videoId} but oEmbed failed`)
+        console.info(`[exercise-video] YouTube API returned ${videoId} but oEmbed failed`)
         videoId = null
       }
     }
   }
 
-  // 2b — Static curated map (validated via oEmbed)
+  // 2b â€” Static curated map (validated via oEmbed)
   if (!videoId) {
     const staticId = getYouTubeId(rawName)
     if (staticId) {
@@ -90,12 +90,12 @@ export async function GET(req: Request) {
         videoId = staticId
         source  = 'static-map'
       } else {
-        console.log(`[exercise-video] Static map ID ${staticId} no longer embeddable`)
+        console.info(`[exercise-video] Static map ID ${staticId} no longer embeddable`)
       }
     }
   }
 
-  // 2c — HTML scraper fallback
+  // 2c â€” HTML scraper fallback
   if (!videoId) {
     videoId = await searchAndValidate(rawName)
     if (videoId) source = 'scraper'
@@ -104,9 +104,9 @@ export async function GET(req: Request) {
   // Normalise to bare ID (should already be, but guard anyway)
   if (videoId) videoId = extractVideoId(videoId) ?? null
 
-  console.log(`[exercise-video] "${name}" → ${videoId ?? 'not found'} (${source})`)
+  console.info(`[exercise-video] "${name}" â†’ ${videoId ?? 'not found'} (${source})`)
 
-  // ── 3. Persist to DB cache ────────────────────────────────────────────────
+  // â”€â”€ 3. Persist to DB cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   try {
     await supabase.from('exercise_videos').upsert(
       { exercise_name: name, video_id: videoId, searched_at: new Date().toISOString() },
@@ -119,7 +119,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ videoId: videoId ?? null })
 }
 
-// ── Scraper: search YouTube HTML and pick first embeddable result ─────────────
+// â”€â”€ Scraper: search YouTube HTML and pick first embeddable result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function searchAndValidate(exerciseName: string): Promise<string | null> {
   try {
