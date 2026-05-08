@@ -42,7 +42,7 @@ export default function PrivacyPage() {
               <li><strong className="text-white">Account data:</strong> Name, email address, and password when you register.</li>
               <li><strong className="text-white">Profile data:</strong> Age, gender, height, weight, fitness goals, dietary preferences, and health conditions you choose to share.</li>
               <li><strong className="text-white">Body measurements:</strong> Up to 13 body measurements you log over time.</li>
-              <li><strong className="text-white">Nutrition data:</strong> Meals, foods, and calories you log manually or via barcode scan.</li>
+              <li><strong className="text-white">Nutrition data:</strong> Meals, foods, and calories you log manually or via food photo scan.</li>
               <li><strong className="text-white">Workout data:</strong> Exercise completions, weights, sets, and reps you log.</li>
               <li><strong className="text-white">Progress photos:</strong> Images you voluntarily upload for progress tracking (Elite tier).</li>
               <li><strong className="text-white">Communications:</strong> Messages you send to Ion, support inquiries, and contact form submissions.</li>
@@ -72,13 +72,13 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="4. Data Sharing">
-            <P>We share your data only with the following categories of service providers, under strict data processing agreements:</P>
+            <P>We share your data only with trusted service providers under strict data processing agreements, and only to the extent necessary to operate and improve the platform. These include:</P>
             <ul className="list-disc pl-6 space-y-1.5 text-sm" style={{ color: '#94A3B8' }}>
-              <li><strong className="text-white">Anthropic:</strong> Your messages to Ion are processed by Claude (Anthropic) to generate AI responses. Anthropic&apos;s usage policies apply.</li>
-              <li><strong className="text-white">Supabase:</strong> Database and authentication infrastructure. Data is stored on Supabase-hosted servers.</li>
-              <li><strong className="text-white">Lemon Squeezy:</strong> Payment processing. They handle all card data under PCI-DSS compliance.</li>
-              <li><strong className="text-white">Resend:</strong> Email delivery service for transactional emails.</li>
-              <li><strong className="text-white">Vercel:</strong> Hosting and serverless infrastructure.</li>
+              <li><strong className="text-white">AI infrastructure providers:</strong> Your messages to Ion are processed by our AI systems to generate coaching responses. Their data processing policies apply.</li>
+              <li><strong className="text-white">Cloud infrastructure and database providers:</strong> Your account and fitness data is stored securely on our cloud infrastructure.</li>
+              <li><strong className="text-white">Payment processors:</strong> All billing is handled by our payment provider under PCI-DSS compliance. We never see or store your card number.</li>
+              <li><strong className="text-white">Email delivery:</strong> Transactional emails are sent via a secure email delivery service.</li>
+              <li><strong className="text-white">Hosting and CDN:</strong> Our platform is hosted on enterprise-grade cloud infrastructure.</li>
             </ul>
             <P>We may disclose your data if required by law, court order, or to protect the rights and safety of SYNAP and its users.</P>
           </Section>
@@ -106,9 +106,9 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-6 space-y-1.5 text-sm" style={{ color: '#94A3B8' }}>
               <li>TLS/HTTPS encryption for all data in transit.</li>
               <li>Encrypted storage for sensitive fields at rest.</li>
-              <li>Row-level security (RLS) policies on all database tables.</li>
-              <li>API keys and secrets stored as environment variables, never in code.</li>
-              <li>Service-role database access limited to server-side code only.</li>
+              <li>Row-level access controls ensuring users can only access their own data.</li>
+              <li>Secure secrets management — credentials are never exposed in client-side code.</li>
+              <li>Server-side-only access for privileged operations.</li>
             </ul>
             <P>No system is completely secure. If you believe your account has been compromised, contact us immediately at <A href="mailto:ion@synapfit.app">ion@synapfit.app</A>.</P>
           </Section>
@@ -121,8 +121,8 @@ export default function PrivacyPage() {
             <P>SYNAP is not intended for children under 16 years of age. We do not knowingly collect data from minors. If you believe a child has provided us with personal data, please contact us and we will promptly remove it.</P>
           </Section>
 
-          <Section title="10. International Transfers">
-            <P>Your data may be processed in countries outside your own, including the United States (Anthropic, Vercel, Supabase). We ensure appropriate safeguards are in place for such transfers in accordance with applicable data protection laws.</P>
+          <Section title="10. International Data Transfers">
+            <P>Your data may be processed in countries outside your own. We ensure appropriate safeguards are in place for such transfers in accordance with applicable data protection laws, including standard contractual clauses or equivalent mechanisms where required.</P>
           </Section>
 
           <Section title="11. Changes to This Policy">

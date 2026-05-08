@@ -7,7 +7,7 @@ import IonAvatar from '@/components/ui/IonAvatar'
 import { RecipeButton } from '@/components/ui/RecipeModal'
 import type { FoodProduct } from '@/components/ui/BarcodeScanner'
 
-const BarcodeScanner = lazy(() => import('@/components/ui/BarcodeScanner'))
+const FoodPhotoScanner = lazy(() => import('@/components/ui/FoodPhotoScanner'))
 
 export const dynamic = 'force-dynamic'
 
@@ -256,10 +256,10 @@ export default function NutritionPage() {
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-3xl mx-auto">
 
-      {/* Scanner overlay */}
+      {/* Food photo scanner overlay */}
       {scannerOpen && (
         <Suspense fallback={null}>
-          <BarcodeScanner
+          <FoodPhotoScanner
             onScan={handleScanResult}
             onClose={() => setScannerOpen(false)}
           />
@@ -282,7 +282,7 @@ export default function NutritionPage() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-heading font-bold text-xs tracking-wider flex-shrink-0 mt-1"
           style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)', color: '#F97316' }}
         >
-          <Camera size={14} /> SCAN FOOD
+          <Camera size={14} /> PHOTO SCAN
         </button>
       </div>
 

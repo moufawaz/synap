@@ -98,6 +98,7 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -120,6 +121,15 @@ function LoginForm() {
     const supabase = createBrowserClient()
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     if (signInError) { setError('Invalid email or password.'); setLoading(false); return }
+
+    // If "Remember Me" is off, store a flag so the middleware can detect session-only mode
+    if (!rememberMe) {
+      sessionStorage.setItem('synap_session_only', '1')
+    } else {
+      sessionStorage.removeItem('synap_session_only')
+      localStorage.setItem('synap_remember_me', '1')
+    }
+
     router.push(redirectTo)
     router.refresh()
   }
@@ -280,6 +290,32 @@ function LoginForm() {
             </button>
           </div>
         </div>
+
+        {/* Remember Me */}
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <div
+            onClick={() => setRememberMe(!rememberMe)}
+            className="relative w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all cursor-pointer"
+            style={{
+              background: rememberMe ? '#BB5CF6' : 'transparent',
+              border: `1.5px solid ${rememberMe ? '#BB5CF6' : 'rgba(255,255,255,0.2)'}`,
+              boxShadow: rememberMe ? '0 0 8px rgba(187,92,246,0.3)' : 'none',
+            }}
+          >
+            {rememberMe && (
+              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+          <span
+            className="font-heading text-xs tracking-wider cursor-pointer"
+            style={{ color: '#64748B' }}
+            onClick={() => setRememberMe(!rememberMe)}
+          >
+            Remember me
+          </span>
+        </label>
 
         {/* Error */}
         {error && (

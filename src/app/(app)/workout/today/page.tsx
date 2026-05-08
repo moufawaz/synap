@@ -14,7 +14,10 @@ import { VideoButton } from '@/components/ui/ExerciseVideoModal'
 export const dynamic = 'force-dynamic'
 
 // ── Session persistence ───────────────────────────────────
+// localStorage = fast local restore (same device)
+// DB (/api/workout-session) = cross-device sync source of truth
 const SESSION_KEY = 'synap_workout_session'
+const TODAY_DATE  = new Date().toISOString().split('T')[0]
 
 interface WorkoutSession {
   date: string
@@ -25,11 +28,11 @@ interface WorkoutSession {
   completedExercises: number[]
 }
 
-function saveSession(data: WorkoutSession) {
+function saveSessionLocal(data: WorkoutSession) {
   try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)) } catch {}
 }
 
-function loadSession(dayName: string): WorkoutSession | null {
+function loadSessionLocal(dayName: string): WorkoutSession | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY)
     if (!raw) return null
@@ -40,6 +43,19 @@ function loadSession(dayName: string): WorkoutSession | null {
     }
     return data
   } catch { return null }
+}
+
+// Debounced DB sync — avoid hammering the API on every checkbox click
+let dbSyncTimer: ReturnType<typeof setTimeout> | null = null
+function syncSessionToDB(dayName: string, completedExercises: number[]) {
+  if (dbSyncTimer) clearTimeout(dbSyncTimer)
+  dbSyncTimer = setTimeout(() => {
+    fetch('/api/workout-session', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: TODAY_DATE, dayName, completedExercises }),
+    }).catch(() => {})
+  }, 800) // write to DB 800 ms after last change
 }
 
 // ── Main component ────────────────────────────────────────
@@ -85,9 +101,35 @@ export default function WorkoutTodayPage() {
     setPlan(planData)
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
 
-    // Restore paused session if same day
+    // Restore paused session — DB is source of truth, localStorage is fast fallback
     if (planData) {
-      const saved = loadSession(todayName)
+      let saved: WorkoutSession | null = null
+
+      // 1. Try DB first (cross-device)
+      try {
+        const res = await fetch(`/api/workout-session?date=${TODAY_DATE}`)
+        if (res.ok) {
+          const json = await res.json()
+          if (json.session && json.session.dayName === todayName) {
+            saved = {
+              date: new Date().toDateString(),
+              dayName: json.session.dayName,
+              totalMs: 0,
+              resumeAt: null,
+              isPaused: true,
+              completedExercises: json.session.completedExercises || [],
+            }
+            // Write back to localStorage so next page load is instant
+            saveSessionLocal(saved)
+          }
+        }
+      } catch {}
+
+      // 2. Fall back to localStorage (same device, fast)
+      if (!saved) {
+        saved = loadSessionLocal(todayName)
+      }
+
       if (saved) {
         setCompletedExercises(new Set(saved.completedExercises))
         const ms = saved.isPaused
@@ -116,7 +158,9 @@ export default function WorkoutTodayPage() {
       const next = new Set(prev)
       next.has(i) ? next.delete(i) : next.add(i)
       const ms = resumeAt ? totalMs + (Date.now() - resumeAt) : totalMs
-      saveSession(buildSession(next, ms, resumeAt, isPaused))
+      const session = buildSession(next, ms, resumeAt, isPaused)
+      saveSessionLocal(session)
+      syncSessionToDB(todayName, Array.from(next))
       return next
     })
   }
@@ -130,7 +174,8 @@ export default function WorkoutTodayPage() {
     setDisplaySecs(0)
     setCompletedExercises(new Set())
     setSessionRestored(false)
-    saveSession({ date: new Date().toDateString(), dayName: todayName, totalMs: 0, resumeAt: now, isPaused: false, completedExercises: [] })
+    saveSessionLocal({ date: new Date().toDateString(), dayName: todayName, totalMs: 0, resumeAt: now, isPaused: false, completedExercises: [] })
+    syncSessionToDB(todayName, [])
   }
 
   function pauseWorkout() {
@@ -139,14 +184,14 @@ export default function WorkoutTodayPage() {
     setResumeAt(null)
     setIsPaused(true)
     setDisplaySecs(Math.floor(acc / 1000))
-    saveSession(buildSession(completedExercises, acc, null, true))
+    saveSessionLocal(buildSession(completedExercises, acc, null, true))
   }
 
   function resumeWorkout() {
     const now = Date.now()
     setResumeAt(now)
     setIsPaused(false)
-    saveSession(buildSession(completedExercises, totalMs, now, false))
+    saveSessionLocal(buildSession(completedExercises, totalMs, now, false))
   }
 
   async function finishWorkout() {
@@ -154,6 +199,8 @@ export default function WorkoutTodayPage() {
     setDisplaySecs(finalSecs)
     setWorkoutDone(true)
     localStorage.removeItem(SESSION_KEY)
+    // Clear DB session (fire-and-forget)
+    fetch('/api/workout-session', { method: 'DELETE' }).catch(() => {})
 
     if (!confettiFired.current) {
       confettiFired.current = true

@@ -1,11 +1,12 @@
-import { createServerClient } from '@/lib/supabase-server'
+﻿import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { canSendMessage, incrementMessageCount, isLaunchMode, getUserSubscription, effectivePlan } from '@/lib/subscription'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
+import { withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
 
 export async function POST(req: Request) {
-  // ── Guard: API key must be set ─────────────────────────
+  // â”€â”€ Guard: API key must be set â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     console.error('ANTHROPIC_API_KEY is not set')
@@ -19,14 +20,14 @@ export async function POST(req: Request) {
 
   try {
     const { message } = await req.json()
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // ── Check message limits (skip in launch mode) ────────
+    // â”€â”€ Check message limits (skip in launch mode) â”€â”€â”€â”€â”€â”€â”€â”€
     if (!isLaunchMode()) {
       const { allowed, used, limit, plan, reason } = await canSendMessage(user.id, user.created_at)
 
@@ -92,7 +93,7 @@ export async function POST(req: Request) {
 
     const systemPrompt = buildSystemPrompt(profile, workoutPlan, dietPlan, planTier, measurements, workoutLogs, mealLogs)
 
-    // Build conversation history — Anthropic only accepts 'user' | 'assistant'
+    // Build conversation history â€” Anthropic only accepts 'user' | 'assistant'
     const normalizedHistory: Anthropic.MessageParam[] = history
       .filter(h => h.role === 'user' || h.role === 'assistant' || h.role === 'ion')
       .map(h => ({
@@ -105,12 +106,12 @@ export async function POST(req: Request) {
       { role: 'user', content: message },
     ]
 
-    const response = await client.messages.create({
+    const response = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 1024,
       system: systemPrompt,
       messages,
-    })
+    }))
 
     let reply = response.content[0].type === 'text' ? response.content[0].text : ''
     let messageType = 'text'
@@ -139,33 +140,16 @@ export async function POST(req: Request) {
       metadata: planEdit.applied ? { plan_edit: planEdit } : null,
     })
 
-    // ── Increment message count (skip in launch mode) ─────
+    // â”€â”€ Increment message count (skip in launch mode) â”€â”€â”€â”€â”€
     if (!isLaunchMode()) {
       await incrementMessageCount(user.id).catch(() => {})
     }
 
     return NextResponse.json({ reply, message_type: messageType, plan_edit: planEdit.applied ? planEdit : null })
   } catch (err: any) {
-    console.error('Chat error:', err?.message || err)
-    const friendly = friendlyError(err?.message || '')
-    return NextResponse.json({ error: friendly }, { status: 500 })
+    console.error('Chat error:', err?.status, err?.error?.type, err?.message)
+    return NextResponse.json({ error: anthropicFriendlyError(err) }, { status: 500 })
   }
-}
-
-function friendlyError(raw: string): string {
-  if (raw.includes('credit balance') || raw.includes('billing') || raw.includes('quota')) {
-    return "I'm temporarily unavailable. Please try again in a moment."
-  }
-  if (raw.includes('overloaded') || raw.includes('529') || raw.includes('rate_limit')) {
-    return "I'm a bit busy right now. Give me a second and try again."
-  }
-  if (raw.includes('invalid_api_key') || raw.includes('authentication')) {
-    return "I'm having a configuration issue. Please contact support."
-  }
-  if (raw.includes('context_length') || raw.includes('too long')) {
-    return "That message is too long for me. Can you shorten it?"
-  }
-  return "Something went wrong on my end. Try again in a moment."
 }
 
 type PlanEditResult =
@@ -182,7 +166,7 @@ async function maybeApplyPlanEdit({
   dietPlan,
 }: {
   client: Anthropic
-  supabase: ReturnType<typeof createServerClient>
+  supabase: Awaited<ReturnType<typeof createServerClient>>
   userId: string
   profile: any
   message: string
@@ -203,11 +187,11 @@ async function maybeApplyPlanEdit({
       currentPlan,
     })
 
-    const editResponse = await client.messages.create({
+    const editResponse = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: intent === 'workout' ? 10000 : 6000,
       messages: [{ role: 'user', content: prompt }],
-    })
+    }))
 
     const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
     const edit = parseJsonObject(raw)
@@ -352,7 +336,7 @@ function buildSystemPrompt(
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
-  // ── Profile block ─────────────────────────────────────────────
+  // â”€â”€ Profile block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const profileBlock = profile ? `
 Name: ${profile.name}
 Age: ${profile.age} | Gender: ${profile.gender}
@@ -370,32 +354,32 @@ Supplements: ${Array.isArray(profile.supplements) ? profile.supplements.join(', 
 Exercises hated: ${profile.exercises_hated || 'None'}
 Stress: ${profile.stress_level || 'Not specified'} | Sleep quality: ${profile.sleep_quality || 'Not specified'}
 Activity level: ${profile.activity_level || 'Not specified'}
-`.trim() : 'No profile loaded yet — introduce yourself and ask them to complete onboarding.'
+`.trim() : 'No profile loaded yet - introduce yourself and ask them to complete onboarding.'
 
-  // ── Latest measurements block ─────────────────────────────────
+  // â”€â”€ Latest measurements block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const measureBlock = measurements.length > 0
     ? measurements.map(m => `${m.date}: ${m.weight_kg}kg${m.body_fat_pct ? `, ${m.body_fat_pct}% BF` : ''}${m.waist_cm ? `, waist ${m.waist_cm}cm` : ''}${m.chest_cm ? `, chest ${m.chest_cm}cm` : ''}${m.hips_cm ? `, hips ${m.hips_cm}cm` : ''}${m.bicep_left_cm ? `, L-bicep ${m.bicep_left_cm}cm` : ''}${m.bicep_right_cm ? ` R-bicep ${m.bicep_right_cm}cm` : ''}${m.thigh_left_cm ? `, L-thigh ${m.thigh_left_cm}cm` : ''}${m.thigh_right_cm ? ` R-thigh ${m.thigh_right_cm}cm` : ''}`).join('\n')
     : 'No measurements recorded yet.'
 
-  // ── Workout log summary ───────────────────────────────────────
+  // â”€â”€ Workout log summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const workoutLogBlock = workoutLogs.length > 0
     ? workoutLogs.map(l => `${l.date}${l.day_name ? ` (${l.day_name})` : ''}: ${l.completion_pct ?? '?'}% complete${l.duration_min ? `, ${l.duration_min} min` : ''}`).join('\n')
     : 'No recent workout logs.'
 
-  // ── Meal log summary ──────────────────────────────────────────
+  // â”€â”€ Meal log summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const mealLogBlock = mealLogs.length > 0
     ? mealLogs.map(l => `${l.date} ${l.meal_time || ''}: ${l.description || 'logged'}${l.calories_estimated ? ` (~${l.calories_estimated} kcal` : ''}${l.protein_g ? `, ${l.protein_g}g protein` : ''}${l.calories_estimated ? ')' : ''}`).join('\n')
     : 'No recent meal logs.'
 
-  // ── Diet plan summary ─────────────────────────────────────────
+  // â”€â”€ Diet plan summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const dietBlock = dietPlan
     ? `Daily targets: ${dietPlan.daily_calories} kcal | ${dietPlan.protein_g}g protein | ${dietPlan.carbs_g}g carbs | ${dietPlan.fat_g}g fat`
     : 'No diet plan yet.'
 
-  // ── Workout plan summary ──────────────────────────────────────
+  // â”€â”€ Workout plan summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const workoutBlock = workoutPlan
     ? JSON.stringify(workoutPlan, null, 2).slice(0, 2000)
-    : 'No workout plan yet — encourage them to generate one.'
+    : 'No workout plan yet - encourage them to generate one.'
 
   return `You are Ion, an elite AI personal trainer and nutrition coach for SYNAP. You speak directly to ${profile?.name || 'your client'}.
 
@@ -421,14 +405,15 @@ ${dietBlock}
 ${workoutBlock}
 
 === YOUR ROLE & BEHAVIOUR ===
-- You are a real coach: direct, confident, warm — not a chatbot reciting facts
-- You ALWAYS personalise your response using the data above — never give generic advice
+- You are a real coach: direct, confident, warm - not a chatbot reciting facts
+- You ALWAYS personalise your response using the data above - never give generic advice
 - Use the client's name naturally, reference their specific plan, logs, and measurements
 - Short punchy responses (2-4 sentences) unless detailed analysis is genuinely needed
-- If you notice something in their logs or measurements (plateau, imbalance, missed sessions, macros off) — call it out proactively
+- If you notice something in their logs or measurements (plateau, imbalance, missed sessions, macros off) - call it out proactively
 - If asked to modify their plan, detect the intent and make the change directly
 - For medical questions, recommend a doctor first but still be helpful with what you can
-- If they're struggling, be encouraging but honest — no empty hype
-- You speak Arabic fluently — reply in the same language the user writes in
-- Do NOT mention your tier or pricing — that's handled elsewhere`
+- If they're struggling, be encouraging but honest - no empty hype
+- You speak Arabic fluently - reply in the same language the user writes in
+- Do NOT mention your tier or pricing - that's handled elsewhere`
 }
+

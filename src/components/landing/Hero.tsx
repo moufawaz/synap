@@ -61,24 +61,24 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
             {/* Main headline — SYNAP brand voice */}
             <div className="animate-slide-up">
               <h1
-                className="font-heading font-black leading-[0.95] tracking-widest"
-                style={{ fontSize: 'clamp(3rem, 7vw, 5.5rem)' }}
+                className="font-heading font-black leading-[0.92] tracking-widest"
+                style={{ fontSize: 'clamp(2.8rem, 6.5vw, 5.25rem)' }}
               >
                 <span
-                  className="block text-white mb-1"
+                  className="block text-white"
                   style={{ letterSpacing: '0.08em' }}
                 >
                   {isRTL ? 'جسمك' : 'YOUR BODY'}
                 </span>
                 <span
-                  className="block text-white/20 mb-1"
-                  style={{ letterSpacing: '0.08em', fontSize: '0.55em' }}
+                  className="block text-white mb-2"
+                  style={{ letterSpacing: '0.08em' }}
                 >
-                  {isRTL ? 'منظومة.' : 'IS A SYSTEM.'}
+                  {isRTL ? 'منظومة' : 'SYSTEM'}
                 </span>
                 <span
                   className="block"
-                  style={{ letterSpacing: '0.08em' }}
+                  style={{ letterSpacing: '0.08em', fontSize: '0.62em', opacity: 0.9 }}
                 >
                   <span className="text-white">SYNAP </span>
                   <span style={{ color: '#BB5CF6' }}>
@@ -207,16 +207,16 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
                   <div className="flex items-start gap-2.5 chat-bubble">
                     <IonAvatar gender={ionGender} size="sm" />
                     <div className="max-w-[78%]">
-                      <div className="rounded-2xl rounded-tl-sm px-4 py-2.5" style={{ background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <p className="text-silver text-sm leading-relaxed">{t(lang, 'chat_bubble_1')}</p>
+                      <div className="hero-ion-bubble rounded-2xl rounded-tl-sm px-4 py-2.5">
+                        <p className="text-sm leading-relaxed">{t(lang, 'chat_bubble_1')}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* User message */}
                   <div className={`flex ${isRTL ? 'justify-start' : 'justify-end'} chat-bubble`} style={{ animationDelay: '0.5s' }}>
-                    <div className="max-w-[78%] rounded-2xl rounded-tr-sm px-4 py-2.5" style={{ background: 'rgba(187,92,246,0.15)', border: '1px solid rgba(187,92,246,0.25)' }}>
-                      <p className="text-silver text-sm leading-relaxed">{t(lang, 'chat_bubble_2')}</p>
+                    <div className="hero-user-bubble max-w-[78%] rounded-2xl rounded-tr-sm px-4 py-2.5">
+                      <p className="text-sm leading-relaxed">{t(lang, 'chat_bubble_2')}</p>
                     </div>
                   </div>
 
@@ -224,8 +224,8 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
                   <div className="flex items-start gap-2.5 chat-bubble" style={{ animationDelay: '1s' }}>
                     <IonAvatar gender={ionGender} size="sm" />
                     <div className="max-w-[78%]">
-                      <div className="rounded-2xl rounded-tl-sm px-4 py-2.5" style={{ background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <p className="text-silver text-sm leading-relaxed">{t(lang, 'chat_bubble_3')}</p>
+                      <div className="hero-ion-bubble rounded-2xl rounded-tl-sm px-4 py-2.5">
+                        <p className="text-sm leading-relaxed">{t(lang, 'chat_bubble_3')}</p>
                       </div>
                     </div>
                   </div>
@@ -233,7 +233,7 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
                   {/* Typing */}
                   <div className="flex items-start gap-2.5">
                     <IonAvatar gender={ionGender} size="sm" />
-                    <div className="rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div className="hero-ion-bubble rounded-2xl rounded-tl-sm px-4 py-3">
                       <div className="flex gap-1 items-center">
                         <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
                       </div>
@@ -251,7 +251,7 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
                     <button
                       key={chip}
                       className="px-3 py-1.5 rounded-full text-xs font-heading font-semibold tracking-wider transition-all duration-200"
-                      style={{ border: '1px solid rgba(187,92,246,0.3)', background: 'rgba(187,92,246,0.08)', color: '#E2E8F0' }}
+                      style={{ border: '1px solid rgba(187,92,246,0.3)', background: 'rgba(187,92,246,0.08)', color: 'var(--text-primary)' }}
                       onMouseEnter={e => { (e.target as HTMLElement).style.background = 'rgba(187,92,246,0.18)' }}
                       onMouseLeave={e => { (e.target as HTMLElement).style.background = 'rgba(187,92,246,0.08)' }}
                     >
@@ -262,12 +262,12 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
 
                 {/* Input bar */}
                 <div className="px-5 pb-5">
-                  <div className="flex items-center gap-2 rounded-xl border px-4 py-2.5" style={{ background: '#0A0A0A', borderColor: 'rgba(255,255,255,0.08)' }}>
+                  <div className="hero-input flex items-center gap-2 rounded-xl border px-4 py-2.5">
                     <input
                       type="text"
                       placeholder={isRTL ? 'اكتب ردّك...' : 'Type your reply...'}
                       className="flex-1 bg-transparent text-sm outline-none font-heading"
-                      style={{ color: '#E2E8F0' }}
+                      style={{ color: 'var(--text-primary)' }}
                       readOnly
                     />
                     <button className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#BB5CF6' }}>
@@ -288,7 +288,7 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
               <div className="absolute -bottom-4 -left-4 glass-card px-3 py-2 flex items-center gap-2 animate-float">
                 <span className="text-base">⚡</span>
                 <div>
-                  <p className="text-white text-xs font-heading font-bold tracking-wider">{isRTL ? 'خطتك الآن' : 'YOUR PLAN'}</p>
+                  <p className="text-xs font-heading font-bold tracking-wider" style={{ color: 'var(--text-primary)' }}>{isRTL ? 'خطتك الآن' : 'YOUR PLAN'}</p>
                   <p className="text-xs font-heading tracking-wider" style={{ color: '#BB5CF6', fontSize: '0.6rem' }}>
                     {isRTL ? 'مخصّصة 100%' : '100% CUSTOM'}
                   </p>

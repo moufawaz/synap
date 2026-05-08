@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { withAnthropicRetry } from '@/lib/anthropic'
 
 const client = new Anthropic()
 
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Image required' }, { status: 400 })
     }
 
-    const message = await client.messages.create({
+    const message = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-opus-4-5',
       max_tokens: 600,
       messages: [
@@ -52,7 +53,7 @@ Rules:
           ],
         },
       ],
-    })
+    }))
 
     const raw = (message.content[0] as any).text
     const match = raw.match(/\{[\s\S]*\}/)

@@ -1,5 +1,7 @@
 'use client'
 
+import { useId } from 'react'
+
 interface SynapLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl'
   showText?: boolean
@@ -23,7 +25,7 @@ export default function SynapLogo({
   }
 
   const s = sizes[size]
-  const id = `synap-${Math.random().toString(36).substr(2, 6)}`
+  const id = `synap-${useId().replace(/:/g, '')}`
 
   const Mark = () => (
     <svg
@@ -33,6 +35,7 @@ export default function SynapLogo({
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className="flex-shrink-0"
+      style={{ color: 'var(--silver)' }}
     >
       <defs>
         {/* Chrome/silver ribbon gradient */}
@@ -107,10 +110,11 @@ export default function SynapLogo({
       {/* Ribbon 1 highlight (thin bright edge) */}
       <path
         d="M 8 18 C 18 18, 28 22, 50 50 C 72 78, 82 82, 92 82"
-        stroke="rgba(255,255,255,0.7)"
+        stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
         fill="none"
+        opacity="0.5"
       />
 
       {/* ────────────────────────────────────────
@@ -129,10 +133,11 @@ export default function SynapLogo({
       {/* Ribbon 2 highlight */}
       <path
         d="M 92 18 C 82 18, 72 22, 50 50 C 28 78, 18 82, 8 82"
-        stroke="rgba(255,255,255,0.6)"
+        stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
         fill="none"
+        opacity="0.5"
       />
 
       {/* ── Purple outer glow circle at center ── */}
@@ -176,7 +181,7 @@ export default function SynapLogo({
         <Mark />
         <div className="flex flex-col items-center gap-0.5">
           <span
-            className="font-heading font-black text-white tracking-[0.28em] text-sm"
+            className="font-heading font-black text-silver tracking-[0.28em] text-sm"
             style={{ letterSpacing: s.letterSpacing }}
           >
             SYNAP
@@ -199,7 +204,7 @@ export default function SynapLogo({
       {showText && (
         <div className="flex flex-col justify-center">
           <span
-            className={`font-heading font-black text-white leading-none ${s.text}`}
+            className={`font-heading font-black text-silver leading-none ${s.text}`}
             style={{ letterSpacing: s.letterSpacing }}
           >
             SYNAP

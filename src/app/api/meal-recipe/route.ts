@@ -1,6 +1,7 @@
-import { createServerClient } from '@/lib/supabase-server'
+﻿import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { withAnthropicRetry } from '@/lib/anthropic'
 
 export const runtime = 'nodejs'
 export const maxDuration = 20
@@ -12,7 +13,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
     if (!meal) return NextResponse.json({ error: 'Missing meal.' }, { status: 400 })
 
     const client = new Anthropic({ apiKey })
-    const response = await client.messages.create({
+    const response = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 1200,
       messages: [
@@ -52,7 +53,7 @@ JSON shape:
 }`,
         },
       ],
-    })
+    }))
 
     const raw = response.content[0].type === 'text' ? response.content[0].text : ''
     const recipe = parseJsonObject(raw)
@@ -76,3 +77,4 @@ function parseJsonObject(raw: string): any | null {
     return null
   }
 }
+

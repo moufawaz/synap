@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import SynapLogo from '@/components/ui/SynapLogo'
 import { type Language, t } from '@/lib/i18n'
-import { Menu, X, Globe, LayoutDashboard, Dumbbell, MessageCircle, UtensilsCrossed } from 'lucide-react'
+import { Menu, X, Globe, LayoutDashboard, Dumbbell, MessageCircle, UtensilsCrossed, LogOut } from 'lucide-react'
 
 interface NavbarProps {
   lang: Language
@@ -16,12 +17,21 @@ interface NavbarProps {
 export default function Navbar({ lang, onLangChange, isLoggedIn = false, userName = '' }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  async function handleSignOut() {
+    const { createBrowserClient } = await import('@/lib/supabase')
+    const supabase = createBrowserClient()
+    await supabase.auth.signOut()
+    router.push('/')
+    router.refresh()
+  }
 
   const publicLinks = [
     { label: t(lang, 'nav_features'), href: '#features' },
@@ -124,12 +134,21 @@ export default function Navbar({ lang, onLangChange, isLoggedIn = false, userNam
               )}
               <Link
                 href="/dashboard"
-                className="flex items-center gap-1.5 btn-primary text-xs px-5 py-2.5 font-heading font-bold"
+                className="btn-primary text-xs px-5 py-2.5 font-heading font-bold"
                 style={{ letterSpacing: '0.1em' }}
               >
-                <LayoutDashboard size={12} />
                 DASHBOARD
               </Link>
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-1.5 text-xs font-heading font-semibold tracking-widest transition-colors"
+                style={{ color: '#64748B', letterSpacing: '0.1em' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#EF4444' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#64748B' }}
+              >
+                <LogOut size={13} />
+                SIGN OUT
+              </button>
             </>
           ) : (
             <>
@@ -209,13 +228,23 @@ export default function Navbar({ lang, onLangChange, isLoggedIn = false, userNam
 
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} className="pt-3 flex flex-col gap-3">
               {isLoggedIn ? (
-                <Link
-                  href="/dashboard"
-                  className="btn-primary text-sm text-center font-heading font-bold tracking-widest flex items-center justify-center gap-2"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  <LayoutDashboard size={14} /> OPEN DASHBOARD
-                </Link>
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="btn-primary text-sm text-center font-heading font-bold tracking-widest"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    DASHBOARD
+                  </Link>
+                  <button
+                    onClick={() => { setMobileOpen(false); handleSignOut() }}
+                    className="flex items-center justify-center gap-2 text-sm font-heading font-semibold py-2 transition-colors tracking-widest"
+                    style={{ color: '#EF4444', letterSpacing: '0.12em' }}
+                  >
+                    <LogOut size={15} />
+                    SIGN OUT
+                  </button>
+                </>
               ) : (
                 <>
                   <Link
