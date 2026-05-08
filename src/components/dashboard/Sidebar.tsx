@@ -36,14 +36,14 @@ function TikTokIcon({ size = 13 }: { size?: number }) {
 }
 
 const NAV = [
-  { href: '/dashboard',     icon: LayoutDashboard, label: 'DASHBOARD',       labelAr: 'DASHBOARD' },
-  { href: '/chat',          icon: MessageCircle,   label: 'ASK ION',         labelAr: 'ASK ION' },
-  { href: '/plan',          icon: ClipboardList,   label: 'MY PLAN',         labelAr: 'MY PLAN' },
-  { href: '/workout/today', icon: Flame,           label: "TODAY'S WORKOUT", labelAr: "TODAY'S WORKOUT" },
-  { href: '/workout',       icon: Dumbbell,        label: 'PROGRAMME',       labelAr: 'PROGRAMME' },
-  { href: '/nutrition',     icon: UtensilsCrossed, label: 'NUTRITION',       labelAr: 'NUTRITION' },
-  { href: '/measurements',  icon: Ruler,           label: 'MEASUREMENTS',    labelAr: 'MEASUREMENTS' },
-  { href: '/progress',      icon: TrendingUp,      label: 'PROGRESS',        labelAr: 'PROGRESS' },
+  { href: '/dashboard',     icon: LayoutDashboard, label: 'DASHBOARD',       labelAr: 'الرئيسية' },
+  { href: '/chat',          icon: MessageCircle,   label: 'ASK ION',         labelAr: 'اسأل Ion' },
+  { href: '/plan',          icon: ClipboardList,   label: 'MY PLAN',         labelAr: 'خطتي' },
+  { href: '/workout/today', icon: Flame,           label: "TODAY'S WORKOUT", labelAr: 'تمرين اليوم' },
+  { href: '/workout',       icon: Dumbbell,        label: 'PROGRAMME',       labelAr: 'البرنامج' },
+  { href: '/nutrition',     icon: UtensilsCrossed, label: 'NUTRITION',       labelAr: 'التغذية' },
+  { href: '/measurements',  icon: Ruler,           label: 'MEASUREMENTS',    labelAr: 'القياسات' },
+  { href: '/progress',      icon: TrendingUp,      label: 'PROGRESS',        labelAr: 'التقدم' },
 ]
 interface SidebarProps {
   user: { name: string; email: string; gender?: string; isAdmin?: boolean }
@@ -83,7 +83,8 @@ export default function Sidebar({ user, lang = 'en' }: SidebarProps) {
       className="hidden md:flex flex-col w-64 h-screen sticky top-0 flex-shrink-0"
       style={{
         background: 'linear-gradient(180deg, #080808 0%, #0A0A0A 100%)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.04)',
+        borderRight: isRTL ? undefined : '1px solid rgba(255, 255, 255, 0.04)',
+        borderLeft: isRTL ? '1px solid rgba(255, 255, 255, 0.04)' : undefined,
       }}
     >
       {/* ── Logo ─────────────────────────────────── */}
@@ -126,7 +127,7 @@ export default function Sidebar({ user, lang = 'en' }: SidebarProps) {
               {active && (
                 <span
                   aria-hidden
-                  className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full"
+                  className={`absolute top-2 bottom-2 w-[2px] ${isRTL ? 'right-0 rounded-l-full' : 'left-0 rounded-r-full'}`}
                   style={{
                     background: 'linear-gradient(180deg, #BB5CF6 0%, #7B2FFF 100%)',
                     boxShadow: '0 0 8px rgba(187, 92, 246, 0.6)',

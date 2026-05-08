@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Shield, Star, Lock, Check, X, ChevronRight } from 'lucide-react'
+import { Shield, Star, Lock, Check, X, ChevronRight, Globe } from 'lucide-react'
 import { useCurrency } from '@/lib/currency'
+import { useLanguage } from '@/lib/useLanguage'
 
 // ── Base prices in SAR ────────────────────────────────────────────────────────
 const PRICES = {
@@ -21,28 +22,30 @@ const ELITE_SAVE       = Math.round(ELITE_COMPARE_AT - PRICES.eliteAnnual.sar) /
 
 // ── Comparison table rows ─────────────────────────────────────────────────────
 type RowVal = boolean | string
-interface TableRow { label: string; starter: RowVal; pro: RowVal; elite: RowVal }
+interface TableRow { label: string; labelAr: string; starter: RowVal; pro: RowVal; elite: RowVal }
 
 const TABLE_ROWS: TableRow[] = [
-  { label: 'Adaptive diet plan',               starter: true,        pro: true,             elite: true },
-  { label: 'Smart workout program',             starter: true,        pro: true,             elite: true },
-  { label: 'Body tracking (13 measurements)',   starter: true,        pro: true,             elite: true },
-  { label: 'Bilingual Arabic + English',        starter: true,        pro: true,             elite: true },
-  { label: 'Daily Ion messages',                starter: '5 / day',   pro: 'Unlimited',      elite: 'Unlimited' },
-  { label: 'Barcode food scanner',              starter: false,       pro: true,             elite: true },
-  { label: 'Proactive check-ins',               starter: false,       pro: true,             elite: true },
-  { label: 'Plan renewal that learns',          starter: false,       pro: true,             elite: true },
-  { label: 'Progress photo storage',            starter: false,       pro: true,             elite: true },
-  { label: 'Goal timeline prediction',          starter: false,       pro: false,            elite: true },
-  { label: 'Weekly body composition report',    starter: false,       pro: false,            elite: true },
-  { label: 'Supplement recommendations',        starter: false,       pro: false,            elite: true },
-  { label: 'Wearable integration',              starter: false,       pro: 'Coming Soon',    elite: 'Coming Soon' },
-  { label: 'Community feed',                    starter: false,       pro: 'Coming Soon',    elite: 'Coming Soon' },
+  { label: 'Adaptive diet plan',               labelAr: 'خطة تغذية متكيفة', starter: true,        pro: true,             elite: true },
+  { label: 'Smart workout program',            labelAr: 'برنامج تمرين ذكي', starter: true,        pro: true,             elite: true },
+  { label: 'Body tracking (13 measurements)',  labelAr: 'تتبع الجسم (13 قياس)', starter: true,        pro: true,             elite: true },
+  { label: 'Bilingual Arabic + English',       labelAr: 'العربية والإنجليزية', starter: true,        pro: true,             elite: true },
+  { label: 'Daily Ion messages',               labelAr: 'رسائل Ion اليومية', starter: '5 / day',   pro: 'Unlimited',      elite: 'Unlimited' },
+  { label: 'Barcode food scanner',             labelAr: 'ماسح باركود الطعام', starter: false,       pro: true,             elite: true },
+  { label: 'Proactive check-ins',              labelAr: 'متابعات استباقية', starter: false,       pro: true,             elite: true },
+  { label: 'Plan renewal that learns',         labelAr: 'تجديد خطة يتعلم من نتائجك', starter: false,       pro: true,             elite: true },
+  { label: 'Progress photo storage',           labelAr: 'حفظ صور التقدم', starter: false,       pro: true,             elite: true },
+  { label: 'Goal timeline prediction',         labelAr: 'توقع موعد الوصول للهدف', starter: false,       pro: false,            elite: true },
+  { label: 'Weekly body composition report',   labelAr: 'تقرير تكوين الجسم الأسبوعي', starter: false,       pro: false,            elite: true },
+  { label: 'Supplement recommendations',       labelAr: 'توصيات المكملات', starter: false,       pro: false,            elite: true },
+  { label: 'Wearable integration',             labelAr: 'ربط الأجهزة القابلة للارتداء', starter: false,       pro: 'Coming Soon',    elite: 'Coming Soon' },
+  { label: 'Community feed',                   labelAr: 'المجتمع', starter: false,       pro: 'Coming Soon',    elite: 'Coming Soon' },
 ]
 
 export default function PricingPage() {
+  const { lang, setLang, isRTL } = useLanguage()
   const [billing, setBilling] = useState<'annual' | 'monthly'>('annual')
   const [loading, setLoading] = useState<string | null>(null)
+  const [checkoutError, setCheckoutError] = useState('')
   const { fmt, loading: rateLoading } = useCurrency()
   const router = useRouter()
 
@@ -53,9 +56,67 @@ export default function PricingPage() {
 
   const proMonthlyEq    = billing === 'annual' ? PRICES.proAnnual.sar   / 12 : null
   const eliteMonthlyEq  = billing === 'annual' ? PRICES.eliteAnnual.sar / 12 : null
+  const copy = isRTL ? {
+    pricing: 'الأسعار',
+    title: 'أسعار واضحة وبسيطة',
+    subtitle: 'تجربة مجانية 7 أيام. ألغِ قبل اليوم السابع ولن يتم خصم أي مبلغ.',
+    guarantee: 'ضمان الإلغاء بدون رسوم',
+    annual: 'سنوي',
+    monthly: 'شهري',
+    save33: 'وفر 33%',
+    starterDesc: 'مجاني دائماً - بدون بطاقة',
+    getStarted: 'ابدأ مجاناً',
+    mostPopular: 'الأكثر اختياراً',
+    bestValue: 'أفضل قيمة',
+    year: 'سنة',
+    month: 'شهر',
+    monthEquivalent: 'شهرياً تقريباً',
+    save: 'وفر',
+    threeMonthsFree: '3 أشهر مجانية',
+    annualPrompt: 'اختر السنوي ووفر 33%',
+    comingSoon: 'قريباً',
+    loading: 'جاري التحميل...',
+    startTrial: 'ابدأ التجربة المجانية',
+    fullComparison: 'مقارنة الميزات',
+    securePayments: 'مدفوعات آمنة',
+    zeroTrial: 'تجربة بدون خصم',
+    cancelAnytime: 'إلغاء في أي وقت',
+    secureDesc: 'الدفع عبر Lemon Squeezy. المعاملات مشفرة ولا نحفظ بيانات البطاقة على خوادمنا.',
+    zeroDesc: 'ألغِ قبل اليوم السابع ولن يتم خصم أي مبلغ. هذا ضماننا.',
+    cancelDesc: 'بدون عقود أو رسوم إلغاء. الإلغاء من الإعدادات > الفوترة.',
+  } : {
+    pricing: 'PRICING',
+    title: 'Simple, Transparent Pricing',
+    subtitle: "7-day free trial. Cancel before day 7 and you'll never be charged - not even a single riyal.",
+    guarantee: 'ZERO-CHARGE CANCEL GUARANTEE',
+    annual: 'Annual',
+    monthly: 'Monthly',
+    save33: 'SAVE 33%',
+    starterDesc: 'Free forever - no card needed',
+    getStarted: 'GET STARTED FREE',
+    mostPopular: 'MOST POPULAR',
+    bestValue: 'BEST VALUE',
+    year: 'yr',
+    month: 'mo',
+    monthEquivalent: 'month equivalent',
+    save: 'Save',
+    threeMonthsFree: '3 months free',
+    annualPrompt: 'Switch to annual and save 33%',
+    comingSoon: 'COMING SOON',
+    loading: 'LOADING...',
+    startTrial: 'START FREE TRIAL',
+    fullComparison: 'FULL FEATURE COMPARISON',
+    securePayments: 'Secure Payments',
+    zeroTrial: 'Zero-Charge Trial',
+    cancelAnytime: 'Cancel Anytime',
+    secureDesc: 'Powered by Lemon Squeezy. All transactions encrypted. No card data stored on our servers.',
+    zeroDesc: 'Cancel before day 7 and you will never be billed. Not a single riyal. Our guarantee.',
+    cancelDesc: 'No contracts. No cancellation fees. One click to cancel from Settings > Billing.',
+  }
 
   async function handleCheckout(variantId: string) {
-    if (!variantId) { alert('Plan not yet available. Check back soon!'); return }
+    if (!variantId) { setCheckoutError('Plan not yet available. Check back soon!'); return }
+    setCheckoutError('')
     setLoading(variantId)
     try {
       const res = await fetch('/api/checkout', {
@@ -69,38 +130,47 @@ export default function PricingPage() {
       } else if (data.error === 'Unauthorized') {
         router.push('/auth/login?next=/pricing')
       } else {
-        alert(data.error || 'Something went wrong. Please try again.')
+        setCheckoutError(data.error || 'Something went wrong. Please try again.')
       }
     } catch {
-      alert('Network error. Please try again.')
+      setCheckoutError('Network error. Please try again.')
     } finally {
       setLoading(null)
     }
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#0A0A0A' }}>
+    <div className="min-h-screen" style={{ background: '#0A0A0A' }} dir={isRTL ? 'rtl' : 'ltr'}>
 
       {/* Nav */}
-      <nav className="px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
+      <nav className="px-6 py-4 flex items-center justify-between gap-4 max-w-6xl mx-auto">
         <Link href="/" className="font-heading font-black text-xl tracking-widest" style={{ color: '#BB5CF6', letterSpacing: '0.15em' }}>
           SYNAP
         </Link>
-        <Link href="/dashboard" className="font-heading text-xs tracking-widest" style={{ color: '#475569' }}>
-          Back to Dashboard
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-heading text-xs font-semibold"
+            style={{ color: '#64748B', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <Globe size={12} /> {lang === 'ar' ? 'EN' : 'ع'}
+          </button>
+          <Link href="/dashboard" className="font-heading text-xs tracking-widest" style={{ color: '#475569' }}>
+            {isRTL ? 'العودة للوحة التحكم' : 'Back to Dashboard'}
+          </Link>
+        </div>
       </nav>
 
       <div className="max-w-6xl mx-auto px-4 pb-24 pt-8">
 
         {/* Header */}
         <div className="text-center mb-12">
-          <p className="font-heading text-xs tracking-widest uppercase mb-3" style={{ color: '#BB5CF6', letterSpacing: '0.2em' }}>PRICING</p>
+          <p className="font-heading text-xs tracking-widest uppercase mb-3" style={{ color: '#BB5CF6', letterSpacing: '0.2em' }}>{copy.pricing}</p>
           <h1 className="font-heading font-black text-4xl sm:text-5xl text-white tracking-wider mb-4" style={{ letterSpacing: '0.04em' }}>
-            Simple, Transparent Pricing
+            {copy.title}
           </h1>
           <p className="font-heading text-base max-w-lg mx-auto" style={{ color: '#64748B' }}>
-            7-day free trial. Cancel before day 7 and you&apos;ll never be charged - not even a single riyal.
+            {copy.subtitle}
           </p>
 
           {/* Zero charge badge */}
@@ -108,10 +178,16 @@ export default function PricingPage() {
             style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
             <Shield size={14} style={{ color: '#10B981' }} />
             <span className="font-heading text-xs font-semibold tracking-wider" style={{ color: '#10B981' }}>
-              ZERO-CHARGE CANCEL GUARANTEE
+              {copy.guarantee}
             </span>
           </div>
         </div>
+
+        {checkoutError && (
+          <div className="max-w-xl mx-auto mb-8 rounded-2xl px-4 py-3 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)' }}>
+            <p className="font-heading text-sm" style={{ color: '#FCA5A5' }}>{checkoutError}</p>
+          </div>
+        )}
 
         {/* Billing toggle — annual default */}
         <div className="flex justify-center mb-10">
@@ -125,10 +201,10 @@ export default function PricingPage() {
                 boxShadow: billing === 'annual' ? '0 0 20px rgba(187,92,246,0.3)' : 'none',
               }}
             >
-              Annual
+              {copy.annual}{' '}
               <span className="ml-2 text-[10px] font-black px-1.5 py-0.5 rounded-full"
                 style={{ background: billing === 'annual' ? 'rgba(255,255,255,0.2)' : 'rgba(187,92,246,0.15)', color: billing === 'annual' ? 'white' : '#BB5CF6' }}>
-                SAVE 33%
+                {copy.save33}
               </span>
             </button>
             <button
@@ -139,7 +215,7 @@ export default function PricingPage() {
                 color: billing === 'monthly' ? 'white' : '#475569',
               }}
             >
-              Monthly
+              {copy.monthly}
             </button>
           </div>
         </div>
@@ -155,24 +231,24 @@ export default function PricingPage() {
                 <span className="font-heading font-black text-4xl text-white">0</span>
                 <span className="font-heading text-sm mb-1.5" style={{ color: '#64748B' }}> SAR</span>
               </div>
-              <p className="font-heading text-xs" style={{ color: '#475569' }}>Free forever - no card needed</p>
+              <p className="font-heading text-xs" style={{ color: '#475569' }}>{copy.starterDesc}</p>
             </div>
 
             <div className="flex flex-col gap-2.5 mb-7 flex-1">
-              <PlanFeature text="5 Ion messages / day (7 days)" />
-              <PlanFeature text="Adaptive diet plan" />
-              <PlanFeature text="Smart workout program" />
-              <PlanFeature text="Body tracking (13 measurements)" />
-              <PlanFeature text="Bilingual Arabic + English" />
-              <PlanFeatureMissing text="Unlimited daily messages" />
-              <PlanFeatureMissing text="Barcode food scanner" />
-              <PlanFeatureMissing text="Proactive check-ins" />
+              <PlanFeature text={isRTL ? '5 رسائل Ion يومياً (7 أيام)' : '5 Ion messages / day (7 days)'} />
+              <PlanFeature text={isRTL ? 'خطة تغذية متكيفة' : 'Adaptive diet plan'} />
+              <PlanFeature text={isRTL ? 'برنامج تمرين ذكي' : 'Smart workout program'} />
+              <PlanFeature text={isRTL ? 'تتبع الجسم (13 قياس)' : 'Body tracking (13 measurements)'} />
+              <PlanFeature text={isRTL ? 'العربية والإنجليزية' : 'Bilingual Arabic + English'} />
+              <PlanFeatureMissing text={isRTL ? 'رسائل يومية غير محدودة' : 'Unlimited daily messages'} />
+              <PlanFeatureMissing text={isRTL ? 'ماسح باركود الطعام' : 'Barcode food scanner'} />
+              <PlanFeatureMissing text={isRTL ? 'متابعات استباقية' : 'Proactive check-ins'} />
             </div>
 
             <Link href="/auth/signup">
               <button className="w-full py-3 rounded-xl font-heading font-bold text-sm tracking-wider transition-all"
                 style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#475569', letterSpacing: '0.08em' }}>
-                GET STARTED FREE
+                {copy.getStarted}
               </button>
             </Link>
           </div>
@@ -190,7 +266,7 @@ export default function PricingPage() {
             <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
               <span className="font-heading font-black text-[10px] tracking-widest px-4 py-1.5 rounded-full"
                 style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.15em' }}>
-                MOST POPULAR
+                {copy.mostPopular}
               </span>
             </div>
 
@@ -206,34 +282,34 @@ export default function PricingPage() {
                   {rateLoading ? '...' : fmt(proPrice.sar, 0)}
                 </span>
                 <span className="font-heading text-sm mb-1.5" style={{ color: '#64748B' }}>
-                  /{billing === 'annual' ? 'yr' : 'mo'}
+                  /{billing === 'annual' ? copy.year : copy.month}
                 </span>
               </div>
               {billing === 'annual' && proMonthlyEq ? (
                 <div className="flex flex-col gap-0.5">
                   <p className="font-heading text-xs" style={{ color: '#D88BFF' }}>
-                    {rateLoading ? '...' : fmt(proMonthlyEq, 2)}/month equivalent
+                    {rateLoading ? '...' : fmt(proMonthlyEq, 2)}/{copy.monthEquivalent}
                   </p>
                   <p className="font-heading text-xs font-bold" style={{ color: '#10B981' }}>
-                    Save {rateLoading ? '...' : fmt(PRO_SAVE, 0)} - 3 months free
+                    {copy.save} {rateLoading ? '...' : fmt(PRO_SAVE, 0)} - {copy.threeMonthsFree}
                   </p>
                 </div>
               ) : (
-                <p className="font-heading text-xs" style={{ color: '#475569' }}>Switch to annual and save 33%</p>
+                <p className="font-heading text-xs" style={{ color: '#475569' }}>{copy.annualPrompt}</p>
               )}
             </div>
 
             <div className="flex flex-col gap-2.5 mb-7 flex-1">
-              <PlanFeature text="Unlimited Ion messages / day" highlight />
-              <PlanFeature text="Everything in Starter" />
-              <PlanFeature text="7-day free trial" />
-              <PlanFeature text="Barcode food scanner" />
-              <PlanFeature text="Proactive check-ins" />
-              <PlanFeature text="Plan renewal that learns" />
-              <PlanFeature text="Progress photo storage" />
-              <PlanFeatureMissing text="Goal timeline prediction" />
-              <PlanFeatureMissing text="Weekly body composition report" />
-              <PlanFeatureMissing text="Supplement recommendations" />
+              <PlanFeature text={isRTL ? 'رسائل Ion غير محدودة يومياً' : 'Unlimited Ion messages / day'} highlight />
+              <PlanFeature text={isRTL ? 'كل ميزات Starter' : 'Everything in Starter'} />
+              <PlanFeature text={isRTL ? 'تجربة مجانية 7 أيام' : '7-day free trial'} />
+              <PlanFeature text={isRTL ? 'ماسح باركود الطعام' : 'Barcode food scanner'} />
+              <PlanFeature text={isRTL ? 'متابعات استباقية' : 'Proactive check-ins'} />
+              <PlanFeature text={isRTL ? 'تجديد خطة يتعلم من نتائجك' : 'Plan renewal that learns'} />
+              <PlanFeature text={isRTL ? 'حفظ صور التقدم' : 'Progress photo storage'} />
+              <PlanFeatureMissing text={isRTL ? 'توقع موعد الوصول للهدف' : 'Goal timeline prediction'} />
+              <PlanFeatureMissing text={isRTL ? 'تقرير تكوين الجسم الأسبوعي' : 'Weekly body composition report'} />
+              <PlanFeatureMissing text={isRTL ? 'توصيات المكملات' : 'Supplement recommendations'} />
             </div>
 
             <button
@@ -248,11 +324,11 @@ export default function PricingPage() {
               }}
             >
               {!proAvailable ? (
-                <>COMING SOON</>
+                <>{copy.comingSoon}</>
               ) : loading === proPrice.variantId ? (
-                <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'white', borderTopColor: 'transparent' }} /> LOADING...</>
+                <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'white', borderTopColor: 'transparent' }} /> {copy.loading}</>
               ) : (
-                <>START FREE TRIAL <ChevronRight size={14} /></>
+                <>{copy.startTrial} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} /></>
               )}
             </button>
           </div>
@@ -270,7 +346,7 @@ export default function PricingPage() {
             <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
               <span className="font-heading font-black text-[10px] tracking-widest px-4 py-1.5 rounded-full"
                 style={{ background: 'linear-gradient(90deg, #BB5CF6, #8B5CF6)', color: 'white', letterSpacing: '0.15em', boxShadow: '0 0 20px rgba(187,92,246,0.5)' }}>
-          BEST VALUE
+          {copy.bestValue}
               </span>
             </div>
 
@@ -286,32 +362,32 @@ export default function PricingPage() {
                   {rateLoading ? '...' : fmt(elitePrice.sar, 0)}
                 </span>
                 <span className="font-heading text-sm mb-1.5" style={{ color: '#64748B' }}>
-                  /{billing === 'annual' ? 'yr' : 'mo'}
+                  /{billing === 'annual' ? copy.year : copy.month}
                 </span>
               </div>
               {billing === 'annual' && eliteMonthlyEq ? (
                 <div className="flex flex-col gap-0.5">
                   <p className="font-heading text-xs" style={{ color: '#D88BFF' }}>
-                    {rateLoading ? '...' : fmt(eliteMonthlyEq, 2)}/month equivalent
+                    {rateLoading ? '...' : fmt(eliteMonthlyEq, 2)}/{copy.monthEquivalent}
                   </p>
                   <p className="font-heading text-xs font-bold" style={{ color: '#10B981' }}>
-                    Save {rateLoading ? '...' : fmt(ELITE_SAVE, 0)} - 3 months free
+                    {copy.save} {rateLoading ? '...' : fmt(ELITE_SAVE, 0)} - {copy.threeMonthsFree}
                   </p>
                 </div>
               ) : (
-                <p className="font-heading text-xs" style={{ color: '#475569' }}>Switch to annual and save 33%</p>
+                <p className="font-heading text-xs" style={{ color: '#475569' }}>{copy.annualPrompt}</p>
               )}
             </div>
 
             <div className="flex flex-col gap-2.5 mb-7 flex-1">
-              <PlanFeature text="Everything in Pro" highlight />
-              <PlanFeature text="7-day free trial" />
-              <PlanFeature text="Goal timeline prediction" highlight />
-              <PlanFeature text="Weekly body composition report" highlight />
-              <PlanFeature text="Supplement recommendations" highlight />
-              <PlanFeature text="Wearable integration (coming soon)" />
-              <PlanFeature text="Community feed (coming soon)" />
-              <PlanFeature text="First access to new features" />
+              <PlanFeature text={isRTL ? 'كل ميزات Pro' : 'Everything in Pro'} highlight />
+              <PlanFeature text={isRTL ? 'تجربة مجانية 7 أيام' : '7-day free trial'} />
+              <PlanFeature text={isRTL ? 'توقع موعد الوصول للهدف' : 'Goal timeline prediction'} highlight />
+              <PlanFeature text={isRTL ? 'تقرير تكوين الجسم الأسبوعي' : 'Weekly body composition report'} highlight />
+              <PlanFeature text={isRTL ? 'توصيات المكملات' : 'Supplement recommendations'} highlight />
+              <PlanFeature text={isRTL ? 'ربط الأجهزة القابلة للارتداء (قريباً)' : 'Wearable integration (coming soon)'} />
+              <PlanFeature text={isRTL ? 'المجتمع (قريباً)' : 'Community feed (coming soon)'} />
+              <PlanFeature text={isRTL ? 'وصول مبكر للميزات الجديدة' : 'First access to new features'} />
             </div>
 
             <button
@@ -326,11 +402,11 @@ export default function PricingPage() {
               }}
             >
               {!eliteAvailable ? (
-                <>COMING SOON</>
+                <>{copy.comingSoon}</>
               ) : loading === elitePrice.variantId ? (
-                <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} /> LOADING...</>
+                <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} /> {copy.loading}</>
               ) : (
-                <>START FREE TRIAL <ChevronRight size={14} /></>
+                <>{copy.startTrial} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} /></>
               )}
             </button>
           </div>
@@ -340,25 +416,25 @@ export default function PricingPage() {
         <div className="grid sm:grid-cols-3 gap-4 mb-14">
           <TrustCard
             icon={<Shield size={20} style={{ color: '#10B981' }} />}
-            title="Zero-Charge Trial"
-            desc="Cancel before day 7 and you will never be billed. Not a single riyal. Our guarantee."
+            title={copy.zeroTrial}
+            desc={copy.zeroDesc}
           />
           <TrustCard
             icon={<Lock size={20} style={{ color: '#BB5CF6' }} />}
-            title="Secure Payments"
-            desc="Powered by Lemon Squeezy. All transactions encrypted. No card data stored on our servers."
+            title={copy.securePayments}
+            desc={copy.secureDesc}
           />
           <TrustCard
             icon={<Star size={20} style={{ color: '#F59E0B' }} />}
-            title="Cancel Anytime"
-            desc="No contracts. No cancellation fees. One click to cancel from Settings > Billing."
+            title={copy.cancelAnytime}
+            desc={copy.cancelDesc}
           />
         </div>
 
         {/* Full feature comparison table */}
         <div className="mb-16">
           <p className="font-heading font-black text-sm text-white text-center mb-8 tracking-wider" style={{ letterSpacing: '0.1em' }}>
-            FULL FEATURE COMPARISON
+            {copy.fullComparison}
           </p>
 
           <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -377,11 +453,11 @@ export default function PricingPage() {
               <div key={row.label} className="grid grid-cols-4 gap-0"
                 style={{ background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)', borderBottom: idx < TABLE_ROWS.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
                 <div className="p-4 flex items-center">
-                  <span className="font-heading text-xs" style={{ color: '#94A3B8' }}>{row.label}</span>
+                  <span className="font-heading text-xs" style={{ color: '#94A3B8' }}>{isRTL ? row.labelAr : row.label}</span>
                 </div>
                 {([row.starter, row.pro, row.elite] as RowVal[]).map((val, ci) => (
                   <div key={ci} className="p-4 flex items-center justify-center">
-                    <TableCell value={val} />
+                    <TableCell value={val} isRTL={isRTL} />
                   </div>
                 ))}
               </div>
@@ -392,36 +468,36 @@ export default function PricingPage() {
         {/* FAQ */}
         <div className="max-w-2xl mx-auto">
           <p className="font-heading font-black text-sm text-white text-center mb-6 tracking-wider" style={{ letterSpacing: '0.1em' }}>
-            FREQUENTLY ASKED QUESTIONS
+            {isRTL ? 'الأسئلة الشائعة' : 'FREQUENTLY ASKED QUESTIONS'}
           </p>
           <div className="flex flex-col gap-4">
             <FAQ
-              q="Will I be charged if I cancel during the trial?"
-              a="Absolutely not. If you cancel before day 7 of your trial, you will never be charged. You'll get a confirmation from Ion the moment you cancel."
+              q={isRTL ? 'هل سيتم الخصم إذا ألغيت أثناء التجربة؟' : 'Will I be charged if I cancel during the trial?'}
+              a={isRTL ? 'لا. إذا ألغيت قبل اليوم السابع فلن يتم خصم أي مبلغ، وستصلك رسالة تأكيد من Ion فور الإلغاء.' : "Absolutely not. If you cancel before day 7 of your trial, you will never be charged. You'll get a confirmation from Ion the moment you cancel."}
             />
             <FAQ
-              q="What happens when the trial ends?"
-              a="On day 7, your chosen plan activates and you're billed the full amount. Ion will remind you on days 5 and 6 so you have time to decide."
+              q={isRTL ? 'ماذا يحدث عند انتهاء التجربة؟' : 'What happens when the trial ends?'}
+              a={isRTL ? 'في اليوم السابع تبدأ الخطة التي اخترتها ويتم الخصم. Ion يذكرك في اليومين الخامس والسادس حتى تقرر براحتك.' : "On day 7, your chosen plan activates and you're billed the full amount. Ion will remind you on days 5 and 6 so you have time to decide."}
             />
             <FAQ
-              q="What does Elite have that Pro doesn't?"
-              a="Elite adds three powerful features: Goal Timeline Prediction (Ion tells you exactly when you'll hit your goal), Weekly Body Composition Reports (every Friday, full analysis delivered to your inbox), and Supplement Recommendations (personalised to your diet gaps and training, with local Saudi suppliers)."
+              q={isRTL ? 'ما الذي تضيفه Elite عن Pro؟' : "What does Elite have that Pro doesn't?"}
+              a={isRTL ? 'Elite تضيف توقع موعد الوصول للهدف، تقرير تكوين الجسم الأسبوعي، وتوصيات مكملات مخصصة حسب غذائك وتمرينك مع أماكن شراء مناسبة في السعودية.' : "Elite adds three powerful features: Goal Timeline Prediction (Ion tells you exactly when you'll hit your goal), Weekly Body Composition Reports (every Friday, full analysis delivered to your inbox), and Supplement Recommendations (personalised to your diet gaps and training, with local Saudi suppliers)."}
             />
             <FAQ
-              q="Can I switch between plans?"
-              a="Yes. Upgrade or downgrade anytime from Settings > Billing. Changes take effect on your next billing cycle."
+              q={isRTL ? 'هل يمكنني تغيير الخطة؟' : 'Can I switch between plans?'}
+              a={isRTL ? 'نعم. يمكنك الترقية أو التخفيض من الإعدادات > الفوترة، وتطبق التغييرات في دورة الفوترة التالية.' : 'Yes. Upgrade or downgrade anytime from Settings > Billing. Changes take effect on your next billing cycle.'}
             />
             <FAQ
-              q="Is SAR the only currency?"
-              a="No. We automatically detect your location and show a converted price. Checkout is available in your preferred currency."
+              q={isRTL ? 'هل الريال السعودي هو العملة الوحيدة؟' : 'Is SAR the only currency?'}
+              a={isRTL ? 'لا. نكتشف موقعك تلقائياً ونظهر السعر المحول، والدفع متاح بالعملة المناسبة لك.' : 'No. We automatically detect your location and show a converted price. Checkout is available in your preferred currency.'}
             />
             <FAQ
-              q="What payment methods are accepted?"
-              a="All major credit and debit cards (Visa, Mastercard, Mada), Apple Pay, and local payment methods - all handled securely by Lemon Squeezy."
+              q={isRTL ? 'ما طرق الدفع المقبولة؟' : 'What payment methods are accepted?'}
+              a={isRTL ? 'نقبل البطاقات الرئيسية مثل Visa وMastercard وMada وApple Pay وطرق الدفع المحلية، وكلها تتم بأمان عبر Lemon Squeezy.' : 'All major credit and debit cards (Visa, Mastercard, Mada), Apple Pay, and local payment methods - all handled securely by Lemon Squeezy.'}
             />
             <FAQ
-              q="Can I cancel anytime?"
-              a="Yes - no contracts, no cancellation fees, no questions asked. One click in Settings > Billing. If you cancel during the trial, you owe nothing."
+              q={isRTL ? 'هل يمكنني الإلغاء في أي وقت؟' : 'Can I cancel anytime?'}
+              a={isRTL ? 'نعم، بدون عقود أو رسوم إلغاء. من الإعدادات > الفوترة. إذا ألغيت أثناء التجربة فلن تدفع شيئاً.' : 'Yes - no contracts, no cancellation fees, no questions asked. One click in Settings > Billing. If you cancel during the trial, you owe nothing.'}
             />
           </div>
         </div>
@@ -456,10 +532,13 @@ function PlanFeatureMissing({ text }: { text: string }) {
   )
 }
 
-function TableCell({ value }: { value: RowVal }) {
+function TableCell({ value, isRTL }: { value: RowVal; isRTL: boolean }) {
   if (value === true)  return <Check size={15} style={{ color: '#BB5CF6' }} />
   if (value === false) return <X    size={15} style={{ color: '#1E293B' }} />
-  return <span className="font-heading text-xs font-bold" style={{ color: value === 'Unlimited' ? '#BB5CF6' : '#64748B' }}>{value}</span>
+  const text = isRTL
+    ? value === 'Unlimited' ? 'غير محدود' : value === 'Coming Soon' ? 'قريباً' : value
+    : value
+  return <span className="font-heading text-xs font-bold" style={{ color: value === 'Unlimited' ? '#BB5CF6' : '#64748B' }}>{text}</span>
 }
 
 function TrustCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {

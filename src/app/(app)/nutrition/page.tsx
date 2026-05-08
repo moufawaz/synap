@@ -7,6 +7,7 @@ import IonAvatar from '@/components/ui/IonAvatar'
 import { RecipeButton } from '@/components/ui/RecipeModal'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import type { FoodProduct } from '@/components/ui/BarcodeScanner'
+import { useLanguage } from '@/lib/useLanguage'
 
 const FoodPhotoScanner = lazy(() => import('@/components/ui/FoodPhotoScanner'))
 
@@ -56,6 +57,7 @@ function saveWater(n: number) {
 }
 
 export default function NutritionPage() {
+  const { isRTL } = useLanguage()
   const [plan,              setPlan]              = useState<any>(null)
   const [gender,            setGender]            = useState<'male' | 'female'>('male')
   const [checkedMeals,      setCheckedMeals]      = useState<Set<number>>(new Set())
@@ -295,7 +297,7 @@ export default function NutritionPage() {
   if (!plan)   return <NoPlanState gender={gender} />
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 py-6 max-w-3xl mx-auto">
+    <div className="min-h-screen px-4 sm:px-6 py-6 max-w-3xl mx-auto" dir={isRTL ? 'rtl' : 'ltr'}>
 
       {/* Food photo scanner overlay */}
       {scannerOpen && (
@@ -315,11 +317,11 @@ export default function NutritionPage() {
       />
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#F97316', letterSpacing: '0.14em' }}>NUTRITION PLAN</p>
+          <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#F97316', letterSpacing: '0.14em' }}>{isRTL ? 'خطة التغذية' : 'NUTRITION PLAN'}</p>
           <h1 className="font-heading font-black text-2xl text-white tracking-wider" style={{ letterSpacing: '0.06em' }}>
-            Today&apos;s Meals
+            {isRTL ? 'وجبات اليوم' : "Today's Meals"}
           </h1>
           <p className="font-heading text-sm mt-1" style={{ color: '#475569' }}>
             {plan.daily_calories} kcal - {plan.macros?.protein_g || plan.protein_g}g protein
@@ -330,7 +332,7 @@ export default function NutritionPage() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-heading font-bold text-xs tracking-wider flex-shrink-0 mt-1"
           style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)', color: '#F97316' }}
         >
-          <Camera size={14} /> PHOTO SCAN
+          <Camera size={14} /> {isRTL ? 'تصوير الطعام' : 'PHOTO SCAN'}
         </button>
       </div>
 

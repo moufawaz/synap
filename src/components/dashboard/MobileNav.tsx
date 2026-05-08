@@ -5,15 +5,16 @@ import { usePathname } from 'next/navigation'
 import { LayoutDashboard, MessageCircle, Flame, UtensilsCrossed, TrendingUp } from 'lucide-react'
 
 const NAV = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Home' },
-  { href: '/chat', icon: MessageCircle, label: 'Chat' },
-  { href: '/workout/today', icon: Flame, label: 'Train' },
-  { href: '/nutrition', icon: UtensilsCrossed, label: 'Nutrition' },
-  { href: '/progress', icon: TrendingUp, label: 'Progress' },
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Home', labelAr: 'الرئيسية' },
+  { href: '/chat', icon: MessageCircle, label: 'Chat', labelAr: 'المحادثة' },
+  { href: '/workout/today', icon: Flame, label: 'Train', labelAr: 'التمرين' },
+  { href: '/nutrition', icon: UtensilsCrossed, label: 'Nutrition', labelAr: 'التغذية' },
+  { href: '/progress', icon: TrendingUp, label: 'Progress', labelAr: 'التقدم' },
 ]
 
-export default function MobileNav() {
+export default function MobileNav({ lang = 'en' }: { lang?: 'en' | 'ar' }) {
   const pathname = usePathname()
+  const isRTL = lang === 'ar'
 
   return (
     <nav
@@ -39,7 +40,7 @@ export default function MobileNav() {
           >
             <item.icon size={20} />
             <span className="font-heading text-[9px] font-semibold tracking-wider" style={{ letterSpacing: '0.08em' }}>
-              {item.label.toUpperCase()}
+              {isRTL ? item.labelAr : item.label.toUpperCase()}
             </span>
           </Link>
         )

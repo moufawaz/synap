@@ -39,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="flex-1 min-w-0 pb-20 md:pb-0">
         {children}
       </main>
-      <MobileNav />
+      <MobileNav lang={lang} />
       <AdaptationChecker />
       <OneSignalInit userId={user.id} />
     </div>

@@ -52,6 +52,7 @@ export default async function DashboardPage() {
 
   if (!profile) redirect('/onboarding')
 
+  const isRTL = profile.language === 'ar'
   const isLaunchMode = process.env.LAUNCH_MODE === 'true'
   const plan = effectivePlan(subscription)
   const isTrial = subscription?.status === 'trial'
@@ -77,11 +78,13 @@ export default async function DashboardPage() {
   const todayMeals = dietPlan?.meals || []
 
   const greetingHour = new Date().getHours()
-  const greeting = greetingHour < 12 ? 'GOOD MORNING' : greetingHour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING'
+  const greeting = isRTL
+    ? (greetingHour < 12 ? 'صباح الخير' : greetingHour < 17 ? 'مساء الخير' : 'مساء الخير')
+    : (greetingHour < 12 ? 'GOOD MORNING' : greetingHour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING')
   const hasInbody = !!profile?.inbody_url
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 py-6 max-w-4xl mx-auto pb-24 md:pb-6 relative">
+    <div className="min-h-screen px-4 sm:px-6 py-6 max-w-4xl mx-auto pb-24 md:pb-6 relative" dir={isRTL ? 'rtl' : 'ltr'}>
 
       {/* Ambient hero glow */}
       <div
@@ -93,7 +96,7 @@ export default async function DashboardPage() {
       {isLaunchMode && (
         <Banner color={C.pulse} icon={<Zap size={14} />} bg="rgba(16,137,129,0.06)" border="rgba(16,137,129,0.2)">
           <p className="font-heading text-xs" style={{ color: C.pulse }}>
-            <strong>LAUNCH SPECIAL:</strong> All features unlocked for free during launch.
+            {isRTL ? <><strong>وصول الإطلاق:</strong> كل الميزات مفتوحة مجاناً أثناء فترة الإطلاق.</> : <><strong>LAUNCH SPECIAL:</strong> All features unlocked for free during launch.</>}
           </p>
         </Banner>
       )}
@@ -118,10 +121,10 @@ export default async function DashboardPage() {
               <Shield size={14} style={{ color: trialDaysLeft <= 1 ? C.danger : trialDaysLeft <= 2 ? C.alert : C.spark }} />
               <div>
                 <p className="font-heading font-bold text-xs text-white tracking-wider">
-                  FREE TRIAL - {trialDaysLeft} DAY{trialDaysLeft !== 1 ? 'S' : ''} LEFT
+                  {isRTL ? `التجربة المجانية - متبقي ${trialDaysLeft} يوم` : `FREE TRIAL - ${trialDaysLeft} DAY${trialDaysLeft !== 1 ? 'S' : ''} LEFT`}
                 </p>
                 <p className="font-heading text-[10px] mt-0.5" style={{ color: C.silverDim }}>
-                  Cancel before day 7 = zero charges. Tap to manage billing.
+                  {isRTL ? 'الإلغاء قبل اليوم السابع يعني بدون أي رسوم. اضغط لإدارة الفوترة.' : 'Cancel before day 7 = zero charges. Tap to manage billing.'}
                 </p>
               </div>
             </div>
@@ -139,9 +142,9 @@ export default async function DashboardPage() {
             <div className="flex items-center gap-2.5">
               <FileText size={14} style={{ color: C.alert }} />
               <div>
-                <p className="font-heading font-bold text-xs text-white tracking-wider">ADD YOUR INBODY SCAN</p>
+                <p className="font-heading font-bold text-xs text-white tracking-wider">{isRTL ? 'أضف فحص InBody' : 'ADD YOUR INBODY SCAN'}</p>
                 <p className="font-heading text-[10px] mt-0.5" style={{ color: C.silverDim }}>
-                  Unlock more accurate calorie &amp; protein targets from Ion.
+                  {isRTL ? 'افتح أهداف سعرات وبروتين أدق من Ion.' : 'Unlock more accurate calorie & protein targets from Ion.'}
                 </p>
               </div>
             </div>
@@ -149,7 +152,7 @@ export default async function DashboardPage() {
               className="font-heading font-bold text-[10px] px-2.5 py-1 rounded-lg shrink-0 tracking-widest"
               style={{ background: 'rgba(245,158,11,0.1)', color: C.alert, border: '1px solid rgba(245,158,11,0.22)' }}
             >
-              ADD
+              {isRTL ? 'إضافة' : 'ADD'}
             </span>
           </div>
         </Link>
@@ -164,9 +167,9 @@ export default async function DashboardPage() {
             <div className="flex items-center gap-2.5">
               <Crown size={14} style={{ color: C.spark }} />
               <div>
-                <p className="font-heading font-bold text-xs text-white tracking-wider">YOU&apos;RE ON THE STARTER PLAN</p>
+                <p className="font-heading font-bold text-xs text-white tracking-wider">{isRTL ? 'أنت على خطة Starter' : 'YOU\'RE ON THE STARTER PLAN'}</p>
                 <p className="font-heading text-[10px] mt-0.5" style={{ color: C.silverDim }}>
-                  5 messages/day for 7 days, then pause. Upgrade to Pro or Elite for unlimited.
+                  {isRTL ? '5 رسائل يومياً لمدة 7 أيام، ثم تتوقف. ارفع إلى Pro أو Elite للرسائل غير المحدودة.' : '5 messages/day for 7 days, then pause. Upgrade to Pro or Elite for unlimited.'}
                 </p>
               </div>
             </div>
@@ -179,7 +182,7 @@ export default async function DashboardPage() {
                 boxShadow: '0 0 12px rgba(187,92,246,0.4)',
               }}
             >
-              UPGRADE
+              {isRTL ? 'ترقية' : 'UPGRADE'}
             </span>
           </div>
         </Link>
@@ -192,7 +195,7 @@ export default async function DashboardPage() {
         >
           <Crown size={13} style={{ color: C.spark }} />
           <p className="font-heading text-xs font-semibold" style={{ color: C.sparkLight }}>
-            Elite member - weekly reports, supplement stack &amp; goal predictions active
+            {isRTL ? 'عضوية Elite فعالة - التقارير الأسبوعية والمكملات وتوقعات الهدف مفعلة' : 'Elite member - weekly reports, supplement stack & goal predictions active'}
           </p>
         </div>
       )}
@@ -244,7 +247,7 @@ export default async function DashboardPage() {
                     className="font-heading font-bold text-[11px]"
                     style={{ color: C.sparkLight, letterSpacing: '0.18em' }}
                   >
-                    ION SAYS
+                    {isRTL ? 'ION يقول' : 'ION SAYS'}
                   </p>
                 </div>
                 <p className="font-heading text-sm leading-relaxed line-clamp-2" style={{ color: '#CBD5E1' }}>
@@ -258,17 +261,17 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <StatCard icon={<Target size={16} />} label="GOAL"      value={goalLabel(profile.goal)}                        color={C.spark} />
-        <StatCard icon={<Flame size={16} />}  label="CALORIES"  value={totalCalories ? `${totalCalories} kcal` : '-'}  color={C.flame} />
+        <StatCard icon={<Target size={16} />} label={isRTL ? 'الهدف' : 'GOAL'} value={goalLabel(profile.goal, isRTL)} color={C.spark} />
+        <StatCard icon={<Flame size={16} />}  label={isRTL ? 'السعرات' : 'CALORIES'}  value={totalCalories ? `${totalCalories} kcal` : '-'}  color={C.flame} />
         <StatCard
           icon={<Dumbbell size={16} />}
-          label="THIS WEEK"
+          label={isRTL ? 'هذا الأسبوع' : 'THIS WEEK'}
           value={`${weeklyWorkouts.length} / ${profile.training_days || '?'}`}
           color={C.sparkLight}
         />
         <StatCard
           icon={<TrendingUp size={16} />}
-          label="WEIGHT"
+          label={isRTL ? 'الوزن' : 'WEIGHT'}
           value={currentWeight ? `${currentWeight} kg` : '-'}
           sub={weightDelta ? `${Number(weightDelta) > 0 ? '+' : ''}${weightDelta} kg` : undefined}
           subColor={
@@ -290,9 +293,9 @@ export default async function DashboardPage() {
               <div className="flex items-center gap-2.5">
                 <IconBadge color={C.spark} icon={<Dumbbell size={14} />} />
                 <div>
-                  <p className="font-heading font-bold text-[11px]" style={{ color: C.sparkLight, letterSpacing: '0.18em' }}>TODAY</p>
+                  <p className="font-heading font-bold text-[11px]" style={{ color: C.sparkLight, letterSpacing: '0.18em' }}>{isRTL ? 'اليوم' : 'TODAY'}</p>
                   <p className="font-heading font-bold text-sm text-white" style={{ letterSpacing: '0.04em' }}>
-                    {workoutPlan?.name || 'Workout'}
+                    {workoutPlan?.name || (isRTL ? 'التمرين' : 'Workout')}
                   </p>
                 </div>
               </div>
@@ -301,9 +304,9 @@ export default async function DashboardPage() {
 
             {isRestDay ? (
               <div className="flex flex-col items-center justify-center py-6 gap-2">
-                <div className="text-3xl">REST</div>
-                <p className="font-heading font-bold text-white" style={{ letterSpacing: '0.14em' }}>REST DAY</p>
-                <p className="font-heading text-xs" style={{ color: C.silverDeep }}>Recovery is part of the plan</p>
+                <div className="text-3xl">{isRTL ? 'راحة' : 'REST'}</div>
+                <p className="font-heading font-bold text-white" style={{ letterSpacing: '0.14em' }}>{isRTL ? 'يوم راحة' : 'REST DAY'}</p>
+                <p className="font-heading text-xs" style={{ color: C.silverDeep }}>{isRTL ? 'الاستشفاء جزء من الخطة' : 'Recovery is part of the plan'}</p>
               </div>
             ) : (
               <div>
@@ -323,7 +326,7 @@ export default async function DashboardPage() {
                   ))}
                   {(todayWorkout.exercises || []).length > 4 && (
                     <p className="font-heading text-xs text-center" style={{ color: C.silverDeep }}>
-                      +{todayWorkout.exercises.length - 4} more exercises
+                      {isRTL ? `${todayWorkout.exercises.length - 4}+ تمارين إضافية` : `+${todayWorkout.exercises.length - 4} more exercises`}
                     </p>
                   )}
                 </div>
@@ -339,9 +342,9 @@ export default async function DashboardPage() {
               <div className="flex items-center gap-2.5">
                 <IconBadge color={C.flame} icon={<UtensilsCrossed size={14} />} />
                 <div>
-                  <p className="font-heading font-bold text-[11px]" style={{ color: C.flame, letterSpacing: '0.18em' }}>NUTRITION</p>
+                  <p className="font-heading font-bold text-[11px]" style={{ color: C.flame, letterSpacing: '0.18em' }}>{isRTL ? 'التغذية' : 'NUTRITION'}</p>
                   <p className="font-heading font-bold text-sm text-white" style={{ letterSpacing: '0.04em' }}>
-                    {totalCalories ? `${totalCalories} kcal` : 'Diet Plan'}
+                    {totalCalories ? `${totalCalories} kcal` : (isRTL ? 'خطة التغذية' : 'Diet Plan')}
                   </p>
                 </div>
               </div>
@@ -349,9 +352,9 @@ export default async function DashboardPage() {
             </div>
 
             <div className="flex flex-col gap-3 mb-4">
-              <MacroBar label="PROTEIN" value={totalProtein} max={totalProtein || 100} color={C.spark}      unit="g" />
-              <MacroBar label="CARBS"   value={totalCarbs}   max={totalCarbs   || 100} color={C.flame}      unit="g" />
-              <MacroBar label="FAT"     value={totalFat}     max={totalFat     || 100} color={C.sparkLight} unit="g" />
+              <MacroBar label={isRTL ? 'البروتين' : 'PROTEIN'} value={totalProtein} max={totalProtein || 100} color={C.spark}      unit="g" />
+              <MacroBar label={isRTL ? 'الكارب' : 'CARBS'}   value={totalCarbs}   max={totalCarbs   || 100} color={C.flame}      unit="g" />
+              <MacroBar label={isRTL ? 'الدهون' : 'FAT'}     value={totalFat}     max={totalFat     || 100} color={C.sparkLight} unit="g" />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -367,7 +370,7 @@ export default async function DashboardPage() {
               ))}
               {todayMeals.length > 3 && (
                 <p className="font-heading text-xs text-center" style={{ color: C.silverDeep }}>
-                  +{todayMeals.length - 3} more meals
+                  {isRTL ? `${todayMeals.length - 3}+ وجبات إضافية` : `+${todayMeals.length - 3} more meals`}
                 </p>
               )}
             </div>
@@ -383,7 +386,7 @@ export default async function DashboardPage() {
                 <div className="flex items-center gap-2.5">
                   <IconBadge color={C.spark} icon={<TrendingUp size={14} />} />
                   <p className="font-heading font-bold text-sm text-white" style={{ letterSpacing: '0.14em' }}>
-                    WEIGHT TREND
+                    {isRTL ? 'اتجاه الوزن' : 'WEIGHT TREND'}
                   </p>
                 </div>
                 <ChevronRight size={14} style={{ color: C.silverDeep }} className="group-hover:translate-x-0.5 transition-transform" />
@@ -395,9 +398,9 @@ export default async function DashboardPage() {
       )}
 
       <div className="mt-5 grid grid-cols-3 gap-3">
-        <QuickAction href="/chat"          icon={<Zap size={18} />}        label="ASK ION"        color={C.spark} />
-        <QuickAction href="/measurements"  icon={<TrendingUp size={18} />} label="LOG WEIGHT"     color={C.pulse} />
-        <QuickAction href="/workout/today" icon={<Dumbbell size={18} />}   label="START TRAINING" color={C.flame} />
+        <QuickAction href="/chat"          icon={<Zap size={18} />}        label={isRTL ? 'اسأل ION' : 'ASK ION'}        color={C.spark} />
+        <QuickAction href="/measurements"  icon={<TrendingUp size={18} />} label={isRTL ? 'سجل الوزن' : 'LOG WEIGHT'}     color={C.pulse} />
+        <QuickAction href="/workout/today" icon={<Dumbbell size={18} />}   label={isRTL ? 'ابدأ التمرين' : 'START TRAINING'} color={C.flame} />
       </div>
     </div>
   )
@@ -564,12 +567,20 @@ function QuickAction({
   )
 }
 
-function goalLabel(goal: string): string {
-  return ({
+function goalLabel(goal: string, isRTL = false): string {
+  const en = {
     lose_fat: 'Lose Fat',
     build_muscle: 'Build Muscle',
     recomposition: 'Recomp',
     improve_fitness: 'Fitness',
     be_healthier: 'Health',
-  } as Record<string, string>)[goal] || goal
+  } as Record<string, string>
+  const ar = {
+    lose_fat: 'خسارة الدهون',
+    build_muscle: 'بناء العضلات',
+    recomposition: 'إعادة تركيب',
+    improve_fitness: 'لياقة أفضل',
+    be_healthier: 'صحة أفضل',
+  } as Record<string, string>
+  return (isRTL ? ar : en)[goal] || goal
 }

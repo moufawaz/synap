@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { Send, Sparkles, Dumbbell, Utensils, TrendingUp, AlertCircle, Zap, CheckCircle, Clock } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase'
+import { useLanguage } from '@/lib/useLanguage'
 
 const PLAN_MODIFY_WINDOW_DAYS = 30
 
@@ -31,7 +32,19 @@ const QUICK_PROMPTS = [
   "I'm feeling sore",
 ]
 
+const QUICK_PROMPTS_AR = [
+  'كيف أتقدم؟',
+  'عدّل سعراتي',
+  'فاتني تمرين',
+  'أشعر بالتعب',
+  'اشرح تقسيم التمرين',
+  'أفضل وقت للبروتين؟',
+  'أريد تغيير هدفي',
+  'أشعر بآلام عضلية',
+]
+
 export default function ChatPage() {
+  const { isRTL } = useLanguage()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -39,6 +52,7 @@ export default function ChatPage() {
   const [planDaysLeft, setPlanDaysLeft] = useState<number | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const quickPrompts = isRTL ? QUICK_PROMPTS_AR : QUICK_PROMPTS
 
   useEffect(() => { loadHistory() }, [])
 
@@ -120,7 +134,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: '#080808' }}>
+    <div className="flex flex-col h-screen" style={{ background: '#080808' }} dir={isRTL ? 'rtl' : 'ltr'}>
 
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#0A0A14' }}>
@@ -129,7 +143,7 @@ export default function ChatPage() {
           <p className="font-heading font-bold text-sm text-white tracking-wider" style={{ letterSpacing: '0.08em' }}>ION</p>
           <p className="font-heading text-xs" style={{ color: '#10B981' }}>● Always available</p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className={`${isRTL ? 'mr-auto' : 'ml-auto'} flex items-center gap-2`}>
           <button
             onClick={() => sendMessage("Run my daily adaptation check")}
             className="flex items-center gap-1 px-2.5 py-1 rounded-lg font-heading text-xs font-semibold transition-all"
@@ -178,7 +192,7 @@ export default function ChatPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center max-w-sm">
-              {QUICK_PROMPTS.map(p => (
+              {quickPrompts.map(p => (
                 <button
                   key={p}
                   onClick={() => sendMessage(p)}
@@ -193,7 +207,7 @@ export default function ChatPage() {
         )}
 
         {messages.map(msg => (
-          <MessageBubble key={msg.id} msg={msg} gender={profileGender} onPrompt={sendMessage} />
+          <MessageBubble key={msg.id} msg={msg} gender={profileGender} onPrompt={sendMessage} isRTL={isRTL} />
         ))}
 
         {loading && (
@@ -212,7 +226,7 @@ export default function ChatPage() {
       {/* Quick prompts rail */}
       {messages.length > 0 && (
         <div className="px-4 pb-2 flex gap-2 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
-          {QUICK_PROMPTS.slice(0, 4).map(p => (
+          {quickPrompts.slice(0, 4).map(p => (
             <button
               key={p}
               onClick={() => sendMessage(p)}
@@ -232,7 +246,7 @@ export default function ChatPage() {
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="Ask Ion anything..."
+            placeholder={isRTL ? 'اسأل Ion أي شيء...' : 'Ask Ion anything...'}
             className="flex-1 rounded-xl px-4 py-3 text-sm font-heading outline-none transition-all"
             style={{ background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.07)', color: '#F0F0FF' }}
             onFocus={e => { e.target.style.borderColor = 'rgba(187,92,246,0.45)' }}
@@ -257,18 +271,23 @@ export default function ChatPage() {
 }
 
 // ── Rich Message Bubble ────────────────────────────────
-function MessageBubble({ msg, gender, onPrompt }: { msg: Message; gender: 'male' | 'female'; onPrompt: (t: string) => void }) {
+function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender: 'male' | 'female'; onPrompt: (t: string) => void; isRTL: boolean }) {
   const isUser = msg.role === 'user'
   const type = msg.message_type || 'text'
 
   if (isUser) {
     return (
-      <div className="flex items-end gap-2.5 flex-row-reverse chat-bubble">
+      <div className={`flex items-end gap-2.5 chat-bubble ${isRTL ? 'justify-start' : 'flex-row-reverse'}`}>
         <div
           className="max-w-[78%] sm:max-w-[65%] rounded-2xl px-4 py-3"
-          style={{ background: 'rgba(187,92,246,0.15)', border: '1px solid rgba(187,92,246,0.25)', borderBottomRightRadius: '4px' }}
+           style={{
+             background: 'rgba(187,92,246,0.15)',
+             border: '1px solid rgba(187,92,246,0.25)',
+             borderBottomRightRadius: isRTL ? '1rem' : '4px',
+             borderBottomLeftRadius: isRTL ? '4px' : '1rem',
+           }}
         >
-          <p className="font-heading text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#F0F0FF' }}>
+          <p className="font-heading text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#F0F0FF', textAlign: isRTL ? 'right' : 'left' }}>
             {msg.content}
           </p>
         </div>
@@ -291,14 +310,16 @@ function MessageBubble({ msg, gender, onPrompt }: { msg: Message; gender: 'male'
   const isCard = type !== 'text'
 
   return (
-    <div className="flex items-end gap-2.5 chat-bubble">
+    <div className={`flex items-end gap-2.5 chat-bubble ${isRTL ? 'flex-row-reverse' : ''}`}>
       <IonAvatar gender={gender} size="sm" />
       <div
         className="max-w-[78%] sm:max-w-[72%] rounded-2xl px-4 py-3"
+        dir="auto"
         style={{
           background: style.bg,
           border: `1px solid ${style.border}`,
-          borderBottomLeftRadius: '4px',
+          borderBottomLeftRadius: isRTL ? '1rem' : '4px',
+          borderBottomRightRadius: isRTL ? '4px' : '1rem',
         }}
       >
         {/* Card label */}
@@ -311,7 +332,7 @@ function MessageBubble({ msg, gender, onPrompt }: { msg: Message; gender: 'male'
           </div>
         )}
 
-        <p className="font-heading text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#F0F0FF' }}>
+        <p className="font-heading text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#F0F0FF', textAlign: isRTL ? 'right' : 'left' }}>
           {msg.content}
         </p>
 
