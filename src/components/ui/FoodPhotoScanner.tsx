@@ -5,7 +5,7 @@ import { Camera, Upload, X, Check, RotateCcw, Loader2, AlertCircle } from 'lucid
 import type { FoodProduct } from '@/components/ui/BarcodeScanner'
 
 interface FoodPhotoScannerProps {
-  onScan: (product: FoodProduct, servingG: number) => void
+  onScan: (product: FoodProduct, servingG: number) => void | Promise<void>
   onClose: () => void
 }
 
@@ -30,6 +30,8 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
   const [customCarb, setCustomCarb]   = useState('')
   const [customFat, setCustomFat]     = useState('')
   const [editMode, setEditMode]       = useState(false)
+  const [logging, setLogging]         = useState(false)
+  const [logError, setLogError]       = useState('')
 
   // Convert File to base64 string (no data-URI prefix)
   const toBase64 = (file: File): Promise<string> =>
@@ -98,8 +100,10 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
     e.target.value = '' // reset so same file can be re-selected
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!result) return
+    setLogging(true)
+    setLogError('')
     const product = editMode ? {
       ...result.product,
       name:              customName || result.product.name,
@@ -108,8 +112,13 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
       carbs_per_100g:    parseFloat(customCarb) || result.product.carbs_per_100g,
       fat_per_100g:      parseFloat(customFat)  || result.product.fat_per_100g,
     } : result.product
-    onScan(product, servingG)
-    onClose()
+    try {
+      await onScan(product, servingG)
+      onClose()
+    } catch (err: any) {
+      setLogError(err?.message || 'Food could not be saved. Please try again.')
+      setLogging(false)
+    }
   }
 
   const reset = () => {
@@ -118,6 +127,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
     setStep('capture')
     setResult(null)
     setError('')
+    setLogError('')
     setEditMode(false)
   }
 
@@ -138,7 +148,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}
     >
       <div
@@ -372,11 +382,16 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
           >
             <button
               onClick={handleConfirm}
+              disabled={logging}
               className="w-full py-4 rounded-2xl font-heading font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-              style={{ background: '#F97316', color: 'white', boxShadow: '0 0 24px rgba(249,115,22,0.35)', letterSpacing: '0.08em' }}
+              style={{ background: logging ? '#9A3412' : '#F97316', color: 'white', boxShadow: '0 0 24px rgba(249,115,22,0.35)', letterSpacing: '0.08em' }}
             >
-              <Check size={16} /> LOG {servingG}g
+              {logging ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              {logging ? 'SAVING...' : `LOG ${servingG}g`}
             </button>
+            {logError && (
+              <p className="font-heading text-xs text-center mt-2" style={{ color: '#F87171' }}>{logError}</p>
+            )}
           </div>
         )}
 

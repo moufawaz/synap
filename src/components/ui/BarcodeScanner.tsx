@@ -210,7 +210,7 @@ export default function BarcodeScanner({ onScan, onClose }: Props) {
   const isLoading = scanState === 'loading' || scanState === 'analyzing'
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#080808' }}>
+    <div className="fixed inset-0 z-[90] flex flex-col" style={{ background: '#080808' }}>
 
       {/* Hidden file input for photo capture */}
       <input

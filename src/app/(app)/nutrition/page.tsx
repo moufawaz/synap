@@ -12,8 +12,15 @@ const FoodPhotoScanner = lazy(() => import('@/components/ui/FoodPhotoScanner'))
 
 export const dynamic = 'force-dynamic'
 
-// Per-day localStorage helpers
-const TODAY = new Date().toISOString().split('T')[0]
+// Per-day localStorage helpers. Use local date, not UTC, so late-night logs stay on the user's day.
+function localDateKey(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const TODAY = localDateKey()
 const CHECKED_KEY = `synap_nutrition_checked_${TODAY}`
 const SCANNED_KEY = `synap_nutrition_scanned_${TODAY}`
 const WATER_KEY   = `synap_nutrition_water_${TODAY}`
@@ -172,6 +179,7 @@ export default function NutritionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           meal_name:          meal.name || meal.meal_name,
+          date:               TODAY,
           meal_time:          meal.time,
           calories_estimated: meal.calories,
           protein_g:          meal.protein_g,
@@ -222,6 +230,7 @@ export default function NutritionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           meal_name:          `${item.name} - ${servingG}g`,
+          date:               TODAY,
           calories_estimated: item.calories,
           protein_g:          item.protein_g,
           carbs_g:            item.carbs_g,
@@ -229,12 +238,22 @@ export default function NutritionPage() {
         }),
       })
       const data = await res.json()
-      if (data.log?.id) item.dbId = data.log.id
-    } catch {}
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Food could not be saved.')
+      }
+      if (!data.log?.id) {
+        throw new Error('Food was not saved. Please try again.')
+      }
+      item.dbId = data.log.id
+    } catch (err) {
+      throw err instanceof Error ? err : new Error('Food could not be saved.')
+    }
 
-    const updated = [...scannedItems, item]
-    setScannedItems(updated)
-    saveScanned(updated)
+    setScannedItems(prev => {
+      const updated = [...prev, item]
+      saveScanned(updated)
+      return updated
+    })
   }
 
   async function removeScanned(id: string) {
