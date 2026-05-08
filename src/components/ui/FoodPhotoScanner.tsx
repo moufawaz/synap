@@ -59,6 +59,18 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
 
       const data = await res.json()
 
+      if (!res.ok) {
+        setError(
+          res.status === 401
+            ? 'Please log in again before using food photo scan.'
+            : res.status === 403
+              ? 'Food photo scan is available on Pro, Elite, or during launch access.'
+              : data.error || 'Ion could not read this image right now. Please try again.'
+        )
+        setStep('error')
+        return
+      }
+
       if (!data.product) {
         setError(data.reason || "Couldn't identify this food. Try a clearer photo of the packaging or nutrition label.")
         setStep('error')
@@ -355,8 +367,8 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
         {/* Footer CTA */}
         {step === 'result' && (
           <div
-            className="px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom)+96px)] sm:pb-6 flex-shrink-0"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+            className="sticky bottom-0 px-5 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-5 flex-shrink-0"
+            style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: '#0E0E0E' }}
           >
             <button
               onClick={handleConfirm}
