@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Exo_2, Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 
 // ─── SYNAP — Brand Typography System ─────────────────
 //  • Exo 2  → headings, display, UI labels
@@ -59,7 +60,10 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0A0A0A',
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#0A0A0A' },
+    { media: '(prefers-color-scheme: light)', color: '#F8FAFC' },
+  ],
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
@@ -67,9 +71,28 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${exo2.variable} ${inter.variable} ${jetbrains.variable}`}>
-      <body className="font-body antialiased bg-[#0A0A0A] text-[#E2E8F0] min-h-screen overflow-x-hidden">
+    <html lang="en" className={`${exo2.variable} ${inter.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+try {
+  var stored = localStorage.getItem('synap_theme');
+  var theme = stored === 'light' || stored === 'dark'
+    ? stored
+    : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.style.colorScheme = theme;
+} catch (_) {
+  document.documentElement.dataset.theme = 'dark';
+}
+            `.trim(),
+          }}
+        />
+      </head>
+      <body className="font-body antialiased min-h-screen overflow-x-hidden">
         {children}
+        <ThemeToggle />
       </body>
     </html>
   )
