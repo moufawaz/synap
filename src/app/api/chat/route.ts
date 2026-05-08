@@ -1,4 +1,4 @@
-﻿import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { canSendMessage, incrementMessageCount, isLaunchMode, getUserSubscription, effectivePlan } from '@/lib/subscription'
@@ -6,7 +6,7 @@ import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
 
 export async function POST(req: Request) {
-  // â”€â”€ Guard: API key must be set â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Guard: API key must be set
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     console.error('ANTHROPIC_API_KEY is not set')
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // â”€â”€ Check message limits (skip in launch mode) â”€â”€â”€â”€â”€â”€â”€â”€
+    // Check message limits (skip in launch mode)
     if (!isLaunchMode()) {
       const { allowed, used, limit, plan, reason } = await canSendMessage(user.id, user.created_at)
 
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
 
     const systemPrompt = buildSystemPrompt(profile, workoutPlan, dietPlan, planTier, measurements, workoutLogs, mealLogs)
 
-    // Build conversation history â€” Anthropic only accepts 'user' | 'assistant'
+    // Build conversation history. Anthropic only accepts 'user' | 'assistant'.
     const normalizedHistory: Anthropic.MessageParam[] = history
       .filter(h => h.role === 'user' || h.role === 'assistant' || h.role === 'ion')
       .map(h => ({
@@ -140,7 +140,6 @@ export async function POST(req: Request) {
       metadata: planEdit.applied ? { plan_edit: planEdit } : null,
     })
 
-    // â”€â”€ Increment message count (skip in launch mode) â”€â”€â”€â”€â”€
     if (!isLaunchMode()) {
       await incrementMessageCount(user.id).catch(() => {})
     }
@@ -336,7 +335,6 @@ function buildSystemPrompt(
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
-  // â”€â”€ Profile block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const profileBlock = profile ? `
 Name: ${profile.name}
 Age: ${profile.age} | Gender: ${profile.gender}
@@ -356,27 +354,22 @@ Stress: ${profile.stress_level || 'Not specified'} | Sleep quality: ${profile.sl
 Activity level: ${profile.activity_level || 'Not specified'}
 `.trim() : 'No profile loaded yet - introduce yourself and ask them to complete onboarding.'
 
-  // â”€â”€ Latest measurements block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const measureBlock = measurements.length > 0
     ? measurements.map(m => `${m.date}: ${m.weight_kg}kg${m.body_fat_pct ? `, ${m.body_fat_pct}% BF` : ''}${m.waist_cm ? `, waist ${m.waist_cm}cm` : ''}${m.chest_cm ? `, chest ${m.chest_cm}cm` : ''}${m.hips_cm ? `, hips ${m.hips_cm}cm` : ''}${m.bicep_left_cm ? `, L-bicep ${m.bicep_left_cm}cm` : ''}${m.bicep_right_cm ? ` R-bicep ${m.bicep_right_cm}cm` : ''}${m.thigh_left_cm ? `, L-thigh ${m.thigh_left_cm}cm` : ''}${m.thigh_right_cm ? ` R-thigh ${m.thigh_right_cm}cm` : ''}`).join('\n')
     : 'No measurements recorded yet.'
 
-  // â”€â”€ Workout log summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const workoutLogBlock = workoutLogs.length > 0
     ? workoutLogs.map(l => `${l.date}${l.day_name ? ` (${l.day_name})` : ''}: ${l.completion_pct ?? '?'}% complete${l.duration_min ? `, ${l.duration_min} min` : ''}`).join('\n')
     : 'No recent workout logs.'
 
-  // â”€â”€ Meal log summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const mealLogBlock = mealLogs.length > 0
     ? mealLogs.map(l => `${l.date} ${l.meal_time || ''}: ${l.description || 'logged'}${l.calories_estimated ? ` (~${l.calories_estimated} kcal` : ''}${l.protein_g ? `, ${l.protein_g}g protein` : ''}${l.calories_estimated ? ')' : ''}`).join('\n')
     : 'No recent meal logs.'
 
-  // â”€â”€ Diet plan summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const dietBlock = dietPlan
     ? `Daily targets: ${dietPlan.daily_calories} kcal | ${dietPlan.protein_g}g protein | ${dietPlan.carbs_g}g carbs | ${dietPlan.fat_g}g fat`
     : 'No diet plan yet.'
 
-  // â”€â”€ Workout plan summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const workoutBlock = workoutPlan
     ? JSON.stringify(workoutPlan, null, 2).slice(0, 2000)
     : 'No workout plan yet - encourage them to generate one.'

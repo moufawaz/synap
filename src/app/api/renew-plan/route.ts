@@ -6,7 +6,7 @@ import { sendPushNotification } from '@/lib/onesignal'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 
-// POST /api/renew-plan â€” called by the adaptation-check job when a plan is expiring
+// POST /api/renew-plan called by the adaptation-check job when a plan is expiring
 export async function POST(req: Request) {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -187,8 +187,8 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
       sendPushNotification({ userId: user.id, type: 'plan_renewal' }),
     ])
 
-    // â”€â”€ Supplement recommendations for Elite users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Fire-and-forget â€” don't block plan renewal response
+    // Supplement recommendations for Elite users.
+    // Fire-and-forget; do not block plan renewal response.
     generateSupplementRecsIfElite(supabase, client, user.id, profile, planJson, planType).catch(
       e => console.error('[renew-plan] supplement gen failed:', e)
     )
@@ -200,7 +200,7 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
   }
 }
 
-// â”€â”€ Supplement Recommendations (Elite only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Supplement recommendations (Elite only)
 async function generateSupplementRecsIfElite(
   supabase: any,
   client: Anthropic,

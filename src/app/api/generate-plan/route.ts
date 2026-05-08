@@ -6,7 +6,7 @@ import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { withAnthropicRetry } from '@/lib/anthropic'
 
 export async function POST(req: Request) {
-  // â”€â”€ Guard: API key must be set â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Guard: API key must be set
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     console.error('ANTHROPIC_API_KEY is not set')
@@ -32,8 +32,8 @@ export async function POST(req: Request) {
 
     const message = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-opus-4-5',
-      max_tokens: 16000,   // 8 000 was too low — full plans with recipes easily exceed it
-      system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only — no markdown, no explanation, no text before or after the JSON object.',
+      max_tokens: 16000,   // 8000 was too low; full plans with recipes easily exceed it
+      system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
     }))
 
@@ -41,12 +41,12 @@ export async function POST(req: Request) {
     const finishReason = message.stop_reason
     console.info('[generate-plan] finish_reason:', finishReason, '| tokens:', message.usage)
     if (finishReason === 'max_tokens') {
-      console.error('[generate-plan] Response was truncated â€” increase max_tokens further if this persists')
+      console.error('[generate-plan] Response was truncated; increase max_tokens further if this persists')
     }
 
     const rawContent = message.content[0].type === 'text' ? message.content[0].text : ''
 
-    // Extract JSON â€” try multiple strategies in order
+    // Extract JSON using multiple strategies in order
     let plan: any
     try {
       plan = extractJSON(rawContent)
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Ion returned an invalid plan format. Please try again.' }, { status: 500 })
     }
 
-    // â”€â”€ Enrich every exercise with a verified YouTube video ID â”€â”€
+    // Enrich every exercise with a verified YouTube video ID
     // Run all lookups in parallel (static-map hits are instant; dynamic
     // searches run concurrently so the total wait is ~one search, not N).
     const allExercises: any[] = (plan.workout_plan?.days || []).flatMap(
@@ -116,7 +116,7 @@ export async function POST(req: Request) {
       })
     }
 
-    // Send welcome email (fire-and-forget â€” don't block response)
+    // Send welcome email (fire-and-forget; do not block response)
     if (user.email) {
       sendEmail({
         to: user.email,
@@ -143,7 +143,7 @@ export async function POST(req: Request) {
   }
 }
 
-// â”€â”€ JSON extraction â€” multiple strategies â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// JSON extraction with multiple strategies
 function extractJSON(raw: string): any {
   // 1. Strip markdown code fences if present
   const stripped = raw
@@ -171,7 +171,7 @@ function extractJSON(raw: string): any {
       if (ch === '}')         { depth--
         if (depth === 0) {
           try { return JSON.parse(stripped.slice(start, i + 1)) } catch {}
-          break  // found the closing brace but it's still invalid â€” give up
+          break  // found the closing brace but it is still invalid; give up
         }
       }
     }

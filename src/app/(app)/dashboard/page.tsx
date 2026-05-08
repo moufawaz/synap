@@ -10,7 +10,6 @@ import { getTrialDaysRemaining, effectivePlan } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
 
-// â”€â”€â”€ Brand palette tokens (mirrors globals.css) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const C = {
   spark:       '#BB5CF6',
   sparkLight:  '#D88BFF',
@@ -91,7 +90,6 @@ export default async function DashboardPage() {
         style={{ background: 'radial-gradient(circle, rgba(187,92,246,0.10), transparent 60%)', filter: 'blur(60px)' }}
       />
 
-      {/* â”€â”€ Launch mode banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isLaunchMode && (
         <Banner color={C.pulse} icon={<Zap size={14} />} bg="rgba(16,137,129,0.06)" border="rgba(16,137,129,0.2)">
           <p className="font-heading text-xs" style={{ color: C.pulse }}>
@@ -100,7 +98,6 @@ export default async function DashboardPage() {
         </Banner>
       )}
 
-      {/* â”€â”€ Trial countdown banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isTrial && trialDaysLeft !== null && !isLaunchMode && (
         <Link href="/settings?tab=billing">
           <div
@@ -133,7 +130,6 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* â”€â”€ InBody reminder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {!hasInbody && (
         <Link href="/measurements">
           <div
@@ -159,7 +155,6 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* â”€â”€ Upgrade CTA (Starter) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isStarter && (
         <Link href="/pricing">
           <div
@@ -190,7 +185,6 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* â”€â”€ Elite badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isElite && !isLaunchMode && (
         <div
           className="mb-5 p-3 rounded-2xl flex items-center gap-2.5"
@@ -203,7 +197,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex items-center justify-between mb-8 relative">
         <div>
           <p
@@ -233,7 +226,6 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* â”€â”€ Ion Message Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {lastIonMessage && (
         <Link href="/chat" className="block mb-6">
           <div
@@ -265,7 +257,6 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* â”€â”€ Stats Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <StatCard icon={<Target size={16} />} label="GOAL"      value={goalLabel(profile.goal)}                        color={C.spark} />
         <StatCard icon={<Flame size={16} />}  label="CALORIES"  value={totalCalories ? `${totalCalories} kcal` : '-'}  color={C.flame} />
@@ -290,7 +281,6 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* â”€â”€ Today's Workout / Nutrition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid md:grid-cols-2 gap-5">
 
         {/* Today's Workout */}
@@ -385,7 +375,6 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* â”€â”€ Weight Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {measurements.length > 1 && (
         <div className="mt-5">
           <Link href="/progress">
@@ -405,7 +394,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* â”€â”€ Quick Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="mt-5 grid grid-cols-3 gap-3">
         <QuickAction href="/chat"          icon={<Zap size={18} />}        label="ASK ION"        color={C.spark} />
         <QuickAction href="/measurements"  icon={<TrendingUp size={18} />} label="LOG WEIGHT"     color={C.pulse} />
@@ -415,9 +403,7 @@ export default async function DashboardPage() {
   )
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Sub-components
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function Banner({
   color, icon, bg, border, children,

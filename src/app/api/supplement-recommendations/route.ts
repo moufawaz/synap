@@ -2,7 +2,7 @@ import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 
-// GET /api/supplement-recommendations â€” returns latest recommendation for the user (Elite only)
+// GET /api/supplement-recommendations returns latest recommendation for the user (Elite only)
 export async function GET() {
   const supabase = await createServerClient()
   const { data: { user }, error } = await supabase.auth.getUser()

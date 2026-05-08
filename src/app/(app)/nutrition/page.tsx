@@ -11,7 +11,7 @@ const FoodPhotoScanner = lazy(() => import('@/components/ui/FoodPhotoScanner'))
 
 export const dynamic = 'force-dynamic'
 
-// ── Per-day localStorage helpers ──────────────────────────────
+// Per-day localStorage helpers
 const TODAY = new Date().toISOString().split('T')[0]
 const CHECKED_KEY = `synap_nutrition_checked_${TODAY}`
 const SCANNED_KEY = `synap_nutrition_scanned_${TODAY}`
@@ -71,17 +71,24 @@ export default function NutritionPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const [planRes, profileRes, logsRes] = await Promise.all([
+    const [planRes, profileRes, logsRes, hydrationRes] = await Promise.all([
       supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
       fetch(`/api/log-meal?date=${TODAY}`).then(r => r.json()).catch(() => ({ logs: [] })),
+      fetch(`/api/hydration?date=${TODAY}`).then(r => r.json()).catch(() => ({ hydration: null })),
     ])
 
     const planData = planRes.data?.plan_json || null
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
     setPlan(planData)
 
-    // ── Rebuild checked + scanned from DB (cross-device source of truth) ──
+    const dbWater = Number(hydrationRes.hydration?.glasses)
+    if (Number.isFinite(dbWater) && dbWater >= 0) {
+      setWater(dbWater)
+      saveWater(dbWater)
+    }
+
+    // Rebuild checked + scanned from DB (cross-device source of truth)
     const logs: any[] = logsRes.logs || []
     if (logs.length > 0) {
       const meals: any[] = planData?.meals || []
@@ -100,13 +107,13 @@ export default function NutritionPage() {
           newChecked.add(matchIdx)
           newDbIds.set(matchIdx, log.id)
         } else {
-          // Scanned/extra food — parse "Name — 150g" format
-          const servingMatch = logName.match(/— (\d+(?:\.\d+)?)g$/)
+          // Scanned/extra food: parse "Name - 150g" or older em-dash rows.
+          const servingMatch = logName.match(/\s+[^0-9]+(\d+(?:\.\d+)?)g$/)
           const servingG = servingMatch ? parseFloat(servingMatch[1]) : 100
           unmatched.push({
             id:        log.id,
             dbId:      log.id,
-            name:      logName.replace(/ — \d+(?:\.\d+)?g$/, '') || logName,
+            name:      logName.replace(/\s+[^0-9]+\d+(?:\.\d+)?g$/, '') || logName,
             calories:  log.calories_estimated || 0,
             protein_g: log.protein_g         || 0,
             carbs_g:   log.carbs_g           || 0,
@@ -126,12 +133,12 @@ export default function NutritionPage() {
     setLoading(false)
   }
 
-  // ── Toggle plan meal checked state ──────────────────────────
+  // Toggle plan meal checked state
   async function toggleMeal(index: number, meal: any) {
     const isChecked = checkedMeals.has(index)
 
     if (isChecked) {
-      // Uncheck — remove from state + DB
+      // Uncheck: remove from state + DB
       const next = new Set(checkedMeals)
       next.delete(index)
       setCheckedMeals(next)
@@ -149,7 +156,7 @@ export default function NutritionPage() {
         }).catch(() => {})
       }
     } else {
-      // Check — add to state + DB
+      // Check: add to state + DB
       const next = new Set(checkedMeals)
       next.add(index)
       setCheckedMeals(next)
@@ -174,14 +181,23 @@ export default function NutritionPage() {
     }
   }
 
-  // ── Water tracker ────────────────────────────────────────────
+  // Water tracker
   function handleWater(i: number) {
     const next = i < water ? i : i + 1
     setWater(next)
     saveWater(next)
+    fetch('/api/hydration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: TODAY,
+        glasses: next,
+        target_liters: plan?.hydration_liters || plan?.water_l || 3,
+      }),
+    }).catch(() => {})
   }
 
-  // ── Barcode scan result ──────────────────────────────────────
+  // Barcode scan result
   async function handleScanResult(product: FoodProduct, servingG: number) {
     const round = (v?: number) => v ? Math.round((v * servingG) / 100) : 0
     const item: ScannedItem = {
@@ -200,7 +216,7 @@ export default function NutritionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          meal_name:          `${item.name} — ${servingG}g`,
+          meal_name:          `${item.name} - ${servingG}g`,
           calories_estimated: item.calories,
           protein_g:          item.protein_g,
           carbs_g:            item.carbs_g,
@@ -232,7 +248,7 @@ export default function NutritionPage() {
     }
   }
 
-  // ── Macro totals ─────────────────────────────────────────────
+  // Macro totals
   const meals        = plan?.meals || []
   const checkedList  = [...checkedMeals]
   const mealCal      = checkedList.reduce((s, i) => s + (meals[i]?.calories || 0), 0)
@@ -274,7 +290,7 @@ export default function NutritionPage() {
             Today&apos;s Meals
           </h1>
           <p className="font-heading text-sm mt-1" style={{ color: '#475569' }}>
-            {plan.daily_calories} kcal · {plan.macros?.protein_g || plan.protein_g}g protein
+            {plan.daily_calories} kcal - {plan.macros?.protein_g || plan.protein_g}g protein
           </p>
         </div>
         <button
@@ -347,7 +363,7 @@ export default function NutritionPage() {
         </div>
       )}
 
-      {/* ── Plan meals ── */}
+      {/* Plan meals */}
       {meals.length > 0 && (
         <div className="flex flex-col gap-3 mb-6">
           {meals.map((meal: any, i: number) => {
@@ -416,7 +432,7 @@ export default function NutritionPage() {
         </div>
       )}
 
-      {/* ── Scanned / logged foods ── */}
+      {/* Scanned / logged foods */}
       {scannedItems.length > 0 && (
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
