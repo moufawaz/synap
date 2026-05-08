@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { withAnthropicRetry } from '@/lib/anthropic'
+import { requireFoodScanAccess } from '@/lib/feature-access'
 
 const client = new Anthropic()
 
@@ -10,6 +11,9 @@ const client = new Anthropic()
 // and estimate its nutritional values.
 export async function POST(req: Request) {
   try {
+    const gate = await requireFoodScanAccess()
+    if (gate.response) return gate.response
+
     const { image, mimeType = 'image/jpeg' } = await req.json()
     if (!image || typeof image !== 'string') {
       return NextResponse.json({ error: 'Image required' }, { status: 400 })

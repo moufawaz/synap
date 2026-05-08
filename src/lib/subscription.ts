@@ -1,27 +1,20 @@
 import { createAdminClient } from '@/lib/supabase-server'
 
-// ── Daily message limits by tier ──────────────────────────────
-// Starter: 5/day for first 7 days, then upgrade wall (see canSendMessage)
-// Pro / Elite / Trial: unlimited
 export const DAILY_LIMITS: Record<string, number> = {
-  starter:   5,
-  free:      5,      // legacy alias
-  trial:     Infinity,
-  pro:       Infinity,
-  elite:     Infinity,
-  unlimited: Infinity, // legacy alias
+  starter: 5,
+  free: 5,
+  trial: Infinity,
+  pro: Infinity,
+  elite: Infinity,
+  unlimited: Infinity,
 }
 
-// ── Starter trial period (days from account creation) ─────────
 export const STARTER_TRIAL_DAYS = 7
 
-// ── Is LAUNCH_MODE active? ─────────────────────────────────────
 export function isLaunchMode(): boolean {
-  return process.env.LAUNCH_MODE === 'true'
+  return process.env.LAUNCH_MODE === 'true' || process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
 }
 
-// ── Get subscription row for a user ───────────────────────────
-// Uses service-role key — bypasses RLS, always returns real data.
 export async function getUserSubscription(userId: string) {
   const admin = createAdminClient()
   const { data } = await admin
@@ -32,31 +25,27 @@ export async function getUserSubscription(userId: string) {
   return data
 }
 
-// ── Effective plan tier (accounting for trial/expiry) ─────────
 export function effectivePlan(sub: any): 'starter' | 'trial' | 'pro' | 'elite' {
+  if (isLaunchMode()) return 'elite'
   if (!sub) return 'starter'
 
   if (sub.status === 'trial') {
     const trialEnd = sub.trial_ends_at ? new Date(sub.trial_ends_at) : null
-    if (!trialEnd || trialEnd > new Date()) return 'trial'
+    if (!trialEnd || trialEnd > new Date()) {
+      const paidTier = planTierFromSubscription(sub)
+      return paidTier === 'starter' ? 'trial' : paidTier
+    }
     return 'starter'
   }
 
   if (sub.status === 'active') {
-    const name = (sub.plan_type || sub.plan_name || '').toLowerCase()
-    if (name === 'elite')    return 'elite'
-    if (name === 'pro')      return 'pro'
-    if (name === 'unlimited') return 'pro'   // legacy → pro
-    return 'starter'
+    return planTierFromSubscription(sub)
   }
 
   if (sub.status === 'cancelled') {
     const periodEnd = sub.current_period_ends_at ? new Date(sub.current_period_ends_at) : null
     if (periodEnd && periodEnd > new Date()) {
-      const name = (sub.plan_type || sub.plan_name || '').toLowerCase()
-      if (name === 'elite')    return 'elite'
-      if (name === 'pro')      return 'pro'
-      if (name === 'unlimited') return 'pro'
+      return planTierFromSubscription(sub)
     }
     return 'starter'
   }
@@ -64,7 +53,13 @@ export function effectivePlan(sub: any): 'starter' | 'trial' | 'pro' | 'elite' {
   return 'starter'
 }
 
-// ── Get today's message count ──────────────────────────────────
+function planTierFromSubscription(sub: any): 'starter' | 'pro' | 'elite' {
+  const label = `${sub?.plan_type || ''} ${sub?.plan_name || ''}`.toLowerCase()
+  if (label.includes('elite')) return 'elite'
+  if (label.includes('pro') || label.includes('unlimited')) return 'pro'
+  return 'starter'
+}
+
 export async function getTodayMessageCount(userId: string): Promise<number> {
   const supabase = createAdminClient()
   const today = new Date().toISOString().split('T')[0]
@@ -77,16 +72,12 @@ export async function getTodayMessageCount(userId: string): Promise<number> {
   return data?.count || 0
 }
 
-// ── Increment daily message count ─────────────────────────────
 export async function incrementMessageCount(userId: string): Promise<void> {
   const supabase = createAdminClient()
   const today = new Date().toISOString().split('T')[0]
   await supabase.rpc('increment_message_usage', { p_user_id: userId, p_date: today })
 }
 
-// ── Check if user can send a message ──────────────────────────
-// Pass userCreatedAt (from auth.getUser()) so we can check Starter trial window
-// without requiring service-role admin API access.
 export async function canSendMessage(userId: string, userCreatedAt?: string): Promise<{
   allowed: boolean
   used: number
@@ -94,7 +85,7 @@ export async function canSendMessage(userId: string, userCreatedAt?: string): Pr
   plan: string
   reason?: 'daily_limit_reached' | 'starter_expired'
 }> {
-  if (isLaunchMode()) return { allowed: true, used: 0, limit: Infinity, plan: 'pro' }
+  if (isLaunchMode()) return { allowed: true, used: 0, limit: Infinity, plan: 'elite' }
 
   const [sub, used] = await Promise.all([
     getUserSubscription(userId),
@@ -103,22 +94,18 @@ export async function canSendMessage(userId: string, userCreatedAt?: string): Pr
 
   const plan = effectivePlan(sub)
 
-  // Paid tiers (pro / elite / trial) — unlimited, always allow
   if (plan !== 'starter') {
     return { allowed: true, used, limit: Infinity, plan }
   }
 
-  // ── Starter tier: check account age ───────────────────────────
   if (userCreatedAt) {
     const createdAt = new Date(userCreatedAt)
     const daysSinceSignup = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24))
     if (daysSinceSignup >= STARTER_TRIAL_DAYS) {
-      // Starter trial expired — full upgrade wall
       return { allowed: false, used, limit: 0, plan: 'starter', reason: 'starter_expired' }
     }
   }
 
-  // Within Starter trial — enforce 5/day
   const limit = DAILY_LIMITS.starter
   if (used >= limit) {
     return { allowed: false, used, limit, plan: 'starter', reason: 'daily_limit_reached' }
@@ -127,7 +114,6 @@ export async function canSendMessage(userId: string, userCreatedAt?: string): Pr
   return { allowed: true, used, limit, plan: 'starter' }
 }
 
-// ── Trial / plan helpers ───────────────────────────────────────
 export function getTrialDaysRemaining(sub: any): number | null {
   if (!sub || sub.status !== 'trial') return null
   const trialEnd = sub.trial_ends_at ? new Date(sub.trial_ends_at) : null
@@ -146,7 +132,6 @@ export function isEliteUser(sub: any): boolean {
 }
 
 export function isUnlimited(sub: any): boolean {
-  // Pro and Elite both have unlimited messages
   const plan = effectivePlan(sub)
   return plan === 'pro' || plan === 'elite' || plan === 'trial'
 }

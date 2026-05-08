@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
+import { requireFoodScanAccess } from '@/lib/feature-access'
 
 // Open Food Facts API — free, no key required
 const OFF_BASE = 'https://world.openfoodfacts.org/api/v2/product'
 
 export async function GET(req: Request) {
+  const gate = await requireFoodScanAccess()
+  if (gate.response) return gate.response
+
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')?.trim()
 

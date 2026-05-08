@@ -5,6 +5,7 @@ import { createBrowserClient } from '@/lib/supabase'
 import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame, Camera, X } from 'lucide-react'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { RecipeButton } from '@/components/ui/RecipeModal'
+import UpgradeModal from '@/components/ui/UpgradeModal'
 import type { FoodProduct } from '@/components/ui/BarcodeScanner'
 
 const FoodPhotoScanner = lazy(() => import('@/components/ui/FoodPhotoScanner'))
@@ -57,6 +58,8 @@ export default function NutritionPage() {
   const [scannedItems,      setScannedItems]      = useState<ScannedItem[]>([])
   const [loading,           setLoading]           = useState(true)
   const [scannerOpen,       setScannerOpen]       = useState(false)
+  const [upgradeOpen,       setUpgradeOpen]       = useState(false)
+  const [tier,              setTier]              = useState<'starter' | 'trial' | 'pro' | 'elite'>('starter')
 
   useEffect(() => {
     // Restore today's state instantly from localStorage while DB loads
@@ -71,15 +74,17 @@ export default function NutritionPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const [planRes, profileRes, logsRes, hydrationRes] = await Promise.all([
+    const [planRes, profileRes, logsRes, hydrationRes, subRes] = await Promise.all([
       supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
       fetch(`/api/log-meal?date=${TODAY}`).then(r => r.json()).catch(() => ({ logs: [] })),
       fetch(`/api/hydration?date=${TODAY}`).then(r => r.json()).catch(() => ({ hydration: null })),
+      fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),
     ])
 
     const planData = planRes.data?.plan_json || null
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
+    if (subRes?.tier) setTier(subRes.tier)
     setPlan(planData)
 
     const dbWater = Number(hydrationRes.hydration?.glasses)
@@ -265,6 +270,7 @@ export default function NutritionPage() {
   const consumedFat      = mealFat + scanFat
   const totalCalories    = plan?.daily_calories || 2000
   const caloriesPct      = Math.min((consumedCalories / totalCalories) * 100, 100)
+  const hasFoodScanAccess = tier !== 'starter' || process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
 
   if (loading) return <LoadingState />
   if (!plan)   return <NoPlanState gender={gender} />
@@ -282,6 +288,13 @@ export default function NutritionPage() {
         </Suspense>
       )}
 
+      <UpgradeModal
+        isOpen={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        featureName="Food photo scan"
+        currentPlan={tier === 'elite' ? 'elite' : tier === 'pro' ? 'pro' : 'starter'}
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -294,7 +307,7 @@ export default function NutritionPage() {
           </p>
         </div>
         <button
-          onClick={() => setScannerOpen(true)}
+          onClick={() => hasFoodScanAccess ? setScannerOpen(true) : setUpgradeOpen(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-heading font-bold text-xs tracking-wider flex-shrink-0 mt-1"
           style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)', color: '#F97316' }}
         >

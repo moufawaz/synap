@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { requireFoodScanAccess } from '@/lib/feature-access'
 
 const client = new Anthropic()
 
@@ -8,6 +9,9 @@ const client = new Anthropic()
 // Uses Claude Haiku to estimate nutrition for a product name when barcode lookup fails
 export async function POST(req: Request) {
   try {
+    const gate = await requireFoodScanAccess()
+    if (gate.response) return gate.response
+
     const { name } = await req.json()
     if (!name || typeof name !== 'string' || name.trim().length < 2) {
       return NextResponse.json({ error: 'Product name required' }, { status: 400 })
