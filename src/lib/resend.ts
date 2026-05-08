@@ -24,6 +24,7 @@ export type EmailType =
   | 'subscription_renewed'
   | 'payment_failed'
   | 'upgrade_confirmation'
+  | 'onboarding_reminder'
 
 interface SendEmailOptions {
   to: string
@@ -66,6 +67,87 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
         <h1 style="color:#D88BFF;font-size:28px;font-weight:900;margin:0 0 8px">Welcome, ${data.name}!</h1>
         <p style="color:#94A3B8;font-size:16px;line-height:1.6;margin:8px 0 0">Ion has reviewed everything you shared and built your personalised plan. Let's get to work.</p>
         ${btn('Open My Dashboard', `${APP_URL}/dashboard`)}
+      `),
+    },
+
+    onboarding_reminder: {
+      subject: `${data.name}, your plan is still waiting — Ion is ready`,
+      html: layout(`
+        <!-- Hero banner -->
+        <div style="background:linear-gradient(135deg,#0D0D1A 0%,#130D1F 50%,#0A0A14 100%);border-radius:16px;padding:36px 28px;margin-bottom:28px;border:1px solid rgba(187,92,246,0.18);position:relative;overflow:hidden">
+          <!-- Glow orb -->
+          <div style="position:absolute;top:-30px;right:-30px;width:160px;height:160px;background:radial-gradient(circle,rgba(187,92,246,0.18) 0%,transparent 70%);border-radius:50%"></div>
+          <!-- SYNAP wordmark -->
+          <p style="font-size:11px;font-weight:900;letter-spacing:0.22em;color:#6D28D9;margin:0 0 20px;text-transform:uppercase">SYNAP · YOUR BODY IS A SYSTEM</p>
+          <!-- Headline -->
+          <h1 style="font-size:30px;font-weight:900;margin:0 0 10px;line-height:1.15;letter-spacing:-0.01em">
+            <span style="color:#FFFFFF">${data.name},</span><br>
+            <span style="background:linear-gradient(90deg,#BB5CF6,#D88BFF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">your plan is waiting.</span>
+          </h1>
+          <p style="color:#94A3B8;font-size:15px;line-height:1.6;margin:0">
+            You signed up ${data.daysSince} day${data.daysSince !== 1 ? 's' : ''} ago. Ion has been standing by, ready to build your personalised training and nutrition plan — he just needs 3 minutes of your time.
+          </p>
+        </div>
+
+        <!-- What Ion builds for you -->
+        <div style="margin-bottom:24px">
+          <p style="font-size:11px;font-weight:800;letter-spacing:0.15em;color:#6D28D9;margin:0 0 14px;text-transform:uppercase">What Ion builds for you</p>
+          <div style="display:grid;gap:10px">
+
+            <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:#0E0E14;border-radius:12px;border:1px solid rgba(255,255,255,0.05)">
+              <div style="width:36px;height:36px;background:rgba(187,92,246,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;line-height:36px;text-align:center">🏋️</div>
+              <div>
+                <p style="font-weight:700;font-size:14px;color:#FFFFFF;margin:0 0 3px">12-Week Workout Programme</p>
+                <p style="color:#64748B;font-size:13px;margin:0;line-height:1.5">Built around your schedule, equipment, and goals — updated as you progress.</p>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:#0E0E14;border-radius:12px;border:1px solid rgba(255,255,255,0.05)">
+              <div style="width:36px;height:36px;background:rgba(249,115,22,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;line-height:36px;text-align:center">🥗</div>
+              <div>
+                <p style="font-weight:700;font-size:14px;color:#FFFFFF;margin:0 0 3px">Personalised Nutrition Plan</p>
+                <p style="color:#64748B;font-size:13px;margin:0;line-height:1.5">Daily meals, macros, and recipes matched to your food preferences and budget.</p>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:#0E0E14;border-radius:12px;border:1px solid rgba(255,255,255,0.05)">
+              <div style="width:36px;height:36px;background:rgba(16,185,129,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;line-height:36px;text-align:center">🧠</div>
+              <div>
+                <p style="font-weight:700;font-size:14px;color:#FFFFFF;margin:0 0 3px">Ion — Your AI Coach</p>
+                <p style="color:#64748B;font-size:13px;margin:0;line-height:1.5">Ask anything, adjust your plan, track progress. Available 24/7.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Time indicator -->
+        <div style="background:rgba(187,92,246,0.07);border:1px solid rgba(187,92,246,0.2);border-radius:12px;padding:16px 20px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:20px">⚡</span>
+          <div>
+            <p style="font-weight:700;font-size:13px;color:#D88BFF;margin:0 0 2px;letter-spacing:0.04em">TAKES 3 MINUTES</p>
+            <p style="color:#64748B;font-size:13px;margin:0">Answer Ion's questions → get your full plan instantly.</p>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div style="text-align:center;margin-top:28px">
+          <a href="${data.onboardingUrl}" style="display:inline-block;padding:16px 48px;background:linear-gradient(135deg,#9B3CD6,#BB5CF6);color:white;border-radius:12px;text-decoration:none;font-weight:800;font-size:15px;letter-spacing:0.06em;box-shadow:0 8px 32px rgba(187,92,246,0.35)">
+            BUILD MY PLAN →
+          </a>
+          <p style="color:#334155;font-size:12px;margin:14px 0 0">Takes 3 minutes · No credit card needed to start</p>
+        </div>
+
+        <!-- Separator -->
+        <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(187,92,246,0.2),transparent);margin:32px 0"></div>
+
+        <!-- Ion quote -->
+        <div style="padding:0 4px">
+          <p style="color:#475569;font-size:13px;font-style:italic;line-height:1.7;margin:0">
+            "Every athlete I've coached had one thing in common — they started. The plan, the progress, the results all come after that first step. I'm ready to build something specifically for you."
+          </p>
+          <p style="color:#6D28D9;font-size:12px;font-weight:700;margin:10px 0 0;letter-spacing:0.08em">— ION · YOUR AI COACH</p>
+        </div>
       `),
     },
 
