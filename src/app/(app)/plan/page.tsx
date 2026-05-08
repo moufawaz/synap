@@ -285,7 +285,7 @@ function MealCard({ meal }: { meal: any }) {
           <div className="text-left">
             <p className="font-heading font-semibold text-sm text-white">{meal.meal_name || meal.name}</p>
             <p className="font-heading text-xs" style={{ color: '#64748B' }}>
-              {meal.time || ''}{meal.calories ? ` · ${meal.calories} kcal` : ''}
+              {meal.time || ''}{meal.calories ? ` - ${meal.calories} kcal` : ''}
             </p>
           </div>
         </div>
@@ -309,7 +309,7 @@ function MealCard({ meal }: { meal: any }) {
                 <div key={fi} className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <span className="font-heading text-sm" style={{ color: '#94A3B8' }}>{name}</span>
-                    {amount ? <span className="font-heading text-xs ml-1" style={{ color: '#475569' }}>· {amount}</span> : null}
+                    {amount ? <span className="font-heading text-xs ml-1" style={{ color: '#475569' }}>- {amount}</span> : null}
                   </div>
                   {kcal !== null && (
                     <span className="font-heading text-xs flex-shrink-0 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.08)', color: '#F59E0B' }}>
@@ -429,7 +429,7 @@ function DayList({ days, expandedDay, setExpandedDay, prefix }: any) {
                 <div className="text-left">
                   <p className="font-heading font-semibold text-sm text-white">{day.muscle_focus || day.focus || day.day_name || `Day ${di+1}`}</p>
                   <p className="font-heading text-xs" style={{ color: '#64748B' }}>
-                    {isRest ? 'Rest day' : `${day.exercises?.length || 0} exercises · ${day.duration_min || '—'} min`}
+                    {isRest ? 'Rest day' : `${day.exercises?.length || 0} exercises - ${day.duration_min || '-'} min`}
                   </p>
                 </div>
               </div>
@@ -442,7 +442,7 @@ function DayList({ days, expandedDay, setExpandedDay, prefix }: any) {
                     <div key={ei} className="flex items-center gap-2 py-2 px-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)' }}>
                       <div className="flex-1 min-w-0">
                         <p className="font-heading font-semibold text-sm text-white">{ex.name}</p>
-                        <p className="font-heading text-xs" style={{ color: '#64748B' }}>{ex.sets} sets × {ex.reps} · {ex.rest_sec}s rest</p>
+                        <p className="font-heading text-xs" style={{ color: '#64748B' }}>{ex.sets} sets x {ex.reps} - {ex.rest_sec}s rest</p>
                       </div>
                       <span className="font-heading text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'rgba(187,92,246,0.1)', color: '#D88BFF' }}>
                         {ex.muscle_group}
@@ -654,7 +654,7 @@ function SupplementRow({ s }: { s: any }) {
             </span>
           </div>
           <p className="font-heading text-xs mt-0.5" style={{ color: '#64748B' }}>
-            {s.dose} · {s.timing}
+            {s.dose} - {s.timing}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

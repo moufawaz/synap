@@ -9,6 +9,7 @@ import {
   Ruler, TrendingUp, Settings, Shield, LogOut, ClipboardList, Flame, Mail,
 } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase'
+import { clearSessionPersistenceFlags } from '@/lib/auth-session'
 import { useRouter } from 'next/navigation'
 
 // ── Brand social icons (inline SVG — no external deps) ────────
@@ -35,16 +36,15 @@ function TikTokIcon({ size = 13 }: { size?: number }) {
 }
 
 const NAV = [
-  { href: '/dashboard',     icon: LayoutDashboard, label: 'DASHBOARD',       labelAr: 'الرئيسية' },
-  { href: '/chat',          icon: MessageCircle,   label: 'ASK ION',         labelAr: 'تحدث مع Ion' },
-  { href: '/plan',          icon: ClipboardList,   label: 'MY PLAN',         labelAr: 'خطتي' },
-  { href: '/workout/today', icon: Flame,           label: "TODAY'S WORKOUT", labelAr: 'تمرين اليوم' },
-  { href: '/workout',       icon: Dumbbell,        label: 'PROGRAMME',       labelAr: 'البرنامج' },
-  { href: '/nutrition',     icon: UtensilsCrossed, label: 'NUTRITION',       labelAr: 'التغذية' },
-  { href: '/measurements',  icon: Ruler,           label: 'MEASUREMENTS',    labelAr: 'القياسات' },
-  { href: '/progress',      icon: TrendingUp,      label: 'PROGRESS',        labelAr: 'التقدم' },
+  { href: '/dashboard',     icon: LayoutDashboard, label: 'DASHBOARD',       labelAr: 'DASHBOARD' },
+  { href: '/chat',          icon: MessageCircle,   label: 'ASK ION',         labelAr: 'ASK ION' },
+  { href: '/plan',          icon: ClipboardList,   label: 'MY PLAN',         labelAr: 'MY PLAN' },
+  { href: '/workout/today', icon: Flame,           label: "TODAY'S WORKOUT", labelAr: "TODAY'S WORKOUT" },
+  { href: '/workout',       icon: Dumbbell,        label: 'PROGRAMME',       labelAr: 'PROGRAMME' },
+  { href: '/nutrition',     icon: UtensilsCrossed, label: 'NUTRITION',       labelAr: 'NUTRITION' },
+  { href: '/measurements',  icon: Ruler,           label: 'MEASUREMENTS',    labelAr: 'MEASUREMENTS' },
+  { href: '/progress',      icon: TrendingUp,      label: 'PROGRESS',        labelAr: 'PROGRESS' },
 ]
-
 interface SidebarProps {
   user: { name: string; email: string; gender?: string; isAdmin?: boolean }
   lang?: 'en' | 'ar'
@@ -58,6 +58,7 @@ export default function Sidebar({ user, lang = 'en' }: SidebarProps) {
   async function handleSignOut() {
     const supabase = createBrowserClient()
     await supabase.auth.signOut()
+    clearSessionPersistenceFlags()
     router.push('/')
   }
 

@@ -118,7 +118,7 @@ export default function WorkoutPage() {
           {plan.name}
         </h1>
         <p className="font-heading text-sm mt-1" style={{ color: '#475569' }}>
-          {plan.schedule} • {plan.split_type?.replace(/_/g, ' ')}
+          {plan.schedule} - {plan.split_type?.replace(/_/g, ' ')}
         </p>
       </div>
 
@@ -223,7 +223,7 @@ export default function WorkoutPage() {
                       </p>
                       <div className="flex items-center gap-3 mt-0.5">
                         <span className="font-heading text-xs" style={{ color: done ? '#108981' : '#475569' }}>
-                          {ex.sets} sets × {ex.reps}
+                          {ex.sets} sets x {ex.reps}
                         </span>
                         <span className="font-heading text-xs" style={{ color: '#2D3748' }}>
                           {ex.rest_sec}s rest
@@ -289,7 +289,7 @@ export default function WorkoutPage() {
             {logs.slice(0, 5).map((log, i) => (
               <div key={i} className="flex items-center justify-between py-2.5 px-4 rounded-xl" style={{ background: '#0F0F0F', border: '1px solid rgba(255,255,255,0.04)' }}>
                 <div>
-                  <p className="font-heading font-bold text-xs text-white">{log.day_name} — {log.muscle_focus}</p>
+                  <p className="font-heading font-bold text-xs text-white">{log.day_name} - {log.muscle_focus}</p>
                   <p className="font-heading text-[10px]" style={{ color: '#475569' }}>
                     {new Date(log.logged_at).toLocaleDateString()}
                   </p>
@@ -328,7 +328,7 @@ function WorkoutDoneCard({ elapsed, completed, total, gender, onReset }: any) {
       <div>
         <p className="font-heading font-black text-2xl text-white tracking-wider mb-1" style={{ letterSpacing: '0.08em' }}>WORKOUT DONE!</p>
         <p className="font-heading text-sm" style={{ color: '#64748B' }}>
-          {Math.round(elapsed / 60)} minutes • {completed}/{total} exercises
+          {Math.round(elapsed / 60)} minutes - {completed}/{total} exercises
         </p>
       </div>
       <div className="flex gap-4">

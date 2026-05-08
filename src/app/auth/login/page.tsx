@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AuthCard from '@/components/auth/AuthCard'
 import { createBrowserClient } from '@/lib/supabase'
+import { SESSION_ACTIVE_KEY, SESSION_MODE_KEY } from '@/lib/auth-session'
 import { Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -114,11 +115,14 @@ function LoginForm() {
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     if (signInError) { setError('Invalid email or password.'); setLoading(false); return }
 
-    // If "Remember Me" is off, store a flag so the middleware can detect session-only mode
+    // If "Remember me" is off, keep the Supabase session only for this tab session.
     if (!rememberMe) {
-      sessionStorage.setItem('synap_session_only', '1')
+      localStorage.setItem(SESSION_MODE_KEY, 'session')
+      sessionStorage.setItem(SESSION_ACTIVE_KEY, '1')
+      localStorage.removeItem('synap_remember_me')
     } else {
-      sessionStorage.removeItem('synap_session_only')
+      localStorage.removeItem(SESSION_MODE_KEY)
+      sessionStorage.removeItem(SESSION_ACTIVE_KEY)
       localStorage.setItem('synap_remember_me', '1')
     }
 

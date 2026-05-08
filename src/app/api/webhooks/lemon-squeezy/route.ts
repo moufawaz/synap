@@ -93,10 +93,10 @@ export async function POST(req: Request) {
 
       // Ion welcome message
       const welcomeMsg = isElite
-        ? `🌟 Welcome to Elite, ${userName}! You now have access to everything — unlimited Ion messages, weekly body composition reports, personalised supplement recommendations, and goal timeline predictions. This is the full package. Let's build something exceptional.`
+        ? `Welcome to Elite, ${userName}! You now have access to everything: unlimited Ion messages, weekly body composition reports, personalised supplement recommendations, and goal timeline predictions. This is the full package. Let's build something exceptional.`
         : isInTrial
-          ? `🎉 Your 7-day free trial has started, ${userName}! You now have full Pro access. Remember: if you cancel before day 7, you will never be charged — not even a single riyal. I'll remind you before the trial ends. Let's make these 7 days count!`
-          : `🚀 Welcome to Pro, ${userName}! You now have unlimited access to Ion, your full diet and workout plans, and all tracking features. Let's get to work.`
+          ? `Your 7-day free trial has started, ${userName}! You now have full Pro access. Remember: if you cancel before day 7, you will never be charged. I'll remind you before the trial ends. Let's make these 7 days count.`
+          : `Welcome to Pro, ${userName}! You now have unlimited access to Ion, your full diet and workout plans, and all tracking features. Let's get to work.`
 
       await supabase.from('chat_messages').insert({
         user_id: userId,
@@ -162,7 +162,7 @@ export async function POST(req: Request) {
         await supabase.from('chat_messages').insert({
           user_id: userId,
           role: 'assistant',
-          content: `✅ Your trial has been cancelled successfully, ${userName}. As promised — zero charges, ever. You've reverted to the Starter plan. You're always welcome back whenever you're ready. 💪`,
+          content: `Your trial has been cancelled successfully, ${userName}. As promised: zero charges. You have reverted to the Starter plan. You are always welcome back whenever you are ready.`,
           message_type: 'text',
         })
       } else if (userEmail) {

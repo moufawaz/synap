@@ -97,7 +97,7 @@ export default function ChatPage() {
         // API returned an error — show it in the chat as an alert
         const isLimitError = data.error === 'daily_limit_reached' || data.error === 'starter_expired'
         const errMsg = isLimitError
-          ? `${data.message} [Upgrade to Pro →](/pricing)`
+          ? `${data.message} [Upgrade to Pro](/pricing)`
           : (data.message || data.error || 'Something went wrong. Try again.')
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
@@ -158,8 +158,8 @@ export default function ChatPage() {
           <Clock size={12} style={{ color: planDaysLeft > 7 ? '#108981' : planDaysLeft > 0 ? '#F59E0B' : '#EF4444', flexShrink: 0 }} />
           <p className="font-heading text-xs" style={{ color: planDaysLeft > 7 ? '#108981' : planDaysLeft > 0 ? '#F59E0B' : '#EF4444' }}>
             {planDaysLeft > 0
-              ? `${planDaysLeft} day${planDaysLeft !== 1 ? 's' : ''} left to modify your plan — ask Ion for changes here`
-              : 'Plan modification window expired — ask Ion for a new plan or renewal'}
+              ? `${planDaysLeft} day${planDaysLeft !== 1 ? 's' : ''} left to modify your plan - ask Ion for changes here`
+              : 'Plan modification window expired - ask Ion for a new plan or renewal'}
           </p>
         </div>
       )}
@@ -171,10 +171,10 @@ export default function ChatPage() {
             <IonAvatar gender={profileGender} size="xl" animated />
             <div>
               <p className="font-heading font-bold text-lg text-white tracking-wider mb-2" style={{ letterSpacing: '0.08em' }}>
-                Hey — ask me anything.
+                Hey - ask me anything.
               </p>
               <p className="font-heading text-sm" style={{ color: '#475569' }}>
-                Workouts, meals, progress, motivation — I'm here.
+                Workouts, meals, progress, motivation - I'm here.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center max-w-sm">
@@ -336,14 +336,14 @@ function MessageBubble({ msg, gender, onPrompt }: { msg: Message; gender: 'male'
         {type === 'new_plan' && (
           <div className="flex gap-2 mt-3 flex-wrap">
             <a href="/plan" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(187,92,246,0.15)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.2)' }}>
-              View New Plan →
+              View New Plan
             </a>
           </div>
         )}
         {type === 'workout_card' && (
           <div className="flex gap-2 mt-3">
             <a href="/workout/today" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(187,92,246,0.1)', color: '#BB5CF6', border: '1px solid rgba(187,92,246,0.2)' }}>
-              Go to Workout →
+              Go to Workout
             </a>
           </div>
         )}

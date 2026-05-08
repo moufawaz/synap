@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Exo_2, Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import ThemeToggle from '@/components/ui/ThemeToggle'
+import SessionPersistenceGate from '@/components/auth/SessionPersistenceGate'
 
 // ─── SYNAP — Brand Typography System ─────────────────
 //  • Exo 2  → headings, display, UI labels
@@ -91,6 +92,7 @@ try {
         />
       </head>
       <body className="font-body antialiased min-h-screen overflow-x-hidden">
+        <SessionPersistenceGate />
         {children}
         <ThemeToggle />
       </body>

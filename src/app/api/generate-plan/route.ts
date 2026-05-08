@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       if (!plan) throw new Error('no valid JSON found')
     } catch {
       console.error('[generate-plan] JSON parse failed. finish_reason:', finishReason)
-      console.error('[generate-plan] Raw response (first 800 chars):', rawContent.slice(0, 800))
+      console.error('[generate-plan] Invalid response length:', rawContent.length)
       return NextResponse.json({ error: 'Ion returned an invalid plan format. Please try again.' }, { status: 500 })
     }
 

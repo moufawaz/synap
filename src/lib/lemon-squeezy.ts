@@ -140,8 +140,12 @@ export async function getSubscription(lsSubscriptionId: string) {
 export function verifyWebhookSignature(payload: string, signature: string): boolean {
   const secret = process.env.LEMON_SQUEEZY_WEBHOOK_SECRET
   if (!secret) {
-    console.warn('[LS Webhook] LEMON_SQUEEZY_WEBHOOK_SECRET not set — skipping verification')
-    return true // Allow in dev when secret not set
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[LS Webhook] LEMON_SQUEEZY_WEBHOOK_SECRET is not set')
+      return false
+    }
+    console.warn('[LS Webhook] LEMON_SQUEEZY_WEBHOOK_SECRET is not set; allowing unsigned webhook in development')
+    return true
   }
 
   const hmac = crypto.createHmac('sha256', secret)

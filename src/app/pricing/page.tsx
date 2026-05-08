@@ -48,6 +48,8 @@ export default function PricingPage() {
 
   const proPrice    = billing === 'annual' ? PRICES.proAnnual    : PRICES.proMonthly
   const elitePrice  = billing === 'annual' ? PRICES.eliteAnnual  : PRICES.eliteMonthly
+  const proAvailable = Boolean(proPrice.variantId)
+  const eliteAvailable = Boolean(elitePrice.variantId)
 
   const proMonthlyEq    = billing === 'annual' ? PRICES.proAnnual.sar   / 12 : null
   const eliteMonthlyEq  = billing === 'annual' ? PRICES.eliteAnnual.sar / 12 : null
@@ -85,7 +87,7 @@ export default function PricingPage() {
           SYNAP
         </Link>
         <Link href="/dashboard" className="font-heading text-xs tracking-widest" style={{ color: '#475569' }}>
-          ← Back to Dashboard
+          Back to Dashboard
         </Link>
       </nav>
 
@@ -98,7 +100,7 @@ export default function PricingPage() {
             Simple, Transparent Pricing
           </h1>
           <p className="font-heading text-base max-w-lg mx-auto" style={{ color: '#64748B' }}>
-            7-day free trial. Cancel before day 7 and you&apos;ll never be charged — not even a single riyal.
+            7-day free trial. Cancel before day 7 and you&apos;ll never be charged - not even a single riyal.
           </p>
 
           {/* Zero charge badge */}
@@ -153,7 +155,7 @@ export default function PricingPage() {
                 <span className="font-heading font-black text-4xl text-white">0</span>
                 <span className="font-heading text-sm mb-1.5" style={{ color: '#64748B' }}> SAR</span>
               </div>
-              <p className="font-heading text-xs" style={{ color: '#475569' }}>Free forever — no card needed</p>
+              <p className="font-heading text-xs" style={{ color: '#475569' }}>Free forever - no card needed</p>
             </div>
 
             <div className="flex flex-col gap-2.5 mb-7 flex-1">
@@ -213,7 +215,7 @@ export default function PricingPage() {
                     {rateLoading ? '...' : fmt(proMonthlyEq, 2)}/month equivalent
                   </p>
                   <p className="font-heading text-xs font-bold" style={{ color: '#10B981' }}>
-                    Save {rateLoading ? '...' : fmt(PRO_SAVE, 0)} · 3 months free
+                    Save {rateLoading ? '...' : fmt(PRO_SAVE, 0)} - 3 months free
                   </p>
                 </div>
               ) : (
@@ -236,7 +238,7 @@ export default function PricingPage() {
 
             <button
               onClick={() => handleCheckout(proPrice.variantId)}
-              disabled={!!loading}
+              disabled={!!loading || !proAvailable}
               className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
               style={{
                 background: loading === proPrice.variantId ? 'rgba(187,92,246,0.5)' : '#BB5CF6',
@@ -245,7 +247,9 @@ export default function PricingPage() {
                 boxShadow: '0 0 25px rgba(187,92,246,0.35)',
               }}
             >
-              {loading === proPrice.variantId ? (
+              {!proAvailable ? (
+                <>COMING SOON</>
+              ) : loading === proPrice.variantId ? (
                 <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'white', borderTopColor: 'transparent' }} /> LOADING...</>
               ) : (
                 <>START FREE TRIAL <ChevronRight size={14} /></>
@@ -253,7 +257,7 @@ export default function PricingPage() {
             </button>
           </div>
 
-          {/* ── Elite — BEST VALUE ── */}
+          {/* ── BEST VALUE ── */}
           <div className="rounded-2xl p-6 flex flex-col relative" style={{
             background: 'linear-gradient(135deg, rgba(187,92,246,0.18), rgba(139,92,246,0.10))',
             border: '1.5px solid rgba(187,92,246,0.55)',
@@ -266,12 +270,12 @@ export default function PricingPage() {
             <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
               <span className="font-heading font-black text-[10px] tracking-widest px-4 py-1.5 rounded-full"
                 style={{ background: 'linear-gradient(90deg, #BB5CF6, #8B5CF6)', color: 'white', letterSpacing: '0.15em', boxShadow: '0 0 20px rgba(187,92,246,0.5)' }}>
-                ⭐ BEST VALUE
+          BEST VALUE
               </span>
             </div>
 
             <div className="mb-6">
-              <p className="font-heading font-black text-xs tracking-widest uppercase mb-3" style={{ color: '#BB5CF6', letterSpacing: '0.15em' }}>ELITE ⭐</p>
+              <p className="font-heading font-black text-xs tracking-widest uppercase mb-3" style={{ color: '#BB5CF6', letterSpacing: '0.15em' }}>ELITE</p>
               <div className="flex items-end gap-1 mb-1">
                 {billing === 'annual' && (
                   <span className="font-heading text-base line-through mr-1" style={{ color: '#475569' }}>
@@ -291,7 +295,7 @@ export default function PricingPage() {
                     {rateLoading ? '...' : fmt(eliteMonthlyEq, 2)}/month equivalent
                   </p>
                   <p className="font-heading text-xs font-bold" style={{ color: '#10B981' }}>
-                    Save {rateLoading ? '...' : fmt(ELITE_SAVE, 0)} · 3 months free
+                    Save {rateLoading ? '...' : fmt(ELITE_SAVE, 0)} - 3 months free
                   </p>
                 </div>
               ) : (
@@ -312,7 +316,7 @@ export default function PricingPage() {
 
             <button
               onClick={() => handleCheckout(elitePrice.variantId)}
-              disabled={!!loading}
+              disabled={!!loading || !eliteAvailable}
               className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
               style={{
                 background: loading === elitePrice.variantId ? 'rgba(187,92,246,0.4)' : 'rgba(187,92,246,0.2)',
@@ -321,7 +325,9 @@ export default function PricingPage() {
                 letterSpacing: '0.1em',
               }}
             >
-              {loading === elitePrice.variantId ? (
+              {!eliteAvailable ? (
+                <>COMING SOON</>
+              ) : loading === elitePrice.variantId ? (
                 <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} /> LOADING...</>
               ) : (
                 <>START FREE TRIAL <ChevronRight size={14} /></>
@@ -345,7 +351,7 @@ export default function PricingPage() {
           <TrustCard
             icon={<Star size={20} style={{ color: '#F59E0B' }} />}
             title="Cancel Anytime"
-            desc="No contracts. No cancellation fees. One click to cancel from Settings → Billing."
+            desc="No contracts. No cancellation fees. One click to cancel from Settings > Billing."
           />
         </div>
 
@@ -359,7 +365,7 @@ export default function PricingPage() {
             {/* Table header */}
             <div className="grid grid-cols-4 gap-0" style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div className="p-4" />
-              {(['STARTER', 'PRO', 'ELITE ⭐'] as const).map((h, i) => (
+              {(['STARTER', 'PRO', 'ELITE'] as const).map((h, i) => (
                 <div key={h} className="p-4 text-center">
                   <p className="font-heading font-black text-xs tracking-widest" style={{ color: i === 2 ? '#BB5CF6' : i === 1 ? '#BB5CF6' : '#475569', letterSpacing: '0.12em' }}>{h}</p>
                 </div>
@@ -403,7 +409,7 @@ export default function PricingPage() {
             />
             <FAQ
               q="Can I switch between plans?"
-              a="Yes. Upgrade or downgrade anytime from Settings → Billing. Changes take effect on your next billing cycle."
+              a="Yes. Upgrade or downgrade anytime from Settings > Billing. Changes take effect on your next billing cycle."
             />
             <FAQ
               q="Is SAR the only currency?"
@@ -411,11 +417,11 @@ export default function PricingPage() {
             />
             <FAQ
               q="What payment methods are accepted?"
-              a="All major credit and debit cards (Visa, Mastercard, Mada), Apple Pay, and local payment methods — all handled securely by Lemon Squeezy."
+              a="All major credit and debit cards (Visa, Mastercard, Mada), Apple Pay, and local payment methods - all handled securely by Lemon Squeezy."
             />
             <FAQ
               q="Can I cancel anytime?"
-              a="Yes — no contracts, no cancellation fees, no questions asked. One click in Settings → Billing. If you cancel during the trial, you owe nothing."
+              a="Yes - no contracts, no cancellation fees, no questions asked. One click in Settings > Billing. If you cancel during the trial, you owe nothing."
             />
           </div>
         </div>

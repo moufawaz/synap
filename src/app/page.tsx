@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { type Language } from '@/lib/i18n'
+import { useLanguage } from '@/lib/useLanguage'
 import Navbar from '@/components/landing/Navbar'
 import Hero from '@/components/landing/Hero'
 import TheProblem from '@/components/landing/TheProblem'
@@ -14,7 +14,7 @@ import CTA from '@/components/landing/CTA'
 import Footer from '@/components/landing/Footer'
 
 export default function LandingPage() {
-  const [lang, setLang] = useState<Language>('en')
+  const { lang, setLang } = useLanguage()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userName, setUserName] = useState('')
 

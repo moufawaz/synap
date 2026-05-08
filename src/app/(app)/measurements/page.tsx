@@ -292,7 +292,7 @@ export default function MeasurementsPage() {
                   type="number" step="0.1"
                   value={form[field.key] || ''}
                   onChange={e => setForm(prev => ({ ...prev, [field.key]: e.target.value }))}
-                  placeholder="—"
+                  placeholder="-"
                   className="w-full rounded-lg px-3 py-2 font-heading text-sm outline-none transition-all"
                   style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.07)', color: '#F0F0FF' }}
                   onFocus={e => { e.target.style.borderColor = 'rgba(187,92,246,0.5)' }}
@@ -349,7 +349,7 @@ export default function MeasurementsPage() {
       {activeTab === 'stats' && latest && (
         <div className="mb-6">
           <p className="font-heading text-xs tracking-widest uppercase mb-3" style={{ color: '#475569', letterSpacing: '0.14em' }}>
-            LATEST — {new Date(latest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            LATEST - {new Date(latest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {FIELDS.filter(f => latest[f.key] != null).map(field => {
@@ -662,7 +662,7 @@ export default function MeasurementsPage() {
             {inbodyAnalysis && !uploadingInbody && !analyzingInbody && (
               <div className="p-4 rounded-xl mb-4"
                 style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.2)' }}>
-                <p className="font-heading font-semibold text-xs mb-3" style={{ color: '#BB5CF6' }}>⚡ Ion Analysis</p>
+                <p className="font-heading font-semibold text-xs mb-3" style={{ color: '#BB5CF6' }}>Ion Analysis</p>
 
                 {/* Metric grid */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
@@ -737,7 +737,7 @@ export default function MeasurementsPage() {
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-heading font-semibold text-xs w-fit transition-all"
                     style={{ background: 'rgba(187,92,246,0.12)', border: '1px solid rgba(187,92,246,0.25)', color: '#BB5CF6' }}
                   >
-                    ⚡ Analyze with Ion
+                    Analyze with Ion
                   </button>
                 )}
 
@@ -764,7 +764,7 @@ export default function MeasurementsPage() {
                       'Identify muscle imbalances between sides',
                     ].map(t => (
                       <li key={t} className="flex items-start gap-2">
-                        <span className="text-xs mt-0.5" style={{ color: '#F59E0B' }}>•</span>
+                    <span className="text-xs mt-0.5" style={{ color: '#F59E0B' }}>-</span>
                         <span className="font-heading text-xs" style={{ color: '#94A3B8' }}>{t}</span>
                       </li>
                     ))}
@@ -777,7 +777,7 @@ export default function MeasurementsPage() {
                   <div className="text-center">
                     <p className="font-heading font-bold text-sm text-white mb-1">Upload InBody Scan</p>
                     <p className="font-heading text-xs" style={{ color: '#475569' }}>
-                      Photo of your report or PDF • Any InBody model
+                      Photo of your report or PDF - Any InBody model
                     </p>
                   </div>
                   <input ref={inbodyInputRef} type="file" accept="image/*,.pdf" className="hidden"

@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/lib/useLanguage'
 import { t } from '@/lib/i18n'
+import { clearSessionPersistenceFlags } from '@/lib/auth-session'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +58,7 @@ export default function SettingsPage() {
   async function signOut() {
     const supabase = createBrowserClient()
     await supabase.auth.signOut()
+    clearSessionPersistenceFlags()
     router.push('/')
   }
 
@@ -289,7 +291,7 @@ export default function SettingsPage() {
             <div className="p-4 rounded-2xl flex items-center gap-3" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
               <Zap size={14} style={{ color: '#10B981' }} />
               <p className="font-heading text-xs" style={{ color: '#10B981' }}>
-                🎉 <strong>Launch Special:</strong> All features are free during our launch period. Enjoy unlimited access!
+                <strong>Launch Special:</strong> All features are free during our launch period. Enjoy unlimited access!
               </p>
             </div>
           )}
@@ -317,7 +319,7 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-1.5 mt-1">
                     <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#10B981' }} />
                     <p className="font-heading text-xs font-semibold" style={{ color: '#10B981' }}>
-                      Trial active — {trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} remaining
+                      Trial active - {trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} remaining
                     </p>
                   </div>
                 )}
@@ -405,7 +407,7 @@ export default function SettingsPage() {
 
               {cancelResult ? (
                 <div className="p-3 rounded-xl" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                  <p className="font-heading text-xs" style={{ color: '#10B981' }}>✅ {cancelResult}</p>
+                  <p className="font-heading text-xs" style={{ color: '#10B981' }}>{cancelResult}</p>
                 </div>
               ) : (
                 <>
@@ -611,7 +613,7 @@ function MessageUsage({ userId, plan, status }: { userId?: string; plan: string;
           <Link href="/pricing">
             <button className="w-full py-2.5 rounded-xl font-heading font-bold text-xs tracking-wider"
               style={{ background: 'rgba(187,92,246,0.12)', border: '1px solid rgba(187,92,246,0.25)', color: '#BB5CF6' }}>
-              Upgrade for more messages →
+              Upgrade for more messages
             </button>
           </Link>
         </div>

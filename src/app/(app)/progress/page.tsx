@@ -122,7 +122,7 @@ export default function ProgressPage() {
               <div key={m.key} className="glass-card p-4">
                 <p className="font-heading text-[10px] tracking-wider mb-2" style={{ color: '#475569' }}>{m.label}</p>
                 <p className="font-heading font-bold text-lg text-white">
-                  {last ?? '—'}<span className="text-xs font-normal ml-1" style={{ color: '#475569' }}>{m.unit}</span>
+                  {last ?? '-'}<span className="text-xs font-normal ml-1" style={{ color: '#475569' }}>{m.unit}</span>
                 </p>
                 {change != null && (
                   <div className="flex items-center gap-1 mt-1">
@@ -190,7 +190,7 @@ export default function ProgressPage() {
           </div>
           {currentStreak > 0 && (
             <span className="font-heading font-bold text-sm px-3 py-1 rounded-full" style={{ background: 'rgba(245,158,11,0.1)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.2)' }}>
-              {currentStreak} day streak 🔥
+              {currentStreak} day streak
             </span>
           )}
         </div>
@@ -285,7 +285,7 @@ export default function ProgressPage() {
                 <p className="font-heading font-bold text-lg" style={{ color: '#10B981' }}>
                   {monthlySummary.stats?.weightChange != null
                     ? `${parseFloat(monthlySummary.stats.weightChange) > 0 ? '+' : ''}${monthlySummary.stats.weightChange}kg`
-                    : '—'}
+                    : '-'}
                 </p>
                 <p className="font-heading text-[10px]" style={{ color: '#475569' }}>WEIGHT CHANGE</p>
               </div>
@@ -314,7 +314,7 @@ export default function ProgressPage() {
             </div>
             <div>
               <p className="font-heading font-black text-xs text-white tracking-wider" style={{ letterSpacing: '0.1em' }}>WEEKLY REPORTS</p>
-              <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE ⭐ · Every Friday</span>
+              <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE - Every Friday</span>
             </div>
           </div>
 
@@ -395,13 +395,13 @@ export default function ProgressPage() {
                       {new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                     </td>
                     <td className="px-4 py-3 font-heading text-xs text-right" style={{ color: '#F0F0FF' }}>
-                      {m.weight_kg ? `${m.weight_kg} kg` : '—'}
+                      {m.weight_kg ? `${m.weight_kg} kg` : '-'}
                     </td>
                     <td className="px-4 py-3 font-heading text-xs text-right" style={{ color: '#F0F0FF' }}>
-                      {m.waist_cm ? `${m.waist_cm} cm` : '—'}
+                      {m.waist_cm ? `${m.waist_cm} cm` : '-'}
                     </td>
                     <td className="px-4 py-3 font-heading text-xs text-right" style={{ color: '#F0F0FF' }}>
-                      {m.body_fat_pct ? `${m.body_fat_pct}%` : '—'}
+                      {m.body_fat_pct ? `${m.body_fat_pct}%` : '-'}
                     </td>
                   </tr>
                 ))}
@@ -447,11 +447,11 @@ function GoalTimelinePrediction({
           <Lock size={22} style={{ color: '#BB5CF6' }} />
           <div className="text-center">
             <p className="font-heading font-bold text-sm text-white mb-1">Goal Timeline Prediction</p>
-            <p className="font-heading text-xs mb-3" style={{ color: '#64748B' }}>Ion calculates exactly when you'll hit your goal — Elite only.</p>
+            <p className="font-heading text-xs mb-3" style={{ color: '#64748B' }}>Ion calculates exactly when you'll hit your goal - Elite only.</p>
             <Link href="/pricing"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-heading font-black text-xs tracking-wider"
               style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.1em', boxShadow: '0 0 16px rgba(187,92,246,0.35)' }}>
-              Upgrade to Elite ⭐
+              Upgrade to Elite
             </Link>
           </div>
         </div>
@@ -462,7 +462,7 @@ function GoalTimelinePrediction({
           </div>
           <div>
             <p className="font-heading font-black text-xs text-white tracking-wider" style={{ letterSpacing: '0.1em' }}>GOAL TIMELINE PREDICTION</p>
-            <p className="font-heading text-xs" style={{ color: '#64748B' }}>Elite ⭐ feature</p>
+            <p className="font-heading text-xs" style={{ color: '#64748B' }}>Elite feature</p>
           </div>
         </div>
         <div className="h-16 rounded-xl opacity-20" style={{ background: 'rgba(187,92,246,0.1)' }} />
@@ -484,7 +484,7 @@ function GoalTimelinePrediction({
           </div>
           <div>
             <p className="font-heading font-black text-xs text-white tracking-wider" style={{ letterSpacing: '0.1em' }}>GOAL TIMELINE PREDICTION</p>
-            <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE ⭐</span>
+            <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE</span>
           </div>
         </div>
         <p className="font-heading text-xs" style={{ color: '#64748B' }}>
@@ -517,7 +517,7 @@ function GoalTimelinePrediction({
   let confidence: 'high' | 'medium' | 'low' = 'medium'
 
   if (Math.abs(kgPerDay) < 0.001) {
-    prediction = 'Your weight is stable — no clear trend yet.'
+    prediction = 'Your weight is stable - no clear trend yet.'
     confidence = 'low'
   } else if (Math.sign(deltaNeeded) !== Math.sign(kgPerDay)) {
     prediction = 'Your current trend is moving away from your goal. Talk to Ion.'
@@ -545,7 +545,7 @@ function GoalTimelinePrediction({
         </div>
         <div>
           <p className="font-heading font-black text-xs text-white tracking-wider" style={{ letterSpacing: '0.1em' }}>GOAL TIMELINE PREDICTION</p>
-          <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE ⭐</span>
+          <span className="font-heading text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6' }}>ELITE</span>
         </div>
       </div>
 

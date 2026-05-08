@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import SynapLogo from '@/components/ui/SynapLogo'
 import { type Language, t } from '@/lib/i18n'
+import { clearSessionPersistenceFlags } from '@/lib/auth-session'
 import { Menu, X, Globe, LayoutDashboard, Dumbbell, MessageCircle, UtensilsCrossed, LogOut } from 'lucide-react'
 
 interface NavbarProps {
@@ -29,6 +30,7 @@ export default function Navbar({ lang, onLangChange, isLoggedIn = false, userNam
     const { createBrowserClient } = await import('@/lib/supabase')
     const supabase = createBrowserClient()
     await supabase.auth.signOut()
+    clearSessionPersistenceFlags()
     router.push('/')
     router.refresh()
   }
@@ -36,8 +38,8 @@ export default function Navbar({ lang, onLangChange, isLoggedIn = false, userNam
   const publicLinks = [
     { label: t(lang, 'nav_features'), href: '#features' },
     { label: t(lang, 'nav_how_it_works'), href: '#how-it-works' },
-    { label: lang === 'ar' ? 'الأسعار'    : 'PRICING',    href: '/pricing' },
-    { label: lang === 'ar' ? 'تواصل معنا' : 'CONTACT US', href: '/contact' },
+    { label: lang === 'ar' ? 'PRICING' : 'PRICING', href: '/pricing' },
+    { label: lang === 'ar' ? 'CONTACT US' : 'CONTACT US', href: '/contact' },
   ]
 
   const appLinks = [
@@ -122,7 +124,7 @@ export default function Navbar({ lang, onLangChange, isLoggedIn = false, userNam
             }}
           >
             <Globe size={13} />
-            <span>{lang === 'en' ? 'العربية' : 'ENGLISH'}</span>
+            <span>{lang === 'en' ? 'ARABIC' : 'ENGLISH'}</span>
           </button>
 
           {isLoggedIn ? (
@@ -179,7 +181,7 @@ export default function Navbar({ lang, onLangChange, isLoggedIn = false, userNam
             className="px-2.5 py-1.5 rounded-lg border text-xs font-heading font-bold transition-all"
             style={{ borderColor: 'rgba(255,255,255,0.08)', color: '#94A3B8' }}
           >
-            {lang === 'en' ? 'ع' : 'EN'}
+            {lang === 'en' ? 'AR' : 'EN'}
           </button>
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
