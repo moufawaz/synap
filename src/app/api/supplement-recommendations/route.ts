@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
-import { getUserSubscription, effectivePlan } from '@/lib/subscription'
+import { getUserSubscription, effectivePlan, isLaunchMode } from '@/lib/subscription'
 
 // GET /api/supplement-recommendations returns latest recommendation for the user (Elite only)
 export async function GET() {
@@ -8,11 +8,13 @@ export async function GET() {
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Only Elite users can access supplement recommendations
-  const sub = await getUserSubscription(user.id)
-  const plan = effectivePlan(sub)
-  if (plan !== 'elite') {
-    return NextResponse.json({ error: 'Elite plan required', tier: plan }, { status: 403 })
+  // In launch mode all features are free — skip the elite gate
+  if (!isLaunchMode()) {
+    const sub = await getUserSubscription(user.id)
+    const plan = effectivePlan(sub)
+    if (plan !== 'elite') {
+      return NextResponse.json({ error: 'Elite plan required', tier: plan }, { status: 403 })
+    }
   }
 
   const { data } = await supabase

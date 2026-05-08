@@ -55,8 +55,9 @@ export default function PlanPage() {
     const tier: string = tierRes.tier || 'starter'
     setPlanTier(tier)
 
-    // Fetch supplement recommendations for Elite
-    if (tier === 'elite') {
+    // Fetch supplement recommendations for Elite users (or everyone in launch mode)
+    const launchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
+    if (tier === 'elite' || launchMode) {
       setSuppLoading(true)
       try {
         const res = await fetch('/api/supplement-recommendations')
@@ -485,7 +486,7 @@ function SupplementCard({ tier, recommendation, loading, expanded, onToggle }: {
   expanded: boolean
   onToggle: () => void
 }) {
-  const isElite = tier === 'elite'
+  const isElite = tier === 'elite' || process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
   const recs: any[] = recommendation?.recommendations?.supplements || []
   const hasData = recs.length > 0
 
