@@ -74,7 +74,7 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
                   className="block text-white mb-2"
                   style={{ letterSpacing: '0.08em' }}
                 >
-                  {isRTL ? 'منظومة' : 'SYSTEM'}
+                  {isRTL ? 'منظومة' : 'IS A SYSTEM.'}
                 </span>
                 <span
                   className="block"
