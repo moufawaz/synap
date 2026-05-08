@@ -31,7 +31,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
   const [customFat, setCustomFat]     = useState('')
   const [editMode, setEditMode]       = useState(false)
 
-  // Convert File → base64 string (no data-URI prefix)
+  // Convert File to base64 string (no data-URI prefix)
   const toBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -121,7 +121,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
     high: '#10B981', medium: '#F59E0B', low: '#EF4444',
   }
   const confidenceLabel: Record<string, string> = {
-    high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence — please verify',
+    high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence - please verify',
   }
 
   return (
@@ -138,7 +138,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
           <div className="flex items-center gap-2">
             <Camera size={16} style={{ color: '#F97316' }} />
             <p className="font-heading font-bold text-sm tracking-wider" style={{ color: '#F97316', letterSpacing: '0.1em' }}>
-              {step === 'scanning' ? 'IDENTIFYING…' : step === 'result' ? 'FOOD FOUND' : step === 'error' ? 'TRY AGAIN' : 'PHOTO SCAN'}
+              {step === 'scanning' ? 'IDENTIFYING...' : step === 'result' ? 'FOOD FOUND' : step === 'error' ? 'TRY AGAIN' : 'PHOTO SCAN'}
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: '#475569' }}>
@@ -146,7 +146,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto overscroll-contain flex-1">
 
           {/* ── CAPTURE step ── */}
           {step === 'capture' && (
@@ -201,7 +201,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
               )}
               <div className="flex flex-col items-center gap-3">
                 <Loader2 size={32} className="animate-spin" style={{ color: '#F97316' }} />
-                <p className="font-heading font-bold text-white">Ion is analysing…</p>
+                <p className="font-heading font-bold text-white">Ion is analysing...</p>
                 <p className="font-heading text-sm" style={{ color: '#64748B' }}>Reading nutrition information</p>
               </div>
             </div>
@@ -236,9 +236,11 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
                 <div className="w-full h-36 rounded-2xl overflow-hidden relative">
                   <img src={preview} alt="Food" className="w-full h-full object-cover" />
                   {/* confidence badge */}
-                  <div className="absolute top-2 right-2 px-2 py-1 rounded-full text-[10px] font-heading font-bold"
-                    style={{ background: 'rgba(0,0,0,0.7)', color: confidenceColor[result.confidence] || '#F59E0B' }}>
-                    ● {confidenceLabel[result.confidence] || 'Estimated'}
+                  <div
+                    className="absolute top-2 right-2 px-2 py-1 rounded-full text-[10px] font-heading font-bold"
+                    style={{ background: 'rgba(0,0,0,0.7)', color: confidenceColor[result.confidence] || '#F59E0B' }}
+                  >
+                    {confidenceLabel[result.confidence] || 'Estimated'}
                   </div>
                 </div>
               )}
@@ -283,7 +285,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
                     )}
                     {result.ai_estimated && (
                       <p className="font-heading text-[10px] mt-1" style={{ color: '#F59E0B' }}>
-                        ⚡ AI-estimated nutrition · edit if needed
+                        AI-estimated nutrition - edit if needed
                       </p>
                     )}
                   </>
@@ -297,7 +299,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
                   <button onClick={() => setServingG(g => Math.max(10, g - 25))}
                     className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-bold text-lg"
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#94A3B8' }}>
-                    −
+                    -
                   </button>
                   <div className="flex-1 flex items-center gap-1.5 px-4 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <input
@@ -352,7 +354,10 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
 
         {/* Footer CTA */}
         {step === 'result' && (
-          <div className="px-5 pb-6 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div
+            className="px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom)+96px)] sm:pb-6 flex-shrink-0"
+            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+          >
             <button
               onClick={handleConfirm}
               className="w-full py-4 rounded-2xl font-heading font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"

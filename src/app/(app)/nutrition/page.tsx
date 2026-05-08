@@ -343,7 +343,7 @@ export default function NutritionPage() {
       {/* Meal timing note */}
       {plan.meal_timing_note && (
         <div className="px-4 py-3 rounded-xl mb-4" style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.15)' }}>
-          <p className="font-heading text-xs leading-relaxed" style={{ color: '#94A3B8' }}>💡 {plan.meal_timing_note}</p>
+          <p className="font-heading text-xs leading-relaxed" style={{ color: '#94A3B8' }}>{plan.meal_timing_note}</p>
         </div>
       )}
 
@@ -439,7 +439,7 @@ export default function NutritionPage() {
                       <Flame size={10} className="inline mr-0.5" />{item.calories} kcal
                     </span>
                     <span className="font-heading text-[10px]" style={{ color: '#475569' }}>
-                      {item.servingG}g · P:{item.protein_g}g C:{item.carbs_g}g F:{item.fat_g}g
+                      {item.servingG}g - P:{item.protein_g}g C:{item.carbs_g}g F:{item.fat_g}g
                     </span>
                   </div>
                 </div>
