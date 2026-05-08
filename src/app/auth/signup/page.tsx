@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AuthCard from '@/components/auth/AuthCard'
 import { createBrowserClient } from '@/lib/supabase'
-import { Eye, EyeOff, ArrowRight, Loader2, Mail, RefreshCw, Phone, ChevronLeft } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, Loader2, Mail, RefreshCw } from 'lucide-react'
 
 export default function SignupPage() {
   return (
@@ -110,14 +110,6 @@ function SignupForm() {
   // OAuth state
   const [oauthLoading, setOauthLoading] = useState<'google' | null>(null)
 
-  // Phone OTP state
-  const [showPhone, setShowPhone] = useState(false)
-  const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
-  const [phoneStep, setPhoneStep] = useState<'enter' | 'verify'>('enter')
-  const [phoneLoading, setPhoneLoading] = useState(false)
-  const [phoneError, setPhoneError] = useState<string | null>(null)
-
   // ── Email/password signup ───────────────────────────────
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -178,32 +170,6 @@ function SignupForm() {
     // On success the browser will redirect — no further action needed
   }
 
-  // ── Phone OTP — send ────────────────────────────────────
-  const handleSendOTP = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setPhoneError(null)
-    if (!phone.trim()) { setPhoneError('Please enter your phone number.'); return }
-    setPhoneLoading(true)
-    const supabase = createBrowserClient()
-    const { error: otpError } = await supabase.auth.signInWithOtp({ phone })
-    setPhoneLoading(false)
-    if (otpError) { setPhoneError(otpError.message); return }
-    setPhoneStep('verify')
-  }
-
-  // ── Phone OTP — verify ──────────────────────────────────
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setPhoneError(null)
-    if (!otp.trim()) { setPhoneError('Please enter the code.'); return }
-    setPhoneLoading(true)
-    const supabase = createBrowserClient()
-    const { error: verifyError } = await supabase.auth.verifyOtp({ phone, token: otp, type: 'sms' })
-    setPhoneLoading(false)
-    if (verifyError) { setPhoneError(verifyError.message); return }
-    router.push(nextUrl)
-  }
-
   // ── Email confirmation sent screen ──────────────────────
   if (emailSent) {
     return (
@@ -243,92 +209,6 @@ function SignupForm() {
           >
             Already confirmed? Log In →
           </Link>
-        </div>
-      </AuthCard>
-    )
-  }
-
-  // ── Phone OTP view ──────────────────────────────────────
-  if (showPhone) {
-    return (
-      <AuthCard title="PHONE SIGN-UP" subtitle="We'll send a 6-digit code.">
-        <div className="flex flex-col gap-4">
-          {phoneStep === 'enter' ? (
-            <form onSubmit={handleSendOTP} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="font-heading text-xs font-semibold tracking-widest uppercase" style={{ color: '#64748B' }}>
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  required
-                  placeholder="+1 234 567 8900"
-                  className="w-full rounded-xl px-4 py-3 text-sm font-heading outline-none transition-all duration-200"
-                  style={inputBase}
-                  onFocus={inputFocus}
-                  onBlur={inputBlur}
-                />
-                <p className="font-heading text-xs" style={{ color: '#475569' }}>Include country code (e.g. +966 for Saudi Arabia)</p>
-              </div>
-
-              {phoneError && (
-                <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <p className="font-heading text-xs tracking-wider" style={{ color: '#F87171' }}>{phoneError}</p>
-                </div>
-              )}
-
-              <button type="submit" disabled={phoneLoading} className="btn-primary w-full py-4 font-heading font-black text-sm group">
-                {phoneLoading ? <Loader2 size={18} className="animate-spin" /> : <>Send Code <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" /></>}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOTP} className="flex flex-col gap-4">
-              <p className="font-heading text-sm" style={{ color: '#64748B' }}>
-                Enter the 6-digit code sent to <span style={{ color: '#94A3B8' }}>{phone}</span>
-              </p>
-              <div className="flex flex-col gap-2">
-                <label className="font-heading text-xs font-semibold tracking-widest uppercase" style={{ color: '#64748B' }}>
-                  Verification Code
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required
-                  placeholder="123456"
-                  className="w-full rounded-xl px-4 py-3 text-sm font-heading outline-none transition-all duration-200 text-center tracking-widest"
-                  style={{ ...inputBase, fontSize: '1.25rem', letterSpacing: '0.4em' }}
-                  onFocus={inputFocus}
-                  onBlur={inputBlur}
-                />
-              </div>
-
-              {phoneError && (
-                <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <p className="font-heading text-xs tracking-wider" style={{ color: '#F87171' }}>{phoneError}</p>
-                </div>
-              )}
-
-              <button type="submit" disabled={phoneLoading} className="btn-primary w-full py-4 font-heading font-black text-sm group">
-                {phoneLoading ? <Loader2 size={18} className="animate-spin" /> : <>Verify & Continue <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" /></>}
-              </button>
-
-              <button type="button" onClick={() => { setPhoneStep('enter'); setOtp('') }}
-                className="flex items-center justify-center gap-1.5 font-heading text-xs transition-colors"
-                style={{ color: '#475569' }}>
-                <ChevronLeft size={14} /> Back
-              </button>
-            </form>
-          )}
-
-          <button type="button" onClick={() => { setShowPhone(false); setPhoneStep('enter'); setPhone(''); setOtp(''); setPhoneError(null) }}
-            className="flex items-center justify-center gap-1.5 font-heading text-xs transition-colors"
-            style={{ color: '#475569' }}>
-            <ChevronLeft size={14} /> Use email instead
-          </button>
         </div>
       </AuthCard>
     )
@@ -409,7 +289,7 @@ function SignupForm() {
         </p>
       </form>
 
-      {/* Social / phone auth */}
+      {/* Social auth */}
       <div className="flex flex-col gap-3 mt-2">
         <OrDivider />
 
@@ -419,22 +299,6 @@ function SignupForm() {
           icon={<GoogleIcon />}
           label="Continue with Google"
         />
-
-        <button
-          type="button"
-          onClick={() => setShowPhone(true)}
-          className="w-full flex items-center justify-center gap-3 py-3 rounded-xl font-heading font-semibold text-sm transition-all"
-          style={{
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            color: '#CBD5E1',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.18)' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)' }}
-        >
-          <Phone size={16} />
-          Continue with Phone
-        </button>
       </div>
     </AuthCard>
   )
