@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const { data } = await admin
     .from('meals_log')
-    .select('id,meal_name,meal_time,calories_estimated,protein_g,carbs_g,fats_g,logged_at')
+    .select('id,meal_name:description,meal_time,calories_estimated,protein_g,carbs_g,fats_g,logged_at')
     .eq('user_id', user.id)
     .eq('date', date)
     .order('logged_at', { ascending: true })
@@ -29,12 +29,14 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body  = await req.json()
+  const { meal_name, ...rest } = body
   const admin = createAdminClient()
   const { data, error } = await admin.from('meals_log').insert({
     user_id:    user.id,
     date:       new Date().toISOString().split('T')[0],
     logged_at:  new Date().toISOString(),
-    ...body,
+    ...rest,
+    description: meal_name ?? body.description,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
