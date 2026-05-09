@@ -1,5 +1,6 @@
 import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import {
   Users, MessageCircle, Crown, DollarSign,
   TrendingUp, Zap, Activity, ExternalLink as ExternalLinkIcon,
@@ -36,6 +37,8 @@ const GOAL_LABELS: Record<string, string> = {
   be_healthier:    'Health',
 }
 
+type AdminTab = 'overview' | 'usage' | 'users' | 'billing'
+
 function getPlanTier(s: any): 'elite' | 'pro' | 'starter' {
   const p = (s.plan_type || s.plan_name || '').toLowerCase()
   if (p === 'elite')                  return 'elite'
@@ -43,7 +46,17 @@ function getPlanTier(s: any): 'elite' | 'pro' | 'starter' {
   return 'starter'
 }
 
-export default async function AdminPage() {
+function getAdminTab(tab?: string): AdminTab {
+  return tab === 'usage' || tab === 'users' || tab === 'billing' ? tab : 'overview'
+}
+
+function estimateTokensFromText(text?: string | null) {
+  return Math.max(1, Math.ceil((text || '').length / 4))
+}
+
+export default async function AdminPage({ searchParams }: { searchParams?: Promise<{ tab?: string }> }) {
+  const params = await searchParams
+  const activeTab = getAdminTab(params?.tab)
   // ── Auth guard ────────────────────────────────────────────────
   const supabase  = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -81,13 +94,15 @@ export default async function AdminPage() {
       .select('id', { count: 'exact', head: true })
       .in('role', ['user', 'assistant']),
     admin.from('chat_messages')
-      .select('user_id, role, created_at')
-      .in('role', ['user', 'assistant']),
+      .select('user_id, role, content, created_at, metadata')
+      .in('role', ['user', 'assistant'])
+      .range(0, 9999),
     admin.from('workout_log').select('id', { count: 'exact', head: true }),
     // Full message_usage for per-user stats & today aggregation
     admin.from('message_usage').select('user_id, date, count'),
     admin.from('ai_usage_log')
-      .select('user_id, feature, model, input_tokens, output_tokens, cache_write_tokens, cache_read_tokens, total_tokens, estimated_cost_usd, created_at'),
+      .select('user_id, feature, model, input_tokens, output_tokens, cache_write_tokens, cache_read_tokens, total_tokens, estimated_cost_usd, created_at')
+      .range(0, 9999),
     // Users who have an active plan
     admin.from('workout_plans').select('user_id').eq('active', true),
   ])
@@ -119,6 +134,58 @@ export default async function AdminPage() {
     if (row.role === 'assistant') bucket.assistantMessages += 1
     const date = row.created_at?.slice(0, 10) || ''
     if (date > bucket.lastDate) bucket.lastDate = date
+  }
+
+  const firstTrackedUsageByUser: Record<string, string> = {}
+  for (const row of tokenRows) {
+    if (!firstTrackedUsageByUser[row.user_id] || row.created_at < firstTrackedUsageByUser[row.user_id]) {
+      firstTrackedUsageByUser[row.user_id] = row.created_at
+    }
+  }
+
+  const estimatedHistoricalByUser: Record<string, {
+    messages: number
+    input: number
+    output: number
+    total: number
+    cost: number
+    monthMessages: number
+    monthInput: number
+    monthOutput: number
+    monthTotal: number
+    monthCost: number
+    lastDate: string
+  }> = {}
+  for (const row of chatRows) {
+    const firstTracked = firstTrackedUsageByUser[row.user_id]
+    if (firstTracked && row.created_at >= firstTracked) continue
+    if (!estimatedHistoricalByUser[row.user_id]) {
+      estimatedHistoricalByUser[row.user_id] = {
+        messages: 0, input: 0, output: 0, total: 0, cost: 0,
+        monthMessages: 0, monthInput: 0, monthOutput: 0, monthTotal: 0, monthCost: 0, lastDate: '',
+      }
+    }
+    const bucket = estimatedHistoricalByUser[row.user_id]
+    const isAssistant = row.role === 'assistant'
+    const tokens = estimateTokensFromText(row.content)
+    const input = isAssistant ? 0 : tokens
+    const output = isAssistant ? tokens : 0
+    const cost = estimateAnthropicCostUsd({ input_tokens: input, output_tokens: output }, 'claude-sonnet-4-5')
+    const createdDate = row.created_at?.slice(0, 10) || ''
+    const isThisMonth = row.created_at >= monthAgo
+    bucket.messages += isAssistant ? 1 : 0
+    bucket.input += input
+    bucket.output += output
+    bucket.total += tokens
+    bucket.cost += cost
+    if (isThisMonth) {
+      bucket.monthMessages += isAssistant ? 1 : 0
+      bucket.monthInput += input
+      bucket.monthOutput += output
+      bucket.monthTotal += tokens
+      bucket.monthCost += cost
+    }
+    if (createdDate > bucket.lastDate) bucket.lastDate = createdDate
   }
 
   const tokenByUser: Record<string, {
@@ -172,6 +239,38 @@ export default async function AdminPage() {
     bucket.messages += 1
     if (isThisMonth) bucket.monthMessages += 1
     if (createdDate > bucket.lastDate) bucket.lastDate = createdDate
+  }
+
+  for (const [userId, estimate] of Object.entries(estimatedHistoricalByUser)) {
+    if (!tokenByUser[userId]) {
+      tokenByUser[userId] = {
+        messages: 0,
+        input: 0,
+        output: 0,
+        cacheWrite: 0,
+        cacheRead: 0,
+        total: 0,
+        cost: 0,
+        monthMessages: 0,
+        monthInput: 0,
+        monthOutput: 0,
+        monthTotal: 0,
+        monthCost: 0,
+        lastDate: '',
+      }
+    }
+    const bucket = tokenByUser[userId]
+    bucket.messages += estimate.messages
+    bucket.input += estimate.input
+    bucket.output += estimate.output
+    bucket.total += estimate.total
+    bucket.cost += estimate.cost
+    bucket.monthMessages += estimate.monthMessages
+    bucket.monthInput += estimate.monthInput
+    bucket.monthOutput += estimate.monthOutput
+    bucket.monthTotal += estimate.monthTotal
+    bucket.monthCost += estimate.monthCost
+    if (estimate.lastDate > bucket.lastDate) bucket.lastDate = estimate.lastDate
   }
 
   // ── Subscription splits ───────────────────────────────────────
@@ -229,6 +328,7 @@ export default async function AdminPage() {
   const avgCostPerMessage = monthTokenMessages > 0 ? monthTokenCost / monthTokenMessages : 0
   const monthWindowDays = Math.max(1, Math.ceil((Date.now() - new Date(monthAgo).getTime()) / 86400000))
   const projectedMonthlyCost = monthTokenCost > 0 ? monthTokenCost * (30 / monthWindowDays) : 0
+  const estimatedHistoricalCost = Object.values(estimatedHistoricalByUser).reduce((sum, u) => sum + u.cost, 0)
 
   // ── Users with no plan (churn risk) ──────────────────────────
   const noPlanUsers = authUsers.filter(u => !planUserIds.has(u.id))
@@ -294,21 +394,21 @@ export default async function AdminPage() {
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         {[
-          { href: '#overview', label: 'Overview' },
-          { href: '#token-costs', label: 'Token Costs' },
-          { href: '#users', label: 'Users' },
-          { href: '#billing', label: 'Billing' },
+          { id: 'overview' as const, label: 'Overview' },
+          { id: 'usage' as const, label: 'Token Costs' },
+          { id: 'users' as const, label: 'Users' },
+          { id: 'billing' as const, label: 'Billing' },
         ].map(tab => (
-          <a key={tab.href} href={tab.href}
+          <Link key={tab.id} href={`/admin?tab=${tab.id}`}
             className="px-3 py-2 rounded-lg font-heading text-xs font-bold tracking-wider whitespace-nowrap"
-            style={{ background: tab.href === '#token-costs' ? 'rgba(187,92,246,0.16)' : 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: tab.href === '#token-costs' ? '#D88BFF' : '#64748B' }}>
+            style={{ background: activeTab === tab.id ? 'rgba(187,92,246,0.16)' : 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: activeTab === tab.id ? '#D88BFF' : '#64748B' }}>
             {tab.label}
-          </a>
+          </Link>
         ))}
       </div>
 
       {/* ── Row 1: Key metrics ─────────────────────────────────── */}
-      <div id="overview" className="grid grid-cols-2 sm:grid-cols-4 gap-3 scroll-mt-4">
+      <div id="overview" className={`${activeTab === 'overview' ? 'grid' : 'hidden'} grid-cols-2 sm:grid-cols-4 gap-3 scroll-mt-4`}>
         <StatCard label="Total Users"   value={totalUsers}
           sub={`+${newThisWeek} this week · +${newThisMonth} this month`}
           icon={Users} color="#BB5CF6" />
@@ -324,7 +424,7 @@ export default async function AdminPage() {
       </div>
 
       {/* ── Row 2: Engagement & onboarding ──────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className={`${activeTab === 'overview' ? 'grid' : 'hidden'} grid-cols-2 sm:grid-cols-4 gap-3`}>
         <StatCard label="Total Chats"     value={chatCountRes.count ?? 0}
           sub="user + assistant msgs"
           icon={MessageCircle} color="#D88BFF" />
@@ -339,12 +439,12 @@ export default async function AdminPage() {
           icon={TrendingUp} color="#F59E0B" />
       </div>
 
-      <div id="token-costs" className="glass-card overflow-hidden scroll-mt-4">
+      <div id="token-costs" className={`${activeTab === 'usage' ? 'block' : 'hidden'} glass-card overflow-hidden scroll-mt-4`}>
         <div className="px-5 py-4 flex items-start justify-between gap-3 flex-wrap" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
           <div>
             <SectionTitle>TOKEN COSTS</SectionTitle>
             <p className="font-heading text-[10px] -mt-2" style={{ color: '#475569' }}>
-              Based on ai_usage_log rows. Older AI calls before this update may show zero tokens.
+              Exact rows come from ai_usage_log. Historical messages before this update are estimated from saved chat text.
             </p>
             {tokenLogError && (
               <p className="font-heading text-[10px] mt-2" style={{ color: '#F59E0B' }}>
@@ -355,6 +455,11 @@ export default async function AdminPage() {
           <p className="font-heading text-[10px]" style={{ color: '#334155' }}>
             Pricing: ${TOKEN_PRICING.inputPerMTok}/MTok input · ${TOKEN_PRICING.outputPerMTok}/MTok output
           </p>
+          {estimatedHistoricalCost > 0 && (
+            <p className="font-heading text-[10px]" style={{ color: '#F59E0B' }}>
+              Historical estimate included: {formatUsd(estimatedHistoricalCost)}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
@@ -425,7 +530,7 @@ export default async function AdminPage() {
       </div>
 
       {/* ── Funnel + Distribution ─────────────────────────────────── */}
-      <div className="grid sm:grid-cols-2 gap-5">
+      <div className={`${activeTab === 'overview' ? 'grid' : 'hidden'} sm:grid-cols-2 gap-5`}>
 
         {/* Upgrade funnel */}
         <div className="glass-card p-5">
@@ -500,7 +605,7 @@ export default async function AdminPage() {
       </div>
 
       {/* ── Revenue + Sub status ──────────────────────────────────── */}
-      <div id="billing" className="grid sm:grid-cols-2 gap-5 scroll-mt-4">
+      <div id="billing" className={`${activeTab === 'billing' ? 'grid' : 'hidden'} sm:grid-cols-2 gap-5 scroll-mt-4`}>
 
         <div className="glass-card p-5">
           <SectionTitle>REVENUE METRICS</SectionTitle>
@@ -541,7 +646,7 @@ export default async function AdminPage() {
       </div>
 
       {/* ── Onboarding health ─────────────────────────────────────── */}
-      {noPlanUsers.length > 0 && (
+      {activeTab === 'users' && noPlanUsers.length > 0 && (
         <div className="glass-card p-5">
           <div className="flex items-center gap-2 mb-4">
             <AlertCircle size={14} style={{ color: '#F59E0B' }} />
@@ -595,7 +700,7 @@ export default async function AdminPage() {
       )}
 
       {/* ── Active plan breakdown ─────────────────────────────────── */}
-      {Object.keys(planBreakdown).length > 0 && (
+      {activeTab === 'users' && Object.keys(planBreakdown).length > 0 && (
         <div className="glass-card p-5">
           <SectionTitle>ACTIVE PLAN BREAKDOWN</SectionTitle>
           <div className="flex flex-col gap-3">
@@ -618,7 +723,7 @@ export default async function AdminPage() {
       )}
 
       {/* ── Billing events ───────────────────────────────────────── */}
-      {events.length > 0 && (
+      {activeTab === 'billing' && events.length > 0 && (
         <div className="glass-card overflow-hidden">
           <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
             <SectionTitle>RECENT BILLING EVENTS</SectionTitle>
@@ -646,7 +751,7 @@ export default async function AdminPage() {
       )}
 
       {/* ── All users table ──────────────────────────────────────── */}
-      <div id="users" className="glass-card overflow-hidden scroll-mt-4">
+      <div id="users" className={`${activeTab === 'users' ? 'block' : 'hidden'} glass-card overflow-hidden scroll-mt-4`}>
         <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
           <SectionTitle>ALL USERS ({totalUsers})</SectionTitle>
           <p className="font-heading text-[10px]" style={{ color: '#334155' }}>Sorted newest first</p>
@@ -739,7 +844,7 @@ export default async function AdminPage() {
       </div>
 
       {/* ── Goal + Gender breakdown ───────────────────────────────── */}
-      <div className="grid sm:grid-cols-2 gap-5">
+      <div className={`${activeTab === 'overview' ? 'grid' : 'hidden'} sm:grid-cols-2 gap-5`}>
 
         <div className="glass-card p-5">
           <SectionTitle>GOAL BREAKDOWN</SectionTitle>
