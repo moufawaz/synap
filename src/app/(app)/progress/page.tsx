@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { TrendingDown, TrendingUp, Minus, Sparkles, Flame, Target, Lock, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+import { TrendingDown, TrendingUp, Minus, Sparkles, Flame, Target, Lock, FileText, ChevronDown, ChevronUp, Brain } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase'
 import Link from 'next/link'
 
@@ -27,6 +27,7 @@ export default function ProgressPage() {
   const [weeklyReports, setWeeklyReports] = useState<any[]>([])
   const [reportsLoading, setReportsLoading] = useState(false)
   const [expandedReport, setExpandedReport] = useState<string | null>(null)
+  const [coachTimeline, setCoachTimeline] = useState<any[]>([])
 
   useEffect(() => { loadData() }, [])
 
@@ -42,6 +43,10 @@ export default function ProgressPage() {
     const wData = await wRes.json()
     setMeasurements((mData.measurements || []).reverse())
     setWorkoutLogs(wData.logs || [])
+    fetch('/api/coach-features')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setCoachTimeline(d?.timeline || []))
+      .catch(() => setCoachTimeline([]))
 
     // Fetch subscription tier + goal target
     if (user) {
@@ -108,6 +113,30 @@ export default function ProgressPage() {
         <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>ANALYTICS</p>
         <h1 className="font-heading font-bold text-2xl text-white">Your Progress</h1>
       </div>
+
+      {coachTimeline.length > 0 && (
+        <div className="glass-card p-5 mb-6" style={{ borderColor: 'rgba(187,92,246,0.16)' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Brain size={16} style={{ color: '#BB5CF6' }} />
+            <p className="font-heading font-bold text-sm text-white">Coach Memory Timeline</p>
+          </div>
+          <div className="space-y-4">
+            {coachTimeline.map((item, index) => (
+              <div key={`${item.date}-${index}`} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-2.5 h-2.5 rounded-full mt-1" style={{ background: '#BB5CF6', boxShadow: '0 0 12px rgba(187,92,246,0.5)' }} />
+                  {index < coachTimeline.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'rgba(187,92,246,0.18)' }} />}
+                </div>
+                <div className="pb-1">
+                  <p className="font-heading text-sm font-bold text-white">{item.title}</p>
+                  <p className="text-xs leading-relaxed mt-1" style={{ color: '#64748B' }}>{item.body}</p>
+                  <p className="font-heading text-[10px] mt-1" style={{ color: '#475569' }}>{new Date(item.date).toLocaleDateString()}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Summary cards */}
       {measurements.length >= 2 && (

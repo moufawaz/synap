@@ -399,7 +399,7 @@ export default function MeasurementsPage() {
                       color: isGood ? '#10B981' : '#F59E0B',
                       border: `1px solid ${isGood ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
                     }}>
-                      {isGood ? '✓ Balanced' : `⚠ ${gap}cm gap`}
+                      {isGood ? 'Balanced' : `${gap}cm gap`}
                     </span>
                   )}
                 </div>
@@ -430,6 +430,40 @@ export default function MeasurementsPage() {
                 )}
               </div>
             ))}
+          </div>
+          <div className="glass-card p-5" style={{ borderColor: 'rgba(16,185,129,0.18)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle size={16} style={{ color: '#10B981' }} />
+              <p className="font-heading font-bold text-sm text-white">Body Symmetry Coach</p>
+            </div>
+            {(() => {
+              const focus = symmetryData.find(item => item.gap != null && parseFloat(item.gap) > 0.5)
+              if (!focus) {
+                return (
+                  <p className="font-heading text-sm leading-relaxed" style={{ color: '#64748B' }}>
+                    Your logged left/right measurements are balanced. Keep using the same range of motion on both sides and recheck every two weeks.
+                  </p>
+                )
+              }
+              const drill = focus.label === 'Biceps'
+                ? 'single-arm curls and controlled cable curls'
+                : focus.label === 'Thighs'
+                  ? 'split squats, single-leg press, and step-ups'
+                  : 'single-leg calf raises with a pause at the top'
+              return (
+                <div>
+                  <p className="font-heading text-sm leading-relaxed" style={{ color: '#64748B' }}>
+                    {focus.label} need attention: {focus.gap}cm gap. Start unilateral work on the smaller side first.
+                  </p>
+                  <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                    <p className="font-heading text-xs font-bold mb-1" style={{ color: '#10B981' }}>Correction plan</p>
+                    <p className="font-heading text-xs" style={{ color: '#94A3B8' }}>
+                      Add 2 extra sets of {drill}. Match reps on the stronger side, then remeasure in 14 days.
+                    </p>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}

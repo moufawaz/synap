@@ -2,7 +2,7 @@
 
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame, Camera, X } from 'lucide-react'
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame, Camera, X, Sparkles } from 'lucide-react'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { RecipeButton } from '@/components/ui/RecipeModal'
 import UpgradeModal from '@/components/ui/UpgradeModal'
@@ -69,6 +69,7 @@ export default function NutritionPage() {
   const [scannerOpen,       setScannerOpen]       = useState(false)
   const [upgradeOpen,       setUpgradeOpen]       = useState(false)
   const [tier,              setTier]              = useState<'starter' | 'trial' | 'pro' | 'elite'>('starter')
+  const [mealNow,           setMealNow]           = useState<any>(null)
 
   useEffect(() => {
     // Restore today's state instantly from localStorage while DB loads
@@ -83,17 +84,19 @@ export default function NutritionPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const [planRes, profileRes, logsRes, hydrationRes, subRes] = await Promise.all([
+    const [planRes, profileRes, logsRes, hydrationRes, subRes, coachRes] = await Promise.all([
       supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
       fetch(`/api/log-meal?date=${TODAY}`).then(r => r.json()).catch(() => ({ logs: [] })),
       fetch(`/api/hydration?date=${TODAY}`).then(r => r.json()).catch(() => ({ hydration: null })),
       fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),
+      fetch('/api/coach-features').then(r => r.json()).catch(() => null),
     ])
 
     const planData = planRes.data?.plan_json || null
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
     if (subRes?.tier) setTier(subRes.tier)
+    if (coachRes?.mealNow) setMealNow(coachRes.mealNow)
     setPlan(planData)
 
     const dbWater = Number(hydrationRes.hydration?.glasses)
@@ -389,6 +392,34 @@ export default function NutritionPage() {
           </div>
         </div>
       </div>
+
+      {mealNow && (
+        <div className="glass-card p-4 mb-5" style={{ borderColor: 'rgba(16,185,129,0.2)' }}>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981', border: '1px solid rgba(16,185,129,0.25)' }}>
+              <Sparkles size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-heading text-[11px] font-bold tracking-widest uppercase" style={{ color: '#10B981' }}>
+                {isRTL ? 'ماذا آكل الآن؟' : 'WHAT SHOULD I EAT NOW?'}
+              </p>
+              <h2 className="font-heading text-base font-bold text-white mt-1">{mealNow.title}</h2>
+              <p className="text-sm mt-1" style={{ color: '#64748B' }}>{mealNow.reason}</p>
+              {Array.isArray(mealNow.items) && mealNow.items.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {mealNow.items.slice(0, 3).map((item: string, idx: number) => (
+                    <p key={idx} className="text-xs" style={{ color: '#94A3B8' }}>• {item}</p>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2 mt-3">
+                <span className="font-heading text-xs px-2 py-1 rounded-lg" style={{ background: 'rgba(249,115,22,0.1)', color: '#F97316' }}>{Math.round(mealNow.calories || 0)} kcal</span>
+                <span className="font-heading text-xs px-2 py-1 rounded-lg" style={{ background: 'rgba(187,92,246,0.1)', color: '#BB5CF6' }}>{Math.round(mealNow.protein_g || 0)}g protein</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Meal timing note */}
       {plan.meal_timing_note && (

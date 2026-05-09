@@ -2,6 +2,7 @@ import { createServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import IonAvatar from '@/components/ui/IonAvatar'
+import CoachFeaturesPanel from '@/components/dashboard/CoachFeaturesPanel'
 import {
   Dumbbell, UtensilsCrossed, TrendingUp, Flame,
   ChevronRight, Zap, Target, Sparkles, Shield, Crown, FileText,
@@ -259,6 +260,8 @@ export default async function DashboardPage() {
           </div>
         </Link>
       )}
+
+      <CoachFeaturesPanel />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <StatCard icon={<Target size={16} />} label={isRTL ? 'الهدف' : 'GOAL'} value={goalLabel(profile.goal, isRTL)} color={C.spark} />
