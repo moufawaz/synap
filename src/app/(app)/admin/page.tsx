@@ -329,6 +329,48 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
   const monthWindowDays = Math.max(1, Math.ceil((Date.now() - new Date(monthAgo).getTime()) / 86400000))
   const projectedMonthlyCost = monthTokenCost > 0 ? monthTokenCost * (30 / monthWindowDays) : 0
   const estimatedHistoricalCost = Object.values(estimatedHistoricalByUser).reduce((sum, u) => sum + u.cost, 0)
+  const aiMarginPct = mrr > 0 ? Math.round(((mrr - projectedMonthlyCost) / mrr) * 100) : null
+  const highCostUsers = authUsers
+    .map(u => ({ user: u, usage: tokenByUser[u.id], profile: profiles.find(p => p.user_id === u.id), sub: subs.find(s => s.user_id === u.id) }))
+    .filter(row => row.usage?.monthCost > 0)
+    .sort((a, b) => (b.usage?.monthCost || 0) - (a.usage?.monthCost || 0))
+    .slice(0, 8)
+
+  const featureCosts: Record<string, { calls: number; tokens: number; cost: number }> = {}
+  for (const row of tokenRows) {
+    const key = row.feature || 'unknown'
+    if (!featureCosts[key]) featureCosts[key] = { calls: 0, tokens: 0, cost: 0 }
+    featureCosts[key].calls += 1
+    featureCosts[key].tokens += row.total_tokens || 0
+    featureCosts[key].cost += Number(row.estimated_cost_usd || 0)
+  }
+  if (estimatedHistoricalCost > 0) {
+    featureCosts.historical_chat_estimate = {
+      calls: Object.values(estimatedHistoricalByUser).reduce((sum, u) => sum + u.messages, 0),
+      tokens: Object.values(estimatedHistoricalByUser).reduce((sum, u) => sum + u.total, 0),
+      cost: estimatedHistoricalCost,
+    }
+  }
+  const topFeatureCosts = Object.entries(featureCosts)
+    .map(([feature, data]) => ({ feature, ...data }))
+    .sort((a, b) => b.cost - a.cost)
+
+  const tierCosts: Record<string, { users: number; messages: number; cost: number; tokens: number }> = {
+    starter: { users: 0, messages: 0, cost: 0, tokens: 0 },
+    trial: { users: 0, messages: 0, cost: 0, tokens: 0 },
+    pro: { users: 0, messages: 0, cost: 0, tokens: 0 },
+    elite: { users: 0, messages: 0, cost: 0, tokens: 0 },
+  }
+  for (const u of authUsers) {
+    const sub = subs.find(s => s.user_id === u.id)
+    const tier = sub?.status === 'trial' ? 'trial' : sub?.status === 'active' ? getPlanTier(sub) : 'starter'
+    const usage = tokenByUser[u.id]
+    tierCosts[tier].users += 1
+    tierCosts[tier].messages += usage?.monthMessages || 0
+    tierCosts[tier].cost += usage?.monthCost || 0
+    tierCosts[tier].tokens += usage?.monthTotal || 0
+  }
+  const thresholdUsers = highCostUsers.filter(row => (row.usage?.monthCost || 0) >= 1)
 
   // ── Users with no plan (churn risk) ──────────────────────────
   const noPlanUsers = authUsers.filter(u => !planUserIds.has(u.id))
@@ -475,6 +517,76 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
           <StatCard label="All-Time AI Cost" value={formatUsd(totalTokenCost)}
             sub={`${tokenRows.length} tracked rows`}
             icon={BarChart3} color="#3B82F6" />
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-3 p-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <StatCard label="AI Cost vs MRR" value={mrr > 0 ? `${aiMarginPct}% margin` : 'No MRR'}
+            sub={`MRR SAR ${mrr.toFixed(0)} · AI ${formatUsd(projectedMonthlyCost)}/mo`}
+            icon={DollarSign} color={aiMarginPct !== null && aiMarginPct < 80 ? '#F59E0B' : '#10B981'} />
+          <StatCard label="High-Cost Users" value={thresholdUsers.length}
+            sub="users at or above $1 this month"
+            icon={AlertCircle} color={thresholdUsers.length > 0 ? '#F59E0B' : '#10B981'} />
+          <StatCard label="Tracked AI Calls" value={tokenRows.length}
+            sub={`${topFeatureCosts.length} feature groups`}
+            icon={Activity} color="#3B82F6" />
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-5 p-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <div>
+            <SectionTitle>TOP EXPENSIVE USERS</SectionTitle>
+            <div className="flex flex-col gap-2">
+              {highCostUsers.length === 0 ? (
+                <p className="font-heading text-xs" style={{ color: '#475569' }}>No cost data yet.</p>
+              ) : highCostUsers.map(({ user: u, usage, profile, sub }) => {
+                const tier = sub?.status === 'trial' ? 'Trial' : sub?.status === 'active' ? getPlanTier(sub).toUpperCase() : 'Starter'
+                return (
+                  <div key={u.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div className="min-w-0">
+                      <p className="font-heading text-xs text-white truncate">{profile?.name || u.email}</p>
+                      <p className="font-heading text-[10px]" style={{ color: '#475569' }}>{tier} · {usage?.monthMessages || 0} replies</p>
+                    </div>
+                    <p className="font-heading text-xs font-bold" style={{ color: (usage?.monthCost || 0) >= 1 ? '#F59E0B' : '#D88BFF' }}>{formatUsd(usage?.monthCost || 0)}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div>
+            <SectionTitle>TOP EXPENSIVE FEATURES</SectionTitle>
+            <div className="flex flex-col gap-2">
+              {topFeatureCosts.length === 0 ? (
+                <p className="font-heading text-xs" style={{ color: '#475569' }}>No feature cost data yet.</p>
+              ) : topFeatureCosts.slice(0, 8).map(feature => (
+                <div key={feature.feature} className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <p className="font-heading text-xs text-white truncate">{feature.feature.replace(/_/g, ' ')}</p>
+                    <p className="font-heading text-xs font-bold" style={{ color: '#D88BFF' }}>{formatUsd(feature.cost)}</p>
+                  </div>
+                  <p className="font-heading text-[10px]" style={{ color: '#475569' }}>{feature.calls} calls · {feature.tokens.toLocaleString()} tokens</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <SectionTitle>COST BY PLAN</SectionTitle>
+            <div className="flex flex-col gap-2">
+              {Object.entries(tierCosts).map(([tier, data]) => (
+                <div key={tier} className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-heading text-xs text-white capitalize">{tier}</p>
+                    <p className="font-heading text-xs font-bold" style={{ color: data.cost > 0 ? '#10B981' : '#334155' }}>{formatUsd(data.cost)}</p>
+                  </div>
+                  <p className="font-heading text-[10px]" style={{ color: '#475569' }}>{data.users} users · {data.messages} replies · {data.tokens.toLocaleString()} tokens</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <SectionTitle>PER-USER TOKEN COSTS</SectionTitle>
         </div>
 
         <div className="overflow-x-auto">
