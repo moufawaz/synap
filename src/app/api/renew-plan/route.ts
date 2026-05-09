@@ -5,6 +5,7 @@ import { sendEmail } from '@/lib/resend'
 import { sendPushNotification } from '@/lib/onesignal'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { getUserSubscription, effectivePlan } from '@/lib/subscription'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 // POST /api/renew-plan called by the adaptation-check job when a plan is expiring
 export async function POST(req: Request) {
@@ -129,6 +130,7 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
       max_tokens: 8000,
       messages: [{ role: 'user', content: prompt }],
     })
+    await recordAiUsage({ userId: user.id, feature: `renew_plan_${planType}`, model: message.model, usage: message.usage })
 
     const raw = (message.content[0] as any).text
     const match = raw.match(/\{[\s\S]*\}/)
@@ -267,6 +269,7 @@ Generate personalised supplement recommendations as JSON. Return ONLY valid JSON
     max_tokens: 1200,
     messages: [{ role: 'user', content: prompt }],
   })
+  await recordAiUsage({ userId, feature: 'supplement_recommendations', model: message.model, usage: message.usage })
 
   const raw = (message.content[0] as any).text
   const match = raw.match(/\{[\s\S]*\}/)

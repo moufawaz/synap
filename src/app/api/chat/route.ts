@@ -4,6 +4,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { canSendMessage, incrementMessageCount, isLaunchMode, getUserSubscription, effectivePlan } from '@/lib/subscription'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
+import { estimateAnthropicCostUsd } from '@/lib/token-cost'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 export async function POST(req: Request) {
   // Guard: API key must be set
@@ -132,19 +134,43 @@ export async function POST(req: Request) {
     }
 
     // Save assistant response
+    const usageMetadata = {
+      model: response.model,
+      input_tokens: response.usage.input_tokens,
+      output_tokens: response.usage.output_tokens,
+      cache_creation_input_tokens: response.usage.cache_creation_input_tokens || 0,
+      cache_read_input_tokens: response.usage.cache_read_input_tokens || 0,
+      estimated_cost_usd: estimateAnthropicCostUsd(response.usage, response.model),
+    }
+    await recordAiUsage({
+      userId: user.id,
+      feature: 'ion_chat',
+      model: response.model,
+      usage: response.usage,
+    })
+    const totalEstimatedCostUsd = usageMetadata.estimated_cost_usd + (planEdit.applied ? planEdit.usage.estimated_cost_usd : 0)
+
     await supabase.from('chat_messages').insert({
       user_id: user.id,
       role: 'assistant',
       content: reply,
       message_type: messageType,
-      metadata: planEdit.applied ? { plan_edit: planEdit } : null,
+      metadata: {
+        usage: usageMetadata,
+        total_estimated_cost_usd: totalEstimatedCostUsd,
+        ...(planEdit.applied ? { plan_edit: planEdit } : {}),
+      },
     })
 
     if (!isLaunchMode()) {
       await incrementMessageCount(user.id).catch(() => {})
     }
 
-    return NextResponse.json({ reply, message_type: messageType, plan_edit: planEdit.applied ? planEdit : null })
+    return NextResponse.json({
+      reply,
+      message_type: messageType,
+      plan_edit: planEdit.applied ? { type: planEdit.type, summary: planEdit.summary } : null,
+    })
   } catch (err: any) {
     console.error('Chat error:', err?.status, err?.error?.type, err?.message)
     return NextResponse.json({ error: anthropicFriendlyError(err) }, { status: 500 })
@@ -153,7 +179,7 @@ export async function POST(req: Request) {
 
 type PlanEditResult =
   | { applied: false; reason: string }
-  | { applied: true; type: 'workout' | 'diet'; summary: string }
+  | { applied: true; type: 'workout' | 'diet'; summary: string; usage: { model: string; input_tokens: number; output_tokens: number; estimated_cost_usd: number } }
 
 async function maybeApplyPlanEdit({
   client,
@@ -217,10 +243,23 @@ async function maybeApplyPlanEdit({
       if (error) throw error
     }
 
+    await recordAiUsage({
+      userId,
+      feature: `plan_edit_${intent}`,
+      model: editResponse.model,
+      usage: editResponse.usage,
+    })
+
     return {
       applied: true,
       type: intent,
       summary: edit.summary.slice(0, 500),
+      usage: {
+        model: editResponse.model,
+        input_tokens: editResponse.usage.input_tokens,
+        output_tokens: editResponse.usage.output_tokens,
+        estimated_cost_usd: estimateAnthropicCostUsd(editResponse.usage, editResponse.model),
+      },
     }
   } catch (err) {
     console.error('Plan edit failed:', err)

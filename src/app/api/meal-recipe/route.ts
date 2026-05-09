@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { withAnthropicRetry } from '@/lib/anthropic'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 export const runtime = 'nodejs'
 export const maxDuration = 20
@@ -56,6 +57,7 @@ JSON shape:
     }))
 
     const raw = response.content[0].type === 'text' ? response.content[0].text : ''
+    await recordAiUsage({ userId: user.id, feature: 'meal_recipe', model: response.model, usage: response.usage })
     const recipe = parseJsonObject(raw)
     if (!recipe?.title || !Array.isArray(recipe.steps)) {
       return NextResponse.json({ error: 'Invalid recipe response.' }, { status: 500 })
@@ -77,4 +79,3 @@ function parseJsonObject(raw: string): any | null {
     return null
   }
 }
-

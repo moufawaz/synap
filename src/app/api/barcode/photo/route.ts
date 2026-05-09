@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { withAnthropicRetry } from '@/lib/anthropic'
 import { requireFoodScanAccess } from '@/lib/feature-access'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 const client = new Anthropic()
 
@@ -58,6 +59,9 @@ Rules:
         },
       ],
     }))
+    if (gate.user) {
+      await recordAiUsage({ userId: gate.user.id, feature: 'food_photo_scan', model: message.model, usage: message.usage })
+    }
 
     const raw = (message.content[0] as any).text
     const match = raw.match(/\{[\s\S]*\}/)

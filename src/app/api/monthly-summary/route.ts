@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 export async function GET() {
   try {
@@ -46,6 +47,7 @@ Write a monthly summary in ${profile.language === 'ar' ? 'Arabic' : 'English'} a
       max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     })
+    await recordAiUsage({ userId: user.id, feature: 'monthly_summary', model: message.model, usage: message.usage })
 
     const summary = (message.content[0] as any).text
 

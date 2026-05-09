@@ -5,6 +5,7 @@ import {
   TrendingUp, Zap, Activity, ExternalLink as ExternalLinkIcon,
   XCircle, BarChart3, Dumbbell, CheckCircle2, AlertCircle, Clock,
 } from 'lucide-react'
+import { estimateAnthropicCostUsd, formatUsd, TOKEN_PRICING } from '@/lib/token-cost'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,8 +63,10 @@ export default async function AdminPage() {
     subsRes,
     billingEventsRes,
     chatCountRes,
+    chatRowsRes,
     workoutLogCountRes,
     msgUsageRes,
+    tokenMessagesRes,
     workoutPlansRes,
   ] = await Promise.all([
     admin.auth.admin.listUsers({ perPage: 1000 }),
@@ -77,9 +80,14 @@ export default async function AdminPage() {
     admin.from('chat_messages')
       .select('id', { count: 'exact', head: true })
       .in('role', ['user', 'assistant']),
+    admin.from('chat_messages')
+      .select('user_id, role, created_at')
+      .in('role', ['user', 'assistant']),
     admin.from('workout_log').select('id', { count: 'exact', head: true }),
     // Full message_usage for per-user stats & today aggregation
     admin.from('message_usage').select('user_id, date, count'),
+    admin.from('ai_usage_log')
+      .select('user_id, feature, model, input_tokens, output_tokens, cache_write_tokens, cache_read_tokens, total_tokens, estimated_cost_usd, created_at'),
     // Users who have an active plan
     admin.from('workout_plans').select('user_id').eq('active', true),
   ])
@@ -88,7 +96,10 @@ export default async function AdminPage() {
   const profiles      = profilesRes.data || []
   const subs          = subsRes.data || []
   const events        = billingEventsRes.data || []
+  const chatRows      = chatRowsRes.data || []
   const msgUsage      = msgUsageRes.data || []
+  const tokenRows = tokenMessagesRes.data || []
+  const tokenLogError = tokenMessagesRes.error?.message || null
   const planUserIds   = new Set((workoutPlansRes.data || []).map((r: any) => r.user_id))
 
   // ── Per-user message aggregation ─────────────────────────────
@@ -97,6 +108,70 @@ export default async function AdminPage() {
     if (!msgByUser[row.user_id]) msgByUser[row.user_id] = { total: 0, lastDate: '' }
     msgByUser[row.user_id].total += row.count || 0
     if (row.date > msgByUser[row.user_id].lastDate) msgByUser[row.user_id].lastDate = row.date
+  }
+
+  const chatByUser: Record<string, { total: number; userMessages: number; assistantMessages: number; lastDate: string }> = {}
+  for (const row of chatRows) {
+    if (!chatByUser[row.user_id]) chatByUser[row.user_id] = { total: 0, userMessages: 0, assistantMessages: 0, lastDate: '' }
+    const bucket = chatByUser[row.user_id]
+    bucket.total += 1
+    if (row.role === 'user') bucket.userMessages += 1
+    if (row.role === 'assistant') bucket.assistantMessages += 1
+    const date = row.created_at?.slice(0, 10) || ''
+    if (date > bucket.lastDate) bucket.lastDate = date
+  }
+
+  const tokenByUser: Record<string, {
+    messages: number
+    input: number
+    output: number
+    cacheWrite: number
+    cacheRead: number
+    total: number
+    cost: number
+    monthMessages: number
+    monthInput: number
+    monthOutput: number
+    monthTotal: number
+    monthCost: number
+    lastDate: string
+  }> = {}
+  for (const row of tokenRows) {
+    const createdDate = row.created_at?.slice(0, 10) || ''
+    const isThisMonth = row.created_at >= monthAgo
+    if (!tokenByUser[row.user_id]) {
+      tokenByUser[row.user_id] = {
+        messages: 0, input: 0, output: 0, cacheWrite: 0, cacheRead: 0, total: 0, cost: 0,
+        monthMessages: 0, monthInput: 0, monthOutput: 0, monthTotal: 0, monthCost: 0, lastDate: '',
+      }
+    }
+    const bucket = tokenByUser[row.user_id]
+    const input = row.input_tokens || 0
+    const output = row.output_tokens || 0
+    const cacheWrite = row.cache_write_tokens || 0
+    const cacheRead = row.cache_read_tokens || 0
+    const total = row.total_tokens || input + output + cacheWrite + cacheRead
+    const cost = Number(row.estimated_cost_usd || 0) || estimateAnthropicCostUsd({
+      input_tokens: input,
+      output_tokens: output,
+      cache_creation_input_tokens: cacheWrite,
+      cache_read_input_tokens: cacheRead,
+    }, row.model)
+    bucket.input += input
+    bucket.output += output
+    bucket.cacheWrite += cacheWrite
+    bucket.cacheRead += cacheRead
+    bucket.total += total
+    bucket.cost += cost
+    if (isThisMonth) {
+      bucket.monthInput += input
+      bucket.monthOutput += output
+      bucket.monthTotal += total
+      bucket.monthCost += cost
+    }
+    bucket.messages += 1
+    if (isThisMonth) bucket.monthMessages += 1
+    if (createdDate > bucket.lastDate) bucket.lastDate = createdDate
   }
 
   // ── Subscription splits ───────────────────────────────────────
@@ -136,12 +211,24 @@ export default async function AdminPage() {
 
   // ── Today activity ────────────────────────────────────────────
   const todayRows    = msgUsage.filter(r => r.date === today)
-  const todayMsgs    = todayRows.reduce((s, r) => s + (r.count || 0), 0)
-  const activeToday  = todayRows.length
+  const todayChatRows = chatRows.filter(r => r.created_at?.slice(0, 10) === today)
+  const todayMsgs    = todayChatRows.length || todayRows.reduce((s, r) => s + (r.count || 0), 0)
+  const activeToday  = new Set(todayChatRows.map(r => r.user_id)).size || todayRows.length
 
   // ── Retention (sent message in last 7 / 30 days) ─────────────
-  const active7d  = new Set(msgUsage.filter(r => r.date >= weekAgo.slice(0, 10)).map(r => r.user_id)).size
-  const active30d = new Set(msgUsage.filter(r => r.date >= monthAgo.slice(0, 10)).map(r => r.user_id)).size
+  const active7d  = new Set(chatRows.filter(r => r.created_at >= weekAgo).map(r => r.user_id)).size
+    || new Set(msgUsage.filter(r => r.date >= weekAgo.slice(0, 10)).map(r => r.user_id)).size
+  const active30d = new Set(chatRows.filter(r => r.created_at >= monthAgo).map(r => r.user_id)).size
+    || new Set(msgUsage.filter(r => r.date >= monthAgo.slice(0, 10)).map(r => r.user_id)).size
+
+  const tokenUsers = Object.values(tokenByUser)
+  const totalTokenCost = tokenUsers.reduce((sum, u) => sum + u.cost, 0)
+  const monthTokenCost = tokenUsers.reduce((sum, u) => sum + u.monthCost, 0)
+  const monthTokenTotal = tokenUsers.reduce((sum, u) => sum + u.monthTotal, 0)
+  const monthTokenMessages = tokenUsers.reduce((sum, u) => sum + u.monthMessages, 0)
+  const avgCostPerMessage = monthTokenMessages > 0 ? monthTokenCost / monthTokenMessages : 0
+  const monthWindowDays = Math.max(1, Math.ceil((Date.now() - new Date(monthAgo).getTime()) / 86400000))
+  const projectedMonthlyCost = monthTokenCost > 0 ? monthTokenCost * (30 / monthWindowDays) : 0
 
   // ── Users with no plan (churn risk) ──────────────────────────
   const noPlanUsers = authUsers.filter(u => !planUserIds.has(u.id))
@@ -205,8 +292,23 @@ export default async function AdminPage() {
         </div>
       )}
 
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {[
+          { href: '#overview', label: 'Overview' },
+          { href: '#token-costs', label: 'Token Costs' },
+          { href: '#users', label: 'Users' },
+          { href: '#billing', label: 'Billing' },
+        ].map(tab => (
+          <a key={tab.href} href={tab.href}
+            className="px-3 py-2 rounded-lg font-heading text-xs font-bold tracking-wider whitespace-nowrap"
+            style={{ background: tab.href === '#token-costs' ? 'rgba(187,92,246,0.16)' : 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: tab.href === '#token-costs' ? '#D88BFF' : '#64748B' }}>
+            {tab.label}
+          </a>
+        ))}
+      </div>
+
       {/* ── Row 1: Key metrics ─────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div id="overview" className="grid grid-cols-2 sm:grid-cols-4 gap-3 scroll-mt-4">
         <StatCard label="Total Users"   value={totalUsers}
           sub={`+${newThisWeek} this week · +${newThisMonth} this month`}
           icon={Users} color="#BB5CF6" />
@@ -235,6 +337,91 @@ export default async function AdminPage() {
         <StatCard label="Retention 7d/30d" value={`${active7d} / ${active30d}`}
           sub="users active in last 7 / 30 days"
           icon={TrendingUp} color="#F59E0B" />
+      </div>
+
+      <div id="token-costs" className="glass-card overflow-hidden scroll-mt-4">
+        <div className="px-5 py-4 flex items-start justify-between gap-3 flex-wrap" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <div>
+            <SectionTitle>TOKEN COSTS</SectionTitle>
+            <p className="font-heading text-[10px] -mt-2" style={{ color: '#475569' }}>
+              Based on ai_usage_log rows. Older AI calls before this update may show zero tokens.
+            </p>
+            {tokenLogError && (
+              <p className="font-heading text-[10px] mt-2" style={{ color: '#F59E0B' }}>
+                Token table not ready: run supabase-ai-usage.sql in Supabase.
+              </p>
+            )}
+          </div>
+          <p className="font-heading text-[10px]" style={{ color: '#334155' }}>
+            Pricing: ${TOKEN_PRICING.inputPerMTok}/MTok input · ${TOKEN_PRICING.outputPerMTok}/MTok output
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <StatCard label="30d Token Cost" value={formatUsd(monthTokenCost)}
+            sub={`${monthTokenTotal.toLocaleString()} tokens tracked`}
+            icon={DollarSign} color="#10B981" />
+          <StatCard label="Projected Monthly" value={formatUsd(projectedMonthlyCost)}
+            sub="run-rate from tracked usage"
+            icon={TrendingUp} color="#F59E0B" />
+          <StatCard label="Avg Cost / Msg" value={formatUsd(avgCostPerMessage)}
+            sub={`${monthTokenMessages} assistant replies`}
+            icon={MessageCircle} color="#D88BFF" />
+          <StatCard label="All-Time AI Cost" value={formatUsd(totalTokenCost)}
+            sub={`${tokenRows.length} tracked rows`}
+            icon={BarChart3} color="#3B82F6" />
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                {['USER', 'MESSAGES', '30D TOKENS', '30D COST', 'ALL TOKENS', 'ALL COST', 'AVG / MSG', 'LAST AI USE'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left font-heading text-[10px] tracking-widest whitespace-nowrap" style={{ color: '#475569' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...authUsers]
+                .map(u => ({ user: u, usage: tokenByUser[u.id] }))
+                .sort((a, b) => (b.usage?.monthCost || 0) - (a.usage?.monthCost || 0))
+                .map(({ user: u, usage }) => {
+                  const profile = profiles.find(p => p.user_id === u.id)
+                  const avg = usage?.monthMessages ? usage.monthCost / usage.monthMessages : 0
+                  return (
+                    <tr key={u.id} className="hover:bg-white/[0.015] transition-colors" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <td className="px-4 py-3 max-w-[220px]">
+                        <p className="font-heading text-xs text-white truncate">{profile?.name || u.email}</p>
+                        <p className="font-heading text-[10px] truncate" style={{ color: '#334155' }}>{u.email}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-heading text-xs text-white">{usage?.monthMessages || 0} / {usage?.messages || 0}</p>
+                        <p className="font-heading text-[10px]" style={{ color: '#334155' }}>30d / all</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-mono text-xs" style={{ color: '#E2E8F0' }}>{(usage?.monthTotal || 0).toLocaleString()}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-heading text-xs font-bold" style={{ color: (usage?.monthCost || 0) > 0 ? '#10B981' : '#334155' }}>{formatUsd(usage?.monthCost || 0)}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-mono text-xs" style={{ color: '#94A3B8' }}>{(usage?.total || 0).toLocaleString()}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-heading text-xs" style={{ color: '#94A3B8' }}>{formatUsd(usage?.cost || 0)}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-heading text-xs" style={{ color: avg > 0 ? '#D88BFF' : '#334155' }}>{formatUsd(avg)}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-heading text-xs whitespace-nowrap" style={{ color: usage?.lastDate ? '#64748B' : '#334155' }}>{usage?.lastDate || 'No token data'}</p>
+                      </td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ── Funnel + Distribution ─────────────────────────────────── */}
@@ -313,7 +500,7 @@ export default async function AdminPage() {
       </div>
 
       {/* ── Revenue + Sub status ──────────────────────────────────── */}
-      <div className="grid sm:grid-cols-2 gap-5">
+      <div id="billing" className="grid sm:grid-cols-2 gap-5 scroll-mt-4">
 
         <div className="glass-card p-5">
           <SectionTitle>REVENUE METRICS</SectionTitle>
@@ -375,7 +562,7 @@ export default async function AdminPage() {
               <tbody>
                 {noPlanUsers.slice(0, 15).map(u => {
                   const daysAgo = Math.floor((Date.now() - new Date(u.created_at).getTime()) / 86400000)
-                  const msgs    = msgByUser[u.id]?.total || 0
+                  const msgs    = chatByUser[u.id]?.userMessages || msgByUser[u.id]?.total || 0
                   return (
                     <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                       <td className="px-3 py-2.5">
@@ -459,7 +646,7 @@ export default async function AdminPage() {
       )}
 
       {/* ── All users table ──────────────────────────────────────── */}
-      <div className="glass-card overflow-hidden">
+      <div id="users" className="glass-card overflow-hidden scroll-mt-4">
         <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
           <SectionTitle>ALL USERS ({totalUsers})</SectionTitle>
           <p className="font-heading text-[10px]" style={{ color: '#334155' }}>Sorted newest first</p>
@@ -479,8 +666,9 @@ export default async function AdminPage() {
                 const sub        = subs.find(s => s.user_id === u.id)
                 const hasPlan    = planUserIds.has(u.id)
                 const usage      = msgByUser[u.id]
-                const totalMsgs  = usage?.total || 0
-                const lastActive = usage?.lastDate || null
+                const chatUsage  = chatByUser[u.id]
+                const totalMsgs  = chatUsage?.userMessages || usage?.total || 0
+                const lastActive = chatUsage?.lastDate || usage?.lastDate || null
                 const daysInactive = lastActive
                   ? Math.floor((Date.now() - new Date(lastActive).getTime()) / 86400000)
                   : null

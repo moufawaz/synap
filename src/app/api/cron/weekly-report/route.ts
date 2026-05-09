@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 // ── Vercel Cron — runs every Friday at 8AM UTC ────────────────
 // vercel.json: { "crons": [{ "path": "/api/cron/weekly-report", "schedule": "0 8 * * 5" }] }
@@ -148,6 +149,7 @@ Keep it focused, data-driven, and personal. No filler. Max 350 words.`
     max_tokens: 800,
     messages: [{ role: 'user', content: prompt }],
   })
+  await recordAiUsage({ userId, feature: 'weekly_report', model: response.model, usage: response.usage })
 
   const reportMd = response.content[0].type === 'text' ? response.content[0].text : ''
 

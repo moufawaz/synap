@@ -4,6 +4,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { withAnthropicRetry } from '@/lib/anthropic'
+import { estimateAnthropicCostUsd } from '@/lib/token-cost'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 export async function POST(req: Request) {
   // Guard: API key must be set
@@ -45,6 +47,12 @@ export async function POST(req: Request) {
     }
 
     const rawContent = message.content[0].type === 'text' ? message.content[0].text : ''
+    await recordAiUsage({
+      userId: user.id,
+      feature: 'generate_plan',
+      model: message.model,
+      usage: message.usage,
+    })
 
     // Extract JSON using multiple strategies in order
     let plan: any
@@ -113,6 +121,17 @@ export async function POST(req: Request) {
         role: 'assistant',
         content: plan.ion_message,
         message_type: 'text',
+        metadata: {
+          usage: {
+            model: message.model,
+            input_tokens: message.usage.input_tokens,
+            output_tokens: message.usage.output_tokens,
+            cache_creation_input_tokens: message.usage.cache_creation_input_tokens || 0,
+            cache_read_input_tokens: message.usage.cache_read_input_tokens || 0,
+            estimated_cost_usd: estimateAnthropicCostUsd(message.usage, message.model),
+            source: 'generate_plan',
+          },
+        },
       })
     }
 

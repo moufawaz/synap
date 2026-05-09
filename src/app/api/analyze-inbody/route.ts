@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -144,6 +145,7 @@ If this is NOT an InBody report, or the image/PDF is too blurry or unclear to re
       max_tokens: 1024,
       messages: [{ role: 'user', content: messageContent }],
     })
+    await recordAiUsage({ userId: user.id, feature: 'inbody_analysis', model: response.model, usage: response.usage })
 
     const rawText =
       response.content[0].type === 'text' ? response.content[0].text : ''

@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendPushNotification } from '@/lib/onesignal'
 import { sendEmail } from '@/lib/resend'
+import { recordAiUsage } from '@/lib/ai-usage'
 
 // POST /api/adaptation-check
 // Called daily (e.g., via Vercel Cron or external scheduler) for a specific user
@@ -136,6 +137,7 @@ Language: ${profile.language || 'en'}`
         max_tokens: 300,
         messages: [{ role: 'user', content: ionPrompt }],
       })
+      await recordAiUsage({ userId: user.id, feature: 'adaptation_check', model: aiMsg.model, usage: aiMsg.usage })
 
       const ionContent = (aiMsg.content[0] as any).text
 
