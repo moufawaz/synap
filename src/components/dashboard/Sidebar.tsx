@@ -6,7 +6,7 @@ import SynapLogo from '@/components/ui/SynapLogo'
 import IonAvatar from '@/components/ui/IonAvatar'
 import {
   LayoutDashboard, MessageCircle, Dumbbell, UtensilsCrossed,
-  Ruler, TrendingUp, Settings, Shield, LogOut, ClipboardList, Flame, Mail, Camera,
+  Ruler, TrendingUp, Settings, Shield, LogOut, ClipboardList, Flame, Mail, Camera, ShoppingBasket,
 } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase'
 import { clearSessionPersistenceFlags } from '@/lib/auth-session'
@@ -42,6 +42,7 @@ const NAV = [
   { href: '/workout/today', icon: Flame,           label: "TODAY'S WORKOUT", labelAr: 'تمرين اليوم' },
   { href: '/workout',       icon: Dumbbell,        label: 'PROGRAMME',       labelAr: 'البرنامج' },
   { href: '/nutrition',     icon: UtensilsCrossed, label: 'NUTRITION',       labelAr: 'التغذية' },
+  { href: '/grocery-list',  icon: ShoppingBasket,  label: 'GROCERY LIST',    labelAr: 'قائمة التسوق' },
   { href: '/form-check',    icon: Camera,          label: 'FORM CHECK',      labelAr: 'فحص الأداء' },
   { href: '/measurements',  icon: Ruler,           label: 'MEASUREMENTS',    labelAr: 'القياسات' },
   { href: '/progress',      icon: TrendingUp,      label: 'PROGRESS',        labelAr: 'التقدم' },

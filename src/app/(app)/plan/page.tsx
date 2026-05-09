@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
 import Link from 'next/link'
-import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp, MessageSquare, FlaskConical, Lock, Zap, ShieldCheck, Sparkles } from 'lucide-react'
+import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp, MessageSquare, FlaskConical, Lock, Zap, ShieldCheck, Sparkles, ShoppingBasket } from 'lucide-react'
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
 import { RecipeButton } from '@/components/ui/RecipeModal'
 
@@ -183,7 +183,20 @@ function DietPlanView({ plan, expandedMeal, setExpandedMeal }: any) {
   const meals = plan.meals || [] // flat meal list if no weeks
 
   return (
-    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6">
+
+      <Link href="/grocery-list" className="glass-card p-4 flex items-center justify-between gap-3" style={{ borderColor: 'rgba(16,185,129,0.18)' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#10B981' }}>
+            <ShoppingBasket size={16} />
+          </div>
+          <div>
+            <p className="font-heading text-sm font-bold text-white">Weekly Grocery Builder</p>
+            <p className="font-heading text-xs mt-0.5" style={{ color: '#64748B' }}>Generate a grouped shopping list from this diet plan.</p>
+          </div>
+        </div>
+        <span className="font-heading text-xs font-bold" style={{ color: '#10B981' }}>OPEN</span>
+      </Link>
 
       {/* Macro summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

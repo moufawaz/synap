@@ -1,7 +1,7 @@
 'use client'
 
 import { type Language } from '@/lib/i18n'
-import { Utensils, Dumbbell, BarChart2, Camera, Bell, RefreshCw, Target, FileText, Pill, Globe, Watch, Users } from 'lucide-react'
+import { Utensils, Dumbbell, BarChart2, Camera, Bell, RefreshCw, Target, FileText, Pill, Globe, Watch, Users, ShoppingBasket } from 'lucide-react'
 
 interface Props { lang: Language }
 
@@ -18,6 +18,7 @@ const EN = {
     { icon: BarChart2, title: 'Coach Memory Timeline', body: 'Ion remembers first scans, weight shifts, workouts, meal patterns, and coaching notes so your plan gets smarter over time.', badge: null },
     { icon: Bell, title: 'Smart Plateau Intervention', body: 'When progress stalls, Ion detects the pattern and can apply a controlled adjustment to calories, cardio, or training intensity.', badge: null },
     { icon: Utensils, title: 'What Should I Eat Now?', body: 'Ion recommends the next best meal from your remaining daily calories, protein, carbs, and fats.', badge: null },
+    { icon: ShoppingBasket, title: 'Weekly Grocery Builder', body: 'Turn your active meal plan into a grouped grocery list with weekly quantities, check-offs, and easy sharing.', badge: null },
     { icon: Camera, title: 'AI Form Check', body: 'Upload a clear lift frame and Ion gives a form score, safety note, technical fixes, and one cue for the next set.', badge: null },
     { icon: Target, title: 'Weekly Mission', body: 'Every week Ion chooses the highest-impact mission for you: close training gaps, log meals, or protect your streak.', badge: null },
     { icon: Dumbbell, title: 'Body Symmetry Coach', body: 'Ion checks left/right limb gaps and gives correction work before small imbalances become training problems.', badge: null },
@@ -43,6 +44,7 @@ const AR = {
     { icon: BarChart2, title: 'ذاكرة تدريبية كاملة', body: 'آيون يتذكر المحطات المهمة: أول فحص، تغير الوزن، التمارين، الوجبات، والملاحظات التي شكلت خطتك.', badge: null },
     { icon: Bell, title: 'تدخل ذكي عند الثبات', body: 'إذا توقف التقدم، يكتشف آيون النمط ويطبق تعديلا محسوبا على السعرات أو الكارديو أو شدة التدريب.', badge: null },
     { icon: Utensils, title: 'ماذا آكل الآن؟', body: 'افتح التغذية وسيقترح آيون أفضل وجبة تالية حسب السعرات والبروتين والكارب والدهون المتبقية اليوم.', badge: null },
+    { icon: ShoppingBasket, title: 'قائمة تسوق أسبوعية', body: 'حوّل خطة الوجبات إلى قائمة تسوق مرتبة بالكميات الأسبوعية مع تحديد العناصر ومشاركتها بسهولة.', badge: null },
     { icon: Camera, title: 'فحص الأداء بالذكاء الاصطناعي', body: 'ارفع لقطة واضحة من التمرين وسيعطيك آيون تقييما، ملاحظة أمان، وتصحيحات فنية للست القادم.', badge: null },
     { icon: Target, title: 'مهمة أسبوعية', body: 'كل أسبوع يختار آيون المهمة الأعلى تأثيرا: إغلاق فجوة التدريب، تسجيل الوجبات، أو حماية الاستمرارية.', badge: null },
     { icon: Dumbbell, title: 'مدرب تناسق الجسم', body: 'آيون يراقب الفروقات بين اليمين واليسار ويقترح تمارين تصحيحية قبل أن تتحول لفجوة تدريبية.', badge: null },
