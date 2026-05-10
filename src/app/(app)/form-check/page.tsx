@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Camera, CheckCircle2, Loader2, ShieldAlert, Sparkles, Upload } from 'lucide-react'
+import { useLanguage } from '@/lib/useLanguage'
 
 export const dynamic = 'force-dynamic'
 
 export default function FormCheckPage() {
+  const { isRTL } = useLanguage()
   const [exercise, setExercise] = useState('Squat')
   const [preview, setPreview] = useState<string | null>(null)
   const [image, setImage] = useState<string | null>(null)
@@ -14,6 +16,11 @@ export default function FormCheckPage() {
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<any>(null)
 
+  useEffect(() => {
+    if (isRTL && exercise === 'Squat') setExercise('سكوات')
+    if (!isRTL && exercise === 'سكوات') setExercise('Squat')
+  }, [exercise, isRTL])
+
   function handleFile(file?: File) {
     if (!file) return
     setError(null)
@@ -21,7 +28,7 @@ export default function FormCheckPage() {
     setMimeType(file.type || 'image/jpeg')
 
     if (!file.type.startsWith('image/')) {
-      setError('Upload a clear photo or screenshot frame from your lift. Video frame selection is coming next.')
+      setError(isRTL ? 'ارفع صورة واضحة أو لقطة شاشة من التمرين. اختيار إطار من الفيديو قادم لاحقاً.' : 'Upload a clear photo or screenshot frame from your lift. Video frame selection is coming next.')
       return
     }
 
@@ -36,7 +43,7 @@ export default function FormCheckPage() {
 
   async function runCheck() {
     if (!image) {
-      setError('Choose a clear lift photo first.')
+      setError(isRTL ? 'اختر صورة تمرين واضحة أولاً.' : 'Choose a clear lift photo first.')
       return
     }
     setLoading(true)
@@ -48,34 +55,36 @@ export default function FormCheckPage() {
         body: JSON.stringify({ exercise, image, mimeType }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Form check failed')
+      if (!res.ok) throw new Error(data.error || (isRTL ? 'فشل فحص الأداء' : 'Form check failed'))
       setFeedback(data.feedback)
     } catch (err: any) {
-      setError(err?.message || 'Form check failed')
+      setError(err?.message || (isRTL ? 'فشل فحص الأداء' : 'Form check failed'))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 py-6 max-w-3xl mx-auto pb-24 md:pb-6">
+    <div className="min-h-screen px-4 sm:px-6 py-6 max-w-3xl mx-auto pb-24 md:pb-6" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="mb-6">
-        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>AI FORM CHECK</p>
-        <h1 className="font-heading font-bold text-2xl text-white">Lift Form Review</h1>
+        <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>{isRTL ? 'فحص الأداء بالذكاء الاصطناعي' : 'AI FORM CHECK'}</p>
+        <h1 className="font-heading font-bold text-2xl text-white">{isRTL ? 'مراجعة أداء الرفعة' : 'Lift Form Review'}</h1>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: '#64748B' }}>
-          Upload a clear photo or screenshot from a set. Ion will score the frame, flag the safest correction, and give you one cue for the next set.
+          {isRTL
+            ? 'ارفع صورة واضحة أو لقطة شاشة من المجموعة. سيقيّم آيون الإطار، ويحدد التصحيح الأكثر أماناً، ويعطيك ملاحظة واحدة للمجموعة التالية.'
+            : 'Upload a clear photo or screenshot from a set. Ion will score the frame, flag the safest correction, and give you one cue for the next set.'}
         </p>
       </div>
 
       <div className="glass-card p-5 mb-5">
         <label className="block mb-4">
-          <span className="font-heading text-xs font-bold tracking-widest uppercase" style={{ color: '#94A3B8' }}>Exercise</span>
+          <span className="font-heading text-xs font-bold tracking-widest uppercase" style={{ color: '#94A3B8' }}>{isRTL ? 'التمرين' : 'Exercise'}</span>
           <input
             value={exercise}
             onChange={event => setExercise(event.target.value)}
             className="mt-2 w-full rounded-xl px-4 py-3 font-heading text-sm outline-none"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#E2E8F0' }}
-            placeholder="Bench press, squat, deadlift..."
+            placeholder={isRTL ? 'بنش برس، سكوات، ديدلفت...' : 'Bench press, squat, deadlift...'}
           />
         </label>
 
@@ -88,8 +97,8 @@ export default function FormCheckPage() {
           ) : (
             <div className="text-center p-8">
               <Camera size={34} className="mx-auto mb-3" style={{ color: '#BB5CF6' }} />
-              <p className="font-heading text-sm font-bold text-white">Choose form photo</p>
-              <p className="text-xs mt-1" style={{ color: '#64748B' }}>Best angle: full body, side or 45 degrees, good lighting.</p>
+              <p className="font-heading text-sm font-bold text-white">{isRTL ? 'اختر صورة الأداء' : 'Choose form photo'}</p>
+              <p className="text-xs mt-1" style={{ color: '#64748B' }}>{isRTL ? 'أفضل زاوية: الجسم كامل، من الجانب أو 45 درجة، مع إضاءة جيدة.' : 'Best angle: full body, side or 45 degrees, good lighting.'}</p>
             </div>
           )}
           <input
@@ -115,7 +124,7 @@ export default function FormCheckPage() {
           style={{ background: image ? 'linear-gradient(135deg,#BB5CF6,#7B2FFF)' : 'rgba(255,255,255,0.06)', color: image ? '#fff' : '#64748B' }}
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-          {loading ? 'CHECKING FORM...' : 'CHECK FORM'}
+          {loading ? (isRTL ? 'جارٍ فحص الأداء...' : 'CHECKING FORM...') : (isRTL ? 'افحص الأداء' : 'CHECK FORM')}
         </button>
       </div>
 
@@ -123,7 +132,7 @@ export default function FormCheckPage() {
         <div className="glass-card p-5" style={{ borderColor: 'rgba(16,185,129,0.22)' }}>
           <div className="flex items-center gap-2 mb-4">
             <Sparkles size={18} style={{ color: '#10B981' }} />
-            <p className="font-heading text-sm font-bold text-white">Ion Form Feedback</p>
+            <p className="font-heading text-sm font-bold text-white">{isRTL ? 'ملاحظات آيون على الأداء' : 'Ion Form Feedback'}</p>
             <span className="ml-auto font-heading text-xs font-bold px-2 py-1 rounded-lg" style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981' }}>
               {feedback.score}/10
             </span>
@@ -138,7 +147,7 @@ export default function FormCheckPage() {
             ))}
           </div>
           <div className="mt-4 rounded-xl p-3" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
-            <p className="font-heading text-xs font-bold mb-1" style={{ color: '#F59E0B' }}>NEXT SET CUE</p>
+            <p className="font-heading text-xs font-bold mb-1" style={{ color: '#F59E0B' }}>{isRTL ? 'ملاحظة المجموعة التالية' : 'NEXT SET CUE'}</p>
             <p className="text-sm" style={{ color: '#CBD5E1' }}>{feedback.next_set_cue}</p>
           </div>
         </div>

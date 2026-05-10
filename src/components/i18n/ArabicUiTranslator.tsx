@@ -37,6 +37,12 @@ const TEXT: Record<string, string> = {
   'ATHLETE': 'رياضي',
 
   // Dashboard / coaching
+  'LAUNCH SPECIAL:': 'وصول الإطلاق:',
+  'All features unlocked for free during launch.': 'كل الميزات مفتوحة مجاناً أثناء فترة الإطلاق.',
+  'GOOD MORNING': 'صباح الخير',
+  'GOOD AFTERNOON': 'مساء الخير',
+  'GOOD EVENING': 'مساء الخير',
+  'ION SAYS': 'آيون يقول',
   'ION COACHING ENGINE': 'محرك آيون التدريبي',
   'Weekly Mission': 'المهمة الأسبوعية',
   'What Should I Eat Now?': 'ماذا آكل الآن؟',
@@ -53,6 +59,12 @@ const TEXT: Record<string, string> = {
   'Adjust calories': 'تعديل السعرات',
   'Add cardio note': 'إضافة ملاحظة كارديو',
   'Training push': 'دفعة تدريبية',
+  'Close the training gap': 'أغلق فجوة التمرين',
+  'Your fastest win this week is getting the planned sessions done.': 'أسرع فوز هذا الأسبوع هو إكمال الجلسات المخططة.',
+  'Breakfast': 'الفطور',
+  'Planned for 9:00 AM': 'مخطط لها الساعة 9:00 AM',
+  'Nutrition patterns are being remembered for smarter meal guidance.': 'أنماط التغذية محفوظة لتوجيه غذائي أذكى.',
+  'Latest Ion coaching note': 'آخر ملاحظة تدريبية من آيون',
 
   // Nutrition
   'NUTRITION PLAN': 'خطة التغذية',
@@ -161,6 +173,8 @@ const TEXT: Record<string, string> = {
   'CHECKING FORM...': 'جار فحص الأداء...',
   'Ion Form Feedback': 'ملاحظات آيون على الأداء',
   'NEXT SET CUE': 'تلميح الجولة القادمة',
+  'Upload a clear photo or screenshot from a set. Ion will score the frame, flag the safest correction, and give you one cue for the next set.': 'ارفع صورة واضحة أو لقطة شاشة من المجموعة. سيقيّم آيون الإطار، ويحدد التصحيح الأكثر أماناً، ويعطيك ملاحظة واحدة للمجموعة التالية.',
+  'Best angle: full body, side or 45 degrees, good lighting.': 'أفضل زاوية: الجسم كامل، من الجانب أو 45 درجة، مع إضاءة جيدة.',
 }
 
 const PLACEHOLDERS: Record<string, string> = {

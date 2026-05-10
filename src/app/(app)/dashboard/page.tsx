@@ -33,8 +33,9 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const [profileRes, workoutRes, dietRes, measurementsRes, workoutLogRes, chatRes, subRes] = await Promise.all([
+  const [profileRes, userLangRes, workoutRes, dietRes, measurementsRes, workoutLogRes, chatRes, subRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+    supabase.from('users').select('language').eq('id', user.id).single(),
     supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
     supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
     supabase.from('measurements').select('weight_kg, date').eq('user_id', user.id).order('date', { ascending: false }).limit(8),
@@ -53,7 +54,8 @@ export default async function DashboardPage() {
 
   if (!profile) redirect('/onboarding')
 
-  const isRTL = profile.language === 'ar'
+  const language = (userLangRes.data?.language || profile.language || 'en') as 'en' | 'ar'
+  const isRTL = language === 'ar'
   const isLaunchMode = process.env.LAUNCH_MODE === 'true'
   const plan = effectivePlan(subscription)
   const isTrial = subscription?.status === 'trial'
@@ -83,6 +85,9 @@ export default async function DashboardPage() {
     ? (greetingHour < 12 ? 'صباح الخير' : greetingHour < 17 ? 'مساء الخير' : 'مساء الخير')
     : (greetingHour < 12 ? 'GOOD MORNING' : greetingHour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING')
   const hasInbody = !!profile?.inbody_url
+  const displayedIonMessage = isRTL
+    ? 'لديك ملاحظة تدريبية جديدة من آيون. افتح المحادثة لمراجعة التفاصيل والرد.'
+    : lastIonMessage
 
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-4xl mx-auto pb-24 md:pb-6 relative" dir={isRTL ? 'rtl' : 'ltr'}>
@@ -252,7 +257,7 @@ export default async function DashboardPage() {
                   </p>
                 </div>
                 <p className="font-heading text-sm leading-relaxed line-clamp-2" style={{ color: '#CBD5E1' }}>
-                  {lastIonMessage}
+                  {displayedIonMessage}
                 </p>
               </div>
               <ChevronRight size={14} style={{ color: C.silverDeep, flexShrink: 0 }} />

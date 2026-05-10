@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { Activity, ArrowRight, Brain, CheckCircle2, Dumbbell, Flame, Ruler, Sparkles, UtensilsCrossed } from 'lucide-react'
+import { useLanguage } from '@/lib/useLanguage'
 
 type CoachFeatures = {
   timeline?: Array<{ date: string; type: string; title: string; body: string }>
@@ -24,6 +25,7 @@ type CoachFeatures = {
 }
 
 export default function CoachFeaturesPanel({ compact = false }: { compact?: boolean }) {
+  const { isRTL } = useLanguage()
   const [data, setData] = useState<CoachFeatures | null>(null)
   const [loading, setLoading] = useState(true)
   const [applying, setApplying] = useState<string | null>(null)
@@ -47,12 +49,12 @@ export default function CoachFeaturesPanel({ compact = false }: { compact?: bool
         body: JSON.stringify({ action }),
       })
       const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Could not apply adjustment')
+      if (!res.ok) throw new Error(result.error || (isRTL ? 'تعذر تطبيق التعديل' : 'Could not apply adjustment'))
       setAppliedMessage(result.message)
       const fresh = await fetch('/api/coach-features').then(r => r.json())
       setData(fresh)
     } catch (error: any) {
-      setAppliedMessage(error?.message || 'Could not apply adjustment')
+      setAppliedMessage(error?.message || (isRTL ? 'تعذر تطبيق التعديل' : 'Could not apply adjustment'))
     } finally {
       setApplying(null)
     }
@@ -78,19 +80,19 @@ export default function CoachFeaturesPanel({ compact = false }: { compact?: bool
     : 0
 
   return (
-    <section className="mb-6">
+    <section className="mb-6" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Brain size={17} style={{ color: '#BB5CF6' }} />
-          <h2 className="font-heading text-sm font-bold text-white tracking-wider">ION COACHING ENGINE</h2>
+          <h2 className="font-heading text-sm font-bold text-white tracking-wider">{isRTL ? 'محرك آيون التدريبي' : 'ION COACHING ENGINE'}</h2>
         </div>
         <Link href="/form-check" className="font-heading text-xs font-bold flex items-center gap-1" style={{ color: '#D88BFF' }}>
-          Form check <ArrowRight size={13} />
+          {isRTL ? 'فحص الأداء' : 'Form check'} <ArrowRight size={13} />
         </Link>
       </div>
 
       <div className={`grid gap-3 ${compact ? 'grid-cols-1' : 'lg:grid-cols-3'}`}>
-        <Card icon={<Flame size={16} />} title="Weekly Mission" tone="#F97316">
+        <Card icon={<Flame size={16} />} title={isRTL ? 'المهمة الأسبوعية' : 'Weekly Mission'} tone="#F97316">
           <p className="font-heading text-base font-bold text-white">{data.weeklyMission?.title}</p>
           <p className="text-sm mt-1" style={{ color: '#64748B' }}>{data.weeklyMission?.why}</p>
           <div className="mt-4 h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
@@ -101,23 +103,23 @@ export default function CoachFeaturesPanel({ compact = false }: { compact?: bool
           </p>
         </Card>
 
-        <Card icon={<UtensilsCrossed size={16} />} title="What Should I Eat Now?" tone="#10B981">
+        <Card icon={<UtensilsCrossed size={16} />} title={isRTL ? 'ماذا آكل الآن؟' : 'What Should I Eat Now?'} tone="#10B981">
           <p className="font-heading text-base font-bold text-white">{data.mealNow?.title}</p>
           <p className="text-sm mt-1" style={{ color: '#64748B' }}>{data.mealNow?.subtitle}</p>
           <div className="flex gap-2 mt-4 text-xs font-heading">
-            <Pill>{Math.round(data.mealNow?.calories ?? 0)} kcal</Pill>
-            <Pill>{Math.round(data.mealNow?.protein_g ?? 0)}g protein</Pill>
+            <Pill>{Math.round(data.mealNow?.calories ?? 0)} {isRTL ? 'سعرة' : 'kcal'}</Pill>
+            <Pill>{Math.round(data.mealNow?.protein_g ?? 0)}{isRTL ? 'غ بروتين' : 'g protein'}</Pill>
           </div>
           <Link href="/nutrition" className="inline-flex items-center gap-1 mt-4 font-heading text-xs font-bold" style={{ color: '#10B981' }}>
-            Open nutrition <ArrowRight size={12} />
+            {isRTL ? 'افتح التغذية' : 'Open nutrition'} <ArrowRight size={12} />
           </Link>
         </Card>
 
-        <Card icon={<Ruler size={16} />} title="Body Symmetry Coach" tone="#3B82F6">
-          <p className="font-heading text-base font-bold text-white">{data.symmetryCoach?.status === 'attention' ? 'Correction needed' : 'Balance check'}</p>
+        <Card icon={<Ruler size={16} />} title={isRTL ? 'مدرب تناسق الجسم' : 'Body Symmetry Coach'} tone="#3B82F6">
+          <p className="font-heading text-base font-bold text-white">{data.symmetryCoach?.status === 'attention' ? (isRTL ? 'يحتاج تصحيحاً' : 'Correction needed') : (isRTL ? 'فحص التوازن' : 'Balance check')}</p>
           <p className="text-sm mt-1" style={{ color: '#64748B' }}>{data.symmetryCoach?.summary}</p>
           <Link href="/measurements" className="inline-flex items-center gap-1 mt-4 font-heading text-xs font-bold" style={{ color: '#60A5FA' }}>
-            Review symmetry <ArrowRight size={12} />
+            {isRTL ? 'راجع التناسق' : 'Review symmetry'} <ArrowRight size={12} />
           </Link>
         </Card>
       </div>
@@ -127,7 +129,7 @@ export default function CoachFeaturesPanel({ compact = false }: { compact?: bool
           <div className="flex items-start gap-3">
             <Activity size={18} style={{ color: '#F59E0B', flexShrink: 0 }} />
             <div className="flex-1">
-              <p className="font-heading text-sm font-bold text-white">Smart Plateau Intervention</p>
+              <p className="font-heading text-sm font-bold text-white">{isRTL ? 'تدخل ذكي عند ثبات التقدم' : 'Smart Plateau Intervention'}</p>
               <p className="text-sm mt-1" style={{ color: '#64748B' }}>{data.plateau.message}</p>
               <div className="flex flex-wrap gap-2 mt-3">
                 {data.plateau.options.map(option => (
@@ -143,7 +145,7 @@ export default function CoachFeaturesPanel({ compact = false }: { compact?: bool
                       opacity: applying && applying !== option.id ? 0.5 : 1,
                     }}
                   >
-                    {applying === option.id ? 'Applying...' : option.label}
+                    {applying === option.id ? (isRTL ? 'جارٍ التطبيق...' : 'Applying...') : option.label}
                   </button>
                 ))}
               </div>
@@ -160,8 +162,8 @@ export default function CoachFeaturesPanel({ compact = false }: { compact?: bool
       {!compact && data.timeline && data.timeline.length > 0 && (
         <div className="glass-card p-4 mt-3">
           <div className="flex items-center justify-between mb-3">
-            <p className="font-heading text-sm font-bold text-white">Coach Memory Timeline</p>
-            <Link href="/progress" className="font-heading text-xs font-bold" style={{ color: '#D88BFF' }}>View all</Link>
+            <p className="font-heading text-sm font-bold text-white">{isRTL ? 'ذاكرة آيون التدريبية' : 'Coach Memory Timeline'}</p>
+            <Link href="/progress" className="font-heading text-xs font-bold" style={{ color: '#D88BFF' }}>{isRTL ? 'عرض الكل' : 'View all'}</Link>
           </div>
           <div className="space-y-3">
             {data.timeline.slice(0, 3).map((item, index) => (
