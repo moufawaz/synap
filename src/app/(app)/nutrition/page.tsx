@@ -3,7 +3,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import Link from 'next/link'
 import { createBrowserClient } from '@/lib/supabase'
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame, Camera, X, Sparkles, ShoppingBasket } from 'lucide-react'
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame, Camera, X, Sparkles, ShoppingBasket, UtensilsCrossed } from 'lucide-react'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { RecipeButton } from '@/components/ui/RecipeModal'
 import UpgradeModal from '@/components/ui/UpgradeModal'
@@ -434,6 +434,21 @@ export default function NutritionPage() {
             </div>
           </div>
           <span className="font-heading text-xs font-bold" style={{ color: '#10B981' }}>{isRTL ? 'افتح' : 'OPEN'}</span>
+        </div>
+      </Link>
+
+      <Link href="/eating-out" className="block mb-5">
+        <div className="glass-card p-4 flex items-center justify-between gap-3" style={{ borderColor: 'rgba(249,115,22,0.18)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)', color: '#F97316' }}>
+              <UtensilsCrossed size={16} />
+            </div>
+            <div>
+              <p className="font-heading text-sm font-bold text-white">{isRTL ? 'الأكل خارجاً' : 'Eating Out Mode'}</p>
+              <p className="font-heading text-xs mt-0.5" style={{ color: '#64748B' }}>{isRTL ? 'اختر أفضل طلب يناسب الماكروز.' : 'Find the best restaurant or delivery order for your macros.'}</p>
+            </div>
+          </div>
+          <span className="font-heading text-xs font-bold" style={{ color: '#F97316' }}>{isRTL ? 'افتح' : 'OPEN'}</span>
         </div>
       </Link>
 

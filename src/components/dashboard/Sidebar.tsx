@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -42,6 +42,7 @@ const NAV = [
   { href: '/workout/today', icon: Flame,           label: "TODAY'S WORKOUT", labelAr: 'تمرين اليوم' },
   { href: '/workout',       icon: Dumbbell,        label: 'PROGRAMME',       labelAr: 'البرنامج' },
   { href: '/nutrition',     icon: UtensilsCrossed, label: 'NUTRITION',       labelAr: 'التغذية' },
+  { href: '/eating-out',    icon: UtensilsCrossed, label: 'EATING OUT',      labelAr: 'الأكل خارجاً' },
   { href: '/grocery-list',  icon: ShoppingBasket,  label: 'GROCERY LIST',    labelAr: 'قائمة التسوق' },
   { href: '/form-check',    icon: Camera,          label: 'FORM CHECK',      labelAr: 'فحص الأداء' },
   { href: '/measurements',  icon: Ruler,           label: 'MEASUREMENTS',    labelAr: 'القياسات' },
@@ -252,3 +253,4 @@ export default function Sidebar({ user, lang = 'en' }: SidebarProps) {
     </aside>
   )
 }
+

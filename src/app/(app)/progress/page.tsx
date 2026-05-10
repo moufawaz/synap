@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { TrendingDown, TrendingUp, Minus, Sparkles, Flame, Target, Lock, FileText, ChevronDown, ChevronUp, Brain } from 'lucide-react'
 import { createBrowserClient } from '@/lib/supabase'
 import Link from 'next/link'
+import ProgressShareCard from '@/components/progress/ProgressShareCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -113,6 +114,8 @@ export default function ProgressPage() {
         <p className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: '#BB5CF6', letterSpacing: '0.14em' }}>ANALYTICS</p>
         <h1 className="font-heading font-bold text-2xl text-white">Your Progress</h1>
       </div>
+
+      <ProgressShareCard measurements={measurements} workoutLogs={workoutLogs} />
 
       {coachTimeline.length > 0 && (
         <div className="glass-card p-5 mb-6" style={{ borderColor: 'rgba(187,92,246,0.16)' }}>
