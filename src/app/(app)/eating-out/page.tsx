@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { useState } from 'react'
-import { Loader2, MapPin, Search, ShieldCheck, Sparkles, UtensilsCrossed } from 'lucide-react'
+import { CheckCircle2, Loader2, MapPin, Plus, Search, ShieldCheck, Sparkles, UtensilsCrossed } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +18,9 @@ const EXAMPLES = [
 export default function EatingOutPage() {
   const [situation, setSituation] = useState('')
   const [loading, setLoading] = useState(false)
+  const [logging, setLogging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [logMessage, setLogMessage] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
 
   async function askIon(value = situation) {
@@ -30,6 +32,7 @@ export default function EatingOutPage() {
     setSituation(text)
     setLoading(true)
     setError(null)
+    setLogMessage(null)
     setResult(null)
     try {
       const res = await fetch('/api/eating-out', {
@@ -44,6 +47,35 @@ export default function EatingOutPage() {
       setError(err?.message || 'Could not generate order guidance')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function logOrder(order: any, label: string) {
+    if (!order?.estimated_macros) return
+    setLogging(true)
+    setError(null)
+    setLogMessage(null)
+    try {
+      const macros = order.estimated_macros
+      const res = await fetch('/api/log-meal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meal_name: `${order.title || label} - Eating Out`,
+          meal_time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          calories_estimated: Math.round(Number(macros.calories) || 0),
+          protein_g: Math.round(Number(macros.protein_g) || 0),
+          carbs_g: Math.round(Number(macros.carbs_g) || 0),
+          fats_g: Math.round(Number(macros.fat_g) || 0),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not log this order')
+      setLogMessage(`${order.title || label} logged to today's food.`)
+    } catch (err: any) {
+      setError(err?.message || 'Could not log this order')
+    } finally {
+      setLogging(false)
     }
   }
 
@@ -121,14 +153,39 @@ export default function EatingOutPage() {
                     </li>
                   ))}
                 </ul>
+                <button
+                  onClick={() => logOrder(result.best_order, 'Best order')}
+                  disabled={logging}
+                  className="mt-4 flex items-center gap-2 px-4 py-2.5 rounded-xl font-heading text-xs font-bold"
+                  style={{ background: 'rgba(16,185,129,0.14)', border: '1px solid rgba(16,185,129,0.28)', color: '#10B981' }}
+                >
+                  {logging ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                  {logging ? 'LOGGING...' : 'LOG THIS ORDER'}
+                </button>
               </div>
             </div>
           </div>
+
+          {logMessage && (
+            <div className="rounded-2xl p-4 flex items-center gap-2" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10B981' }}>
+              <CheckCircle2 size={16} />
+              <p className="font-heading text-sm font-bold">{logMessage}</p>
+            </div>
+          )}
 
           <div className="grid md:grid-cols-2 gap-4">
             <InfoCard title="Backup order" icon={<ShieldCheck size={16} />} tone="#BB5CF6">
               <p className="font-heading text-sm font-bold text-white mb-2">{result.backup_order?.title}</p>
               <MacroRow macros={result.backup_order?.estimated_macros} compact />
+              <button
+                onClick={() => logOrder(result.backup_order, 'Backup order')}
+                disabled={logging}
+                className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl font-heading text-xs font-bold"
+                style={{ background: 'rgba(187,92,246,0.12)', border: '1px solid rgba(187,92,246,0.25)', color: '#D88BFF' }}
+              >
+                {logging ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                LOG BACKUP
+              </button>
             </InfoCard>
             <InfoCard title="Context note" icon={<MapPin size={16} />} tone="#F97316">
               <p className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{result.context_note}</p>
