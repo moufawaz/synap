@@ -4,6 +4,7 @@ import Sidebar from '@/components/dashboard/Sidebar'
 import MobileNav from '@/components/dashboard/MobileNav'
 import AdaptationChecker from '@/components/dashboard/AdaptationChecker'
 import OneSignalInit from '@/components/OneSignalInit'
+import ArabicUiTranslator from '@/components/i18n/ArabicUiTranslator'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createServerClient()
@@ -40,6 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </main>
       <MobileNav lang={lang} />
+      <ArabicUiTranslator lang={lang} />
       <AdaptationChecker />
       <OneSignalInit userId={user.id} />
     </div>
