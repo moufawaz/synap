@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [cancelResult, setCancelResult] = useState<string | null>(null)
+  const [localizingArabic, setLocalizingArabic] = useState(false)
+  const [localizeResult, setLocalizeResult] = useState<string | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -87,6 +89,27 @@ export default function SettingsPage() {
 
   function updateProfile(key: string, value: any) {
     setProfile((prev: any) => ({ ...prev, [key]: value }))
+  }
+
+  async function localizeSavedArabicContent() {
+    setLocalizingArabic(true)
+    setLocalizeResult(null)
+    try {
+      const res = await fetch('/api/localize-content', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not translate saved content.')
+      const translated = data.result || {}
+      setLocalizeResult(
+        lang === 'ar'
+          ? `تم تحديث المحتوى المحفوظ: الخطط ${translated.diet_plan || translated.workout_plan ? 'جاهزة' : 'لم تتغير'}، والرسائل ${translated.messages || 0}.`
+          : `Saved content updated: plans ${translated.diet_plan || translated.workout_plan ? 'translated' : 'unchanged'}, messages ${translated.messages || 0}.`
+      )
+      await loadData()
+    } catch (err: any) {
+      setLocalizeResult(err?.message || (lang === 'ar' ? 'تعذر تحديث المحتوى.' : 'Could not update saved content.'))
+    } finally {
+      setLocalizingArabic(false)
+    }
   }
 
   const isLaunchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
@@ -256,6 +279,24 @@ export default function SettingsPage() {
                 </button>
               ))}
             </div>
+            {lang === 'ar' && (
+              <div className="mt-4 rounded-2xl p-4" style={{ background: 'rgba(187,92,246,0.08)', border: '1px solid rgba(187,92,246,0.18)' }}>
+                <p className="font-heading text-sm mb-3" style={{ color: '#CBD5E1' }}>
+                  ترجم الخطط والرسائل القديمة حتى تظهر تجربة آيون بالكامل بالعربية.
+                </p>
+                <button
+                  onClick={localizeSavedArabicContent}
+                  disabled={localizingArabic}
+                  className="w-full py-3 rounded-xl font-heading font-black text-xs tracking-widest uppercase transition-all disabled:opacity-60"
+                  style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.12em' }}
+                >
+                  {localizingArabic ? 'جار الترجمة...' : 'ترجمة المحتوى المحفوظ للعربية'}
+                </button>
+                {localizeResult && (
+                  <p className="font-heading text-xs mt-3" style={{ color: '#94A3B8' }}>{localizeResult}</p>
+                )}
+              </div>
+            )}
           </div>
           <div className="glass-card p-5">
             <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_ion_appearance')}</p>

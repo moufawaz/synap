@@ -1,5 +1,6 @@
-import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse } from 'next/server'
 
@@ -27,8 +28,17 @@ export async function POST(req: Request) {
     )
   }
 
+  const admin = createAdminClient()
+  const [profileRes, userLangRes] = await Promise.all([
+    admin.from('profiles').select('language').eq('user_id', user.id).maybeSingle(),
+    admin.from('users').select('language').eq('id', user.id).maybeSingle(),
+  ])
+  const language = normalizeAiLanguage(userLangRes.data?.language ?? profileRes.data?.language)
+
   const client = new Anthropic({ apiKey })
   const prompt = `You are Ion, a strict but supportive personal trainer. Analyze this ${exercise} form from one image frame.
+
+${aiLanguageInstruction(language, 'all user-facing JSON string values including summary, fixes, safety, and next_set_cue')}
 
 Return ONLY valid JSON:
 {

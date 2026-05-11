@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, aiLanguageName, normalizeAiLanguage } from '@/lib/ai-language'
 
 // ── Vercel Cron — runs every Friday at 8AM UTC ────────────────
 // vercel.json: { "crons": [{ "path": "/api/cron/weekly-report", "schedule": "0 8 * * 5" }] }
@@ -70,8 +71,9 @@ async function generateReportForUser(
   if (existing) return
 
   // Fetch user profile, measurements this week, workout logs this week, meal logs this week
-  const [profileRes, measureRes, workoutRes, mealRes] = await Promise.all([
+  const [profileRes, userLangRes, measureRes, workoutRes, mealRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('user_id', userId).single(),
+    supabase.from('users').select('language').eq('id', userId).maybeSingle(),
     supabase.from('measurements').select('*').eq('user_id', userId)
       .gte('date', weekStart).lte('date', weekEnd).order('date', { ascending: true }),
     supabase.from('workout_log').select('date,day_name,completion_pct,duration_min')
@@ -81,6 +83,7 @@ async function generateReportForUser(
   ])
 
   const profile  = profileRes.data
+  const language = normalizeAiLanguage(userLangRes.data?.language ?? profile?.language)
   const measurements = measureRes.data || []
   const workouts = workoutRes.data || []
   const meals    = mealRes.data || []
@@ -123,7 +126,8 @@ Average daily calories: ${avgCal != null ? `${avgCal} kcal` : 'No data'}
 
 Latest measurements: ${latestM ? `Weight ${latestM.weight_kg}kg${latestM.body_fat_pct ? `, ${latestM.body_fat_pct}% BF` : ''}${latestM.waist_cm ? `, waist ${latestM.waist_cm}cm` : ''}` : 'None this week'}
 
-Write a concise, personalised weekly body composition report in this exact markdown format:
+${aiLanguageInstruction(language, 'the entire weekly report including headings, bullet points, analysis, and Ion take')}
+Write a concise, personalised weekly body composition report in ${aiLanguageName(language)}. Use this exact markdown structure translated naturally when Arabic:
 
 ## Weekly Body Composition Report — Week of ${weekStart}
 

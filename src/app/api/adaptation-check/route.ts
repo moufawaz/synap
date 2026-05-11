@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendPushNotification } from '@/lib/onesignal'
 import { sendEmail } from '@/lib/resend'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
 // POST /api/adaptation-check
 // Called daily (e.g., via Vercel Cron or external scheduler) for a specific user
@@ -21,8 +22,10 @@ export async function POST(req: Request) {
     const checks: string[] = []
 
     // 1. Load data
-    const [profileRes, measurementsRes, workoutLogsRes, dietPlanRes, workoutPlanRes] = await Promise.all([
+    const admin = createAdminClient()
+    const [profileRes, userLangRes, measurementsRes, workoutLogsRes, dietPlanRes, workoutPlanRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      admin.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('measurements').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(10),
       supabase.from('workout_log').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(30),
       supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
@@ -31,6 +34,7 @@ export async function POST(req: Request) {
 
     const profile = profileRes.data
     if (!profile) return NextResponse.json({ ok: false, reason: 'no_profile' })
+    const language = normalizeAiLanguage(userLangRes.data?.language ?? profile.language)
 
     const measurements = measurementsRes.data || []
     const workoutLogs = workoutLogsRes.data || []
@@ -126,11 +130,13 @@ export async function POST(req: Request) {
 
       const ionPrompt = `You are Ion, an AI personal trainer. Based on the following observations about ${profile.name}'s progress, write a short, direct coaching message (2-3 sentences max). Be like a sharp, caring human coach - not a robot. Use the user's name.
 
+${aiLanguageInstruction(language, 'the full coaching message')}
+
 Observations:
 ${issueText}
 
 User goal: ${profile.goal}
-Language: ${profile.language || 'en'}`
+Language: ${language}`
 
       const aiMsg = await client.messages.create({
         model: 'claude-sonnet-4-5',

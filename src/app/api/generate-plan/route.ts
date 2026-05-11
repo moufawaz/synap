@@ -1,4 +1,4 @@
-﻿import { createServerClient } from '@/lib/supabase-server'
+﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
@@ -6,6 +6,7 @@ import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { withAnthropicRetry } from '@/lib/anthropic'
 import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
 export async function POST(req: Request) {
   // Guard: API key must be set
@@ -30,7 +31,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const prompt = buildPrompt(profileData)
+    const admin = createAdminClient()
+    const { data: languageRow } = await admin
+      .from('users')
+      .select('language')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const profileForPlan = {
+      ...profileData,
+      language: languageRow?.language ?? profileData?.language ?? 'en',
+    }
+    const prompt = buildPrompt(profileForPlan)
 
     const message = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-opus-4-5',
@@ -228,6 +240,7 @@ function repairTruncatedJSON(s: string): string | null {
 }
 
 function buildPrompt(p: any): string {
+  const language = normalizeAiLanguage(p.language)
   const goalLabels: Record<string, string> = {
     lose_fat: 'Lose Body Fat',
     build_muscle: 'Build Muscle',
@@ -237,6 +250,8 @@ function buildPrompt(p: any): string {
   }
 
   return `You are Ion, a world-class AI personal trainer and nutritionist. Create a complete, personalized 12-week fitness and nutrition plan for this specific person.
+
+${aiLanguageInstruction(language, 'all user-facing JSON string values including plan names, meal names, recipes, exercise tips, coaching notes, summaries, and ion_message')}
 
 PERSON PROFILE:
 - Name: ${p.name}

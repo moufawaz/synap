@@ -6,6 +6,7 @@ import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
 import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
 export async function GET(req: Request) {
   const supabase = await createServerClient()
@@ -491,6 +492,7 @@ function buildPlanEditPrompt({
   userRequest: string
   currentPlan: any
 }) {
+  const language = normalizeAiLanguage(profile?.language)
   const profileText = profile ? `Name: ${profile.name} | Age: ${profile.age} | Gender: ${profile.gender}
 Goal: ${profile.goal}${profile.goal_target ? ` (target: ${profile.goal_target})` : ''}
 Weight: ${profile.weight_kg}kg | Height: ${profile.height_cm}cm
@@ -514,13 +516,14 @@ CURRENT ACTIVE PLAN JSON:
 ${JSON.stringify(currentPlan, null, 2)}
 
 TASK:
+${aiLanguageInstruction(language, 'the summary and all user-facing string values inside updated_plan')}
 - Return the full updated plan JSON, preserving the same overall shape and all useful existing fields.
 - Make only the requested change plus directly necessary balancing changes.
 - If this is a workout plan, keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group when present.
 - If replacing an exercise, choose a safe equivalent for the same muscle group and the user's equipment/injuries.
 - If this is a diet plan, keep daily calories/macros coherent and meal totals roughly aligned.
 - If this is a diet plan, every meal must include a practical recipe object with title, prep_time_min, cook_time_min, ingredients, steps, and tips.
-- If the user asks in Arabic or the profile language is Arabic, write the summary in Arabic. The JSON keys must stay unchanged.
+- If the profile language is Arabic, the saved updated_plan must read naturally in Arabic on the plan, workout, and nutrition pages. The JSON keys must stay unchanged.
 - The saved updated_plan must be immediately usable by the app pages. Preserve top-level "meals" for diet plans and top-level "days" for workout plans when those fields exist.
 - Do not include markdown or explanations outside JSON.
 
@@ -572,6 +575,7 @@ function buildSystemPrompt(
   workoutLogs: any[],
   mealLogs: any[],
 ): string {
+  const language = normalizeAiLanguage(profile?.language)
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -616,6 +620,8 @@ Activity level: ${profile.activity_level || 'Not specified'}
 
   return `You are Ion, an elite AI personal trainer and nutrition coach for SYNAP. You speak directly to ${profile?.name || 'your client'}.
 
+${aiLanguageInstruction(language, 'every chat reply, coaching note, suggestion, plan-change summary, and structured-card text')}
+
 TODAY: ${dateStr}
 CLIENT TIER: ${planTier.toUpperCase()} plan
 
@@ -646,7 +652,7 @@ ${workoutBlock}
 - If asked to modify their plan, detect the intent and make the change directly
 - For medical questions, recommend a doctor first but still be helpful with what you can
 - If they're struggling, be encouraging but honest - no empty hype
-- You speak Arabic fluently - reply in the same language the user writes in
+- If the saved client language is Arabic, always reply in Arabic even if the user types English or Arabizi. If the saved client language is English, reply in English unless the user explicitly asks for Arabic.
 - Do NOT mention your tier or pricing - that's handled elsewhere`
 }
 

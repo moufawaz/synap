@@ -1,8 +1,9 @@
-﻿import { createServerClient } from '@/lib/supabase-server'
+﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { withAnthropicRetry } from '@/lib/anthropic'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
 export const runtime = 'nodejs'
 export const maxDuration = 20
@@ -23,6 +24,13 @@ export async function POST(req: Request) {
     const { meal } = await req.json()
     if (!meal) return NextResponse.json({ error: 'Missing meal.' }, { status: 400 })
 
+    const admin = createAdminClient()
+    const [profileRes, userLangRes] = await Promise.all([
+      admin.from('profiles').select('language').eq('user_id', user.id).maybeSingle(),
+      admin.from('users').select('language').eq('id', user.id).maybeSingle(),
+    ])
+    const language = normalizeAiLanguage(userLangRes.data?.language ?? profileRes.data?.language)
+
     const client = new Anthropic({ apiKey })
     const response = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-sonnet-4-5',
@@ -31,6 +39,8 @@ export async function POST(req: Request) {
         {
           role: 'user',
           content: `Create a practical cooking recipe for this exact diet-plan meal.
+
+${aiLanguageInstruction(language, 'all user-facing JSON string values including title, ingredients, steps, and tips')}
 
 MEAL JSON:
 ${JSON.stringify(meal, null, 2)}

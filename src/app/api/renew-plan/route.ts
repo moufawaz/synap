@@ -6,6 +6,7 @@ import { sendPushNotification } from '@/lib/onesignal'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
 // POST /api/renew-plan called by the adaptation-check job when a plan is expiring
 export async function POST(req: Request) {
@@ -22,20 +23,24 @@ export async function POST(req: Request) {
     if (!planType) return NextResponse.json({ error: 'Missing planType' }, { status: 400 })
 
     // Load profile + measurements
-    const [profileRes, measureRes, oldPlanRes] = await Promise.all([
+    const [profileRes, userLangRes, measureRes, oldPlanRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('measurements').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(4),
       supabase.from(planType === 'diet' ? 'diet_plans' : 'workout_plans')
         .select('*').eq('user_id', user.id).eq('active', true).single(),
     ])
 
     const profile = profileRes.data
+    const language = normalizeAiLanguage(userLangRes.data?.language ?? profile?.language)
     const recentMeasurements = measureRes.data || []
 
     const weightTrend = recentMeasurements.map((m: any) => `${m.date}: ${m.weight_kg}kg`).join(', ')
 
     const prompt = planType === 'diet'
       ? `You are Ion, an AI personal trainer. Generate an updated 4-week diet plan for this user based on their progress.
+
+${aiLanguageInstruction(language, 'all user-facing JSON string values including plan names, meal names, recipes, foods, notes, and coaching guidance')}
 
 User: ${profile.name}, ${profile.age}yr, ${profile.gender}
 Goal: ${profile.goal}
@@ -82,6 +87,8 @@ Generate a refreshed diet plan as JSON. Return ONLY valid JSON with this structu
   "notes": "Ion's coaching note"
 }`
       : `You are Ion, an AI personal trainer. Generate an updated 6-week progressive workout plan for this user.
+
+${aiLanguageInstruction(language, 'all user-facing JSON string values including plan names, day names when appropriate, muscle focus, exercise tips, notes, and coaching guidance')}
 
 User: ${profile.name}, ${profile.age}yr, ${profile.gender}
 Goal: ${profile.goal}
@@ -172,9 +179,13 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
     })
 
     // Ion chat message
-    const ionMessage = planType === 'diet'
-      ? `Your new ${durationWeeks}-week diet plan is live, ${profile.name}. I've adjusted the calories and macros based on your recent progress. Check My Plan to see what's changed.`
-      : `New workout programme unlocked, ${profile.name}. I've increased the intensity and adjusted exercises based on your training over the last ${durationWeeks} weeks. Time to level up.`
+    const ionMessage = language === 'ar'
+      ? (planType === 'diet'
+        ? `خطة التغذية الجديدة لمدة ${durationWeeks} أسابيع جاهزة يا ${profile.name}. عدلت السعرات والماكروز بناء على تقدمك الأخير، وتقدر تشوف التغييرات من صفحة خطتي.`
+        : `برنامج التمرين الجديد جاهز يا ${profile.name}. رفعت مستوى الشدة وعدلت التمارين بناء على تدريبك خلال آخر ${durationWeeks} أسابيع. وقت نرفع المستوى.`)
+      : (planType === 'diet'
+        ? `Your new ${durationWeeks}-week diet plan is live, ${profile.name}. I've adjusted the calories and macros based on your recent progress. Check My Plan to see what's changed.`
+        : `New workout programme unlocked, ${profile.name}. I've increased the intensity and adjusted exercises based on your training over the last ${durationWeeks} weeks. Time to level up.`)
 
     await supabase.from('chat_messages').insert({
       user_id: user.id,
@@ -191,7 +202,7 @@ Generate a progressive workout plan as JSON. Return ONLY valid JSON:
 
     // Supplement recommendations for Elite users.
     // Fire-and-forget; do not block plan renewal response.
-    generateSupplementRecsIfElite(supabase, client, user.id, profile, planJson, planType).catch(
+    generateSupplementRecsIfElite(supabase, client, user.id, profile, planJson, planType, language).catch(
       e => console.error('[renew-plan] supplement gen failed:', e)
     )
 
@@ -210,6 +221,7 @@ async function generateSupplementRecsIfElite(
   profile: any,
   planJson: any,
   planType: 'diet' | 'workout',
+  language: 'en' | 'ar' = 'en',
 ) {
   // Check Elite status
   const sub = await getUserSubscription(userId)
@@ -233,6 +245,8 @@ async function generateSupplementRecsIfElite(
     : `Using existing workout plan.`
 
   const prompt = `You are Ion, an elite AI personal trainer and sports nutritionist. Based on this user's new plan cycle, recommend a precise, evidence-based supplement stack.
+
+${aiLanguageInstruction(language, 'all user-facing JSON string values including headline, benefits, timing, notes, and stack_notes')}
 
 USER:
 Name: ${profile.name}, ${profile.age}yr ${profile.gender}

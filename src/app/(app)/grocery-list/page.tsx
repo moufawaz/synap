@@ -16,6 +16,7 @@ type GroceryItem = {
 
 type GroceryGroup = {
   category: string
+  category_label?: string
   items: GroceryItem[]
 }
 
@@ -69,7 +70,7 @@ export default function GroceryListPage() {
   function listText() {
     return groups.map(group => {
       const rows = group.items.map(item => `${checked.has(item.id) ? '[x]' : '[ ]'} ${item.name} - ${item.quantity}`)
-      return `${group.category}\n${rows.join('\n')}`
+      return `${group.category_label || group.category}\n${rows.join('\n')}`
     }).join('\n\n')
   }
 
@@ -160,7 +161,7 @@ export default function GroceryListPage() {
                 <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   <div className="flex items-center gap-2">
                     <ShoppingBasket size={16} style={{ color: '#10B981' }} />
-                    <h2 className="font-heading text-sm font-bold text-white">{group.category}</h2>
+                    <h2 className="font-heading text-sm font-bold text-white">{group.category_label || group.category}</h2>
                   </div>
                   <span className="font-heading text-xs px-2 py-1 rounded-lg" style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981' }}>
                     {group.items.length}

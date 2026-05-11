@@ -1,7 +1,8 @@
-import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
 export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -25,6 +26,13 @@ export async function POST(req: Request) {
     if (!inbody_url || typeof inbody_url !== 'string') {
       return NextResponse.json({ error: 'Missing inbody_url' }, { status: 400 })
     }
+
+    const admin = createAdminClient()
+    const [profileRes, userLangRes] = await Promise.all([
+      admin.from('profiles').select('language').eq('user_id', user.id).maybeSingle(),
+      admin.from('users').select('language').eq('id', user.id).maybeSingle(),
+    ])
+    const language = normalizeAiLanguage(userLangRes.data?.language ?? profileRes.data?.language)
 
     console.info('[analyze-inbody] Fetching uploaded InBody file')
 
@@ -59,6 +67,8 @@ export async function POST(req: Request) {
       inbody_url.toLowerCase().includes('.pdf')
 
     const analysisPrompt = `You are analyzing an InBody body composition report. Extract ALL available data from this report.
+
+${aiLanguageInstruction(language, 'coaching_summary and any user-facing error text')}
 
 Look for and extract:
 1. Body Weight (kg)

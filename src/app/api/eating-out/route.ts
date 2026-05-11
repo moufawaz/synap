@@ -1,6 +1,7 @@
 import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { getAnthropicClient, withAnthropicRetry } from '@/lib/anthropic'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { NextResponse } from 'next/server'
 
 function todayKey() {
@@ -44,11 +45,13 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient()
   const today = todayKey()
-  const [profileRes, dietRes, mealsRes] = await Promise.all([
+  const [profileRes, userLangRes, dietRes, mealsRes] = await Promise.all([
     admin.from('profiles').select('goal, dietary_preference, food_allergies, food_preferences, language').eq('user_id', user.id).maybeSingle(),
+    admin.from('users').select('language').eq('id', user.id).maybeSingle(),
     admin.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     admin.from('meals_log').select('description,calories_estimated,protein_g,carbs_g,fats_g').eq('user_id', user.id).eq('date', today),
   ])
+  const language = normalizeAiLanguage(userLangRes.data?.language ?? profileRes.data?.language)
 
   const targets = getMacros(dietRes.data?.plan_json ?? {})
   const eaten = (mealsRes.data ?? []).reduce((acc, log: any) => ({
@@ -66,6 +69,8 @@ export async function POST(req: Request) {
   }
 
   const system = `You are Ion, SYNAP's practical nutrition coach. Help a global user eat out or order delivery while staying close to their daily macros.
+
+${aiLanguageInstruction(language, 'all user-facing JSON string values including order titles, item names when not brand-specific, explanations, avoid items, portion rules, and logging guidance')}
 
 Rules:
 - Be global-first. Do not assume Saudi Arabia or any one country.

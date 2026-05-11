@@ -1,4 +1,5 @@
 import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { normalizeAiLanguage } from '@/lib/ai-language'
 import { NextResponse } from 'next/server'
 
 type GroceryItem = {
@@ -21,6 +22,17 @@ const CATEGORY_ORDER = [
   'Drinks & supplements',
   'Other',
 ]
+
+const CATEGORY_LABEL_AR: Record<string, string> = {
+  Protein: 'البروتين',
+  Carbs: 'الكربوهيدرات',
+  'Fruits & vegetables': 'الفواكه والخضار',
+  Dairy: 'الألبان',
+  Fats: 'الدهون الصحية',
+  'Pantry & spices': 'المؤونة والبهارات',
+  'Drinks & supplements': 'المشروبات والمكملات',
+  Other: 'أخرى',
+}
 
 const CATEGORY_KEYWORDS: Array<[string, RegExp]> = [
   ['Protein', /\b(chicken|beef|steak|turkey|fish|salmon|tuna|shrimp|egg|eggs|tofu|tempeh|lentil|lentils|beans|chickpea|protein|whey)\b/i],
@@ -108,7 +120,7 @@ function collectMeals(plan: any) {
   return Array.isArray(plan?.meals) ? plan.meals.flatMap((meal: any) => Array(7).fill(meal)) : []
 }
 
-function buildGroceryList(plan: any) {
+function buildGroceryList(plan: any, language: 'en' | 'ar' = 'en') {
   const meals = collectMeals(plan)
   const map = new Map<string, GroceryItem & { fallbackParts: string[] }>()
 
@@ -153,7 +165,11 @@ function buildGroceryList(plan: any) {
     .sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category) || a.name.localeCompare(b.name))
 
   const groups = CATEGORY_ORDER
-    .map(category => ({ category, items: items.filter(item => item.category === category) }))
+    .map(category => ({
+      category,
+      category_label: language === 'ar' ? CATEGORY_LABEL_AR[category] ?? category : category,
+      items: items.filter(item => item.category === category),
+    }))
     .filter(group => group.items.length > 0)
 
   return { groups, items }
@@ -165,22 +181,24 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
-  const [dietRes, profileRes] = await Promise.all([
+  const [dietRes, profileRes, userLangRes] = await Promise.all([
     admin.from('diet_plans').select('plan_json, created_at').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     admin.from('profiles').select('language, dietary_preference, food_allergies').eq('user_id', user.id).maybeSingle(),
+    admin.from('users').select('language').eq('id', user.id).maybeSingle(),
   ])
 
   if (!dietRes.data?.plan_json) {
     return NextResponse.json({ error: 'No active diet plan found' }, { status: 404 })
   }
 
-  const list = buildGroceryList(dietRes.data.plan_json)
+  const language = normalizeAiLanguage(userLangRes.data?.language ?? profileRes.data?.language)
+  const list = buildGroceryList(dietRes.data.plan_json, language)
   return NextResponse.json({
     ...list,
     generated_at: new Date().toISOString(),
     plan_created_at: dietRes.data.created_at,
     context: {
-      language: profileRes.data?.language ?? 'en',
+      language,
       dietary_preference: profileRes.data?.dietary_preference ?? null,
       food_allergies: profileRes.data?.food_allergies ?? null,
       localization: 'global-first',

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { requireFoodScanAccess } from '@/lib/feature-access'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { createAdminClient } from '@/lib/supabase-server'
+import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
 const client = new Anthropic()
 
@@ -19,8 +21,16 @@ export async function POST(req: Request) {
     }
 
     const productName = name.trim().slice(0, 200)
+    const admin = createAdminClient()
+    const [profileRes, userLangRes] = await Promise.all([
+      admin.from('profiles').select('language').eq('user_id', gate.user!.id).maybeSingle(),
+      admin.from('users').select('language').eq('id', gate.user!.id).maybeSingle(),
+    ])
+    const language = normalizeAiLanguage(userLangRes.data?.language ?? profileRes.data?.language)
 
     const prompt = `You are a nutrition database. Estimate the nutritional values per 100g for the food product: "${productName}".
+
+${aiLanguageInstruction(language, 'user-facing string values such as cleaned product name when translation is natural, brand-safe explanations, and errors')}
 
 Return ONLY a valid JSON object with no markdown, no explanation:
 {
