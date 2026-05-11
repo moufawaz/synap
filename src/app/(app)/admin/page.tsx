@@ -5,6 +5,7 @@ import {
   Users, MessageCircle, Crown, DollarSign,
   TrendingUp, Zap, Activity, ExternalLink as ExternalLinkIcon,
   XCircle, BarChart3, Dumbbell, CheckCircle2, AlertCircle, Clock,
+  Flag, Shield,
 } from 'lucide-react'
 import { estimateAnthropicCostUsd, formatUsd, TOKEN_PRICING } from '@/lib/token-cost'
 
@@ -37,7 +38,7 @@ const GOAL_LABELS: Record<string, string> = {
   be_healthier:    'Health',
 }
 
-type AdminTab = 'overview' | 'usage' | 'users' | 'billing'
+type AdminTab = 'overview' | 'usage' | 'health' | 'errors' | 'flags' | 'users' | 'billing'
 
 function getPlanTier(s: any): 'elite' | 'pro' | 'starter' {
   const p = (s.plan_type || s.plan_name || '').toLowerCase()
@@ -47,7 +48,7 @@ function getPlanTier(s: any): 'elite' | 'pro' | 'starter' {
 }
 
 function getAdminTab(tab?: string): AdminTab {
-  return tab === 'usage' || tab === 'users' || tab === 'billing' ? tab : 'overview'
+  return tab === 'usage' || tab === 'health' || tab === 'errors' || tab === 'flags' || tab === 'users' || tab === 'billing' ? tab : 'overview'
 }
 
 function estimateTokensFromText(text?: string | null) {
@@ -81,6 +82,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
     msgUsageRes,
     tokenMessagesRes,
     workoutPlansRes,
+    appEventsRes,
   ] = await Promise.all([
     admin.auth.admin.listUsers({ perPage: 1000 }),
     admin.from('profiles').select('user_id, name, goal, gender, created_at'),
@@ -105,6 +107,10 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
       .range(0, 9999),
     // Users who have an active plan
     admin.from('workout_plans').select('user_id').eq('active', true),
+    admin.from('app_events')
+      .select('user_id,event_type,severity,source,message,metadata,created_at')
+      .order('created_at', { ascending: false })
+      .limit(500),
   ])
 
   const authUsers     = authUsersRes.data?.users || []
@@ -115,6 +121,8 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
   const msgUsage      = msgUsageRes.data || []
   const tokenRows = tokenMessagesRes.data || []
   const tokenLogError = tokenMessagesRes.error?.message || null
+  const appEvents = appEventsRes.data || []
+  const appEventsError = appEventsRes.error?.message || null
   const planUserIds   = new Set((workoutPlansRes.data || []).map((r: any) => r.user_id))
 
   // ── Per-user message aggregation ─────────────────────────────
@@ -355,6 +363,15 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
     .map(([feature, data]) => ({ feature, ...data }))
     .sort((a, b) => b.cost - a.cost)
 
+  const monthlyTokenTrend = Object.values(tokenRows.reduce((acc: Record<string, { month: string; calls: number; tokens: number; cost: number }>, row: any) => {
+    const month = row.created_at?.slice(0, 7) || 'unknown'
+    if (!acc[month]) acc[month] = { month, calls: 0, tokens: 0, cost: 0 }
+    acc[month].calls += 1
+    acc[month].tokens += row.total_tokens || 0
+    acc[month].cost += Number(row.estimated_cost_usd || 0)
+    return acc
+  }, {})).sort((a: any, b: any) => a.month.localeCompare(b.month)).slice(-6)
+
   const tierCosts: Record<string, { users: number; messages: number; cost: number; tokens: number }> = {
     starter: { users: 0, messages: 0, cost: 0, tokens: 0 },
     trial: { users: 0, messages: 0, cost: 0, tokens: 0 },
@@ -371,6 +388,30 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
     tierCosts[tier].tokens += usage?.monthTotal || 0
   }
   const thresholdUsers = highCostUsers.filter(row => (row.usage?.monthCost || 0) >= 1)
+
+  const eventErrors = appEvents.filter((e: any) => e.severity === 'error' || e.severity === 'critical')
+  const recentErrors = eventErrors.filter((e: any) => e.created_at >= monthAgo)
+  const planFailures30d = appEvents.filter((e: any) => e.event_type === 'plan_generation_failed' && e.created_at >= monthAgo).length
+  const planSuccess30d = appEvents.filter((e: any) => e.event_type === 'plan_generation_succeeded' && e.created_at >= monthAgo).length
+  const profileSaves30d = appEvents.filter((e: any) => e.event_type === 'onboarding_profile_saved' && e.created_at >= monthAgo).length
+  const errorBySource = Object.values(eventErrors.reduce((acc: Record<string, { source: string; count: number; last: string }>, event: any) => {
+    const source = event.source || event.event_type || 'unknown'
+    if (!acc[source]) acc[source] = { source, count: 0, last: '' }
+    acc[source].count += 1
+    if (event.created_at > acc[source].last) acc[source].last = event.created_at
+    return acc
+  }, {})).sort((a: any, b: any) => b.count - a.count)
+
+  const flagRows = [
+    { name: 'LAUNCH_MODE', server: process.env.LAUNCH_MODE, client: process.env.NEXT_PUBLIC_LAUNCH_MODE, impact: 'effectivePlan() returns Elite and feature gates open.' },
+    { name: 'NEXT_PUBLIC_LAUNCH_MODE', server: process.env.NEXT_PUBLIC_LAUNCH_MODE, client: process.env.NEXT_PUBLIC_LAUNCH_MODE, impact: 'Client UI shows launch access and opens gated UI.' },
+    { name: 'ADMIN_EMAIL', server: process.env.ADMIN_EMAIL ? 'set' : 'missing', client: null, impact: 'Controls admin access.' },
+    { name: 'ANTHROPIC_API_KEY', server: process.env.ANTHROPIC_API_KEY ? 'set' : 'missing', client: null, impact: 'Required for Ion, plans, scans, reports.' },
+    { name: 'LEMON_SQUEEZY_API_KEY', server: process.env.LEMON_SQUEEZY_API_KEY ? 'set' : 'missing', client: null, impact: 'Required for checkout creation.' },
+    { name: 'LEMON_SQUEEZY_WEBHOOK_SECRET', server: process.env.LEMON_SQUEEZY_WEBHOOK_SECRET ? 'set' : 'missing', client: null, impact: 'Required to verify billing webhooks.' },
+    { name: 'CRON_SECRET', server: process.env.CRON_SECRET ? 'set' : 'missing', client: null, impact: 'Protects cron endpoints.' },
+    { name: 'NEXT_PUBLIC_ONESIGNAL_APP_ID', server: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ? 'set' : 'missing', client: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ? 'set' : 'missing', impact: 'Browser push notifications.' },
+  ]
 
   // ── Users with no plan (churn risk) ──────────────────────────
   const noPlanUsers = authUsers.filter(u => !planUserIds.has(u.id))
@@ -438,6 +479,9 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
         {[
           { id: 'overview' as const, label: 'Overview' },
           { id: 'usage' as const, label: 'Token Costs' },
+          { id: 'health' as const, label: 'Health' },
+          { id: 'errors' as const, label: 'Errors' },
+          { id: 'flags' as const, label: 'Flags' },
           { id: 'users' as const, label: 'Users' },
           { id: 'billing' as const, label: 'Billing' },
         ].map(tab => (
@@ -532,6 +576,25 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
         </div>
 
         <div className="grid lg:grid-cols-3 gap-5 p-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <div>
+            <SectionTitle>MONTHLY COST TREND</SectionTitle>
+            <div className="flex items-end gap-2 h-40">
+              {monthlyTokenTrend.length === 0 ? (
+                <p className="font-heading text-xs" style={{ color: '#475569' }}>No monthly token data yet.</p>
+              ) : monthlyTokenTrend.map((month: any) => {
+                const maxCost = Math.max(...monthlyTokenTrend.map((m: any) => m.cost), 0.001)
+                const height = Math.max(6, Math.round((month.cost / maxCost) * 100))
+                return (
+                  <div key={month.month} className="flex-1 flex flex-col items-center gap-1">
+                    <span className="font-heading text-[9px]" style={{ color: '#94A3B8' }}>{formatUsd(month.cost)}</span>
+                    <div className="w-full rounded-t-lg" style={{ height: `${height}%`, background: 'rgba(187,92,246,0.45)', border: '1px solid rgba(187,92,246,0.35)' }} />
+                    <span className="font-heading text-[8px]" style={{ color: '#475569' }}>{month.month.slice(5)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
           <div>
             <SectionTitle>TOP EXPENSIVE USERS</SectionTitle>
             <div className="flex flex-col gap-2">
@@ -717,6 +780,125 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
       </div>
 
       {/* ── Revenue + Sub status ──────────────────────────────────── */}
+      <div id="health" className={`${activeTab === 'health' ? 'block' : 'hidden'} space-y-5 scroll-mt-4`}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Active Today" value={activeToday} sub={`${todayMsgs} messages today`} icon={Activity} color="#10B981" />
+          <StatCard label="Active 7d / 30d" value={`${active7d} / ${active30d}`} sub="chat or tracked activity" icon={TrendingUp} color="#3B82F6" />
+          <StatCard label="Profile Saves 30d" value={profileSaves30d} sub={`${onboardingRate}% profiles / signup`} icon={Users} color="#BB5CF6" />
+          <StatCard label="Plan Gen 30d" value={`${planSuccess30d}/${planFailures30d}`} sub="success / failures tracked" icon={Dumbbell} color={planFailures30d > 0 ? '#F59E0B' : '#10B981'} />
+        </div>
+        <div className="grid sm:grid-cols-2 gap-5">
+          <div className="glass-card p-5">
+            <SectionTitle>ONBOARDING DROP-OFF</SectionTitle>
+            <div className="flex flex-col gap-4">
+              {[
+                { label: 'Signed up', count: totalUsers, color: '#BB5CF6' },
+                { label: 'Profile saved', count: profiledUsers, color: '#3B82F6' },
+                { label: 'Plan generated', count: plannedUsers, color: '#10B981' },
+              ].map((step, idx, arr) => {
+                const pct = totalUsers > 0 ? Math.round((step.count / totalUsers) * 100) : 0
+                const drop = idx > 0 ? Math.max(0, arr[idx - 1].count - step.count) : 0
+                return (
+                  <div key={step.label}>
+                    <div className="flex justify-between mb-1">
+                      <span className="font-heading text-xs text-white">{step.label}</span>
+                      <span className="font-heading text-xs" style={{ color: '#64748B' }}>{step.count} ({pct}%)</span>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: step.color }} />
+                    </div>
+                    {idx > 0 && <p className="font-heading text-[10px] text-right mt-1" style={{ color: drop > 0 ? '#F59E0B' : '#334155' }}>{drop} dropped from previous step</p>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <div className="glass-card p-5">
+            <SectionTitle>RETENTION SNAPSHOT</SectionTitle>
+            <div className="flex flex-col gap-3">
+              <RevenueRow label="DAU / total users" value={`${totalUsers > 0 ? Math.round((activeToday / totalUsers) * 100) : 0}%`} color="#10B981" />
+              <RevenueRow label="WAU / total users" value={`${totalUsers > 0 ? Math.round((active7d / totalUsers) * 100) : 0}%`} color="#3B82F6" />
+              <RevenueRow label="MAU / total users" value={`${totalUsers > 0 ? Math.round((active30d / totalUsers) * 100) : 0}%`} color="#BB5CF6" />
+              <RevenueRow label="Users without plan" value={String(noPlanUsers.length)} color={noPlanUsers.length > 0 ? '#F59E0B' : '#10B981'} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="errors" className={`${activeTab === 'errors' ? 'block' : 'hidden'} space-y-5 scroll-mt-4`}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Errors 30d" value={recentErrors.length} sub={appEventsError ? 'Run SQL table first' : 'tracked app events'} icon={AlertCircle} color={recentErrors.length > 0 ? '#EF4444' : '#10B981'} />
+          <StatCard label="Plan Failures 30d" value={planFailures30d} sub={`${planSuccess30d} successes`} icon={XCircle} color={planFailures30d > 0 ? '#F59E0B' : '#10B981'} />
+          <StatCard label="Error Sources" value={errorBySource.length} sub="unique failing areas" icon={BarChart3} color="#3B82F6" />
+          <StatCard label="Monitoring" value={appEventsError ? 'Table missing' : 'Internal'} sub="Sentry-ready event trail" icon={Shield} color={appEventsError ? '#F59E0B' : '#10B981'} />
+        </div>
+        {appEventsError && (
+          <div className="glass-card p-5" style={{ borderColor: 'rgba(245,158,11,0.25)' }}>
+            <SectionTitle>SETUP REQUIRED</SectionTitle>
+            <p className="font-heading text-xs leading-relaxed" style={{ color: '#F59E0B' }}>Run <code>supabase-admin-ops.sql</code> in Supabase to enable app event/error monitoring.</p>
+          </div>
+        )}
+        <div className="grid sm:grid-cols-2 gap-5">
+          <div className="glass-card p-5">
+            <SectionTitle>ERRORS BY SOURCE</SectionTitle>
+            <div className="flex flex-col gap-2">
+              {errorBySource.length === 0 ? <p className="font-heading text-xs" style={{ color: '#475569' }}>No tracked errors yet.</p> : errorBySource.slice(0, 12).map((row: any) => (
+                <div key={row.source} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                  <div className="min-w-0">
+                    <p className="font-heading text-xs text-white truncate">{row.source}</p>
+                    <p className="font-heading text-[10px]" style={{ color: '#475569' }}>{new Date(row.last).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                  <p className="font-heading text-xs font-bold" style={{ color: '#EF4444' }}>{row.count}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="glass-card p-5">
+            <SectionTitle>RECENT ERROR EVENTS</SectionTitle>
+            <div className="flex flex-col gap-2">
+              {eventErrors.length === 0 ? <p className="font-heading text-xs" style={{ color: '#475569' }}>Clean so far.</p> : eventErrors.slice(0, 12).map((event: any, idx: number) => (
+                <div key={`${event.created_at}-${idx}`} className="rounded-xl px-3 py-2" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)' }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-heading text-xs text-white truncate">{event.event_type}</p>
+                    <span className="font-heading text-[10px]" style={{ color: '#EF4444' }}>{event.severity}</span>
+                  </div>
+                  <p className="font-heading text-[10px] truncate mt-1" style={{ color: '#94A3B8' }}>{event.message || event.source}</p>
+                  <p className="font-heading text-[9px] mt-1" style={{ color: '#475569' }}>{new Date(event.created_at).toLocaleString('en-GB')}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="flags" className={`${activeTab === 'flags' ? 'block' : 'hidden'} glass-card overflow-hidden scroll-mt-4`}>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <SectionTitle>FEATURE FLAGS & GATES</SectionTitle>
+          <p className="font-heading text-[10px] -mt-2" style={{ color: '#475569' }}>Read-only env-controlled launch mode, paid gates, beta controls, and required integrations.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                {['FLAG', 'SERVER', 'CLIENT', 'IMPACT'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left font-heading text-[10px] tracking-widest whitespace-nowrap" style={{ color: '#475569' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {flagRows.map(flag => (
+                <tr key={flag.name} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <td className="px-4 py-3"><p className="font-mono text-xs text-white">{flag.name}</p></td>
+                  <td className="px-4 py-3"><FlagPill value={flag.server ?? 'server-only'} active={flag.server === 'true' || flag.server === 'set'} /></td>
+                  <td className="px-4 py-3"><FlagPill value={flag.client ?? 'not public'} active={flag.client === 'true' || flag.client === 'set'} /></td>
+                  <td className="px-4 py-3"><p className="font-heading text-xs" style={{ color: '#94A3B8' }}>{flag.impact}</p></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div id="billing" className={`${activeTab === 'billing' ? 'grid' : 'hidden'} sm:grid-cols-2 gap-5 scroll-mt-4`}>
 
         <div className="glass-card p-5">
@@ -1042,6 +1224,16 @@ function RevenueRow({ label, value, color }: { label: string; value: string; col
       <span className="font-heading text-xs" style={{ color: '#64748B' }}>{label}</span>
       <span className="font-heading font-bold text-sm" style={{ color }}>{value}</span>
     </div>
+  )
+}
+
+function FlagPill({ value, active }: { value: string; active: boolean }) {
+  const color = active ? '#10B981' : value === 'missing' ? '#EF4444' : '#64748B'
+  return (
+    <span className="font-heading text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap"
+      style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
+      {value}
+    </span>
   )
 }
 

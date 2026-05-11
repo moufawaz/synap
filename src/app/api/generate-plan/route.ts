@@ -7,6 +7,7 @@ import { withAnthropicRetry } from '@/lib/anthropic'
 import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
+import { recordAppEvent } from '@/lib/app-events'
 
 export async function POST(req: Request) {
   // Guard: API key must be set
@@ -74,6 +75,14 @@ export async function POST(req: Request) {
     } catch {
       console.error('[generate-plan] JSON parse failed. finish_reason:', finishReason)
       console.error('[generate-plan] Invalid response length:', rawContent.length)
+      await recordAppEvent({
+        userId: user.id,
+        eventType: 'plan_generation_failed',
+        severity: 'error',
+        source: 'api/generate-plan',
+        message: 'Invalid JSON returned from plan generation',
+        metadata: { finishReason, responseLength: rawContent.length },
+      })
       return NextResponse.json({ error: 'Ion returned an invalid plan format. Please try again.' }, { status: 500 })
     }
 
@@ -111,6 +120,13 @@ export async function POST(req: Request) {
 
     if (wpError) {
       console.error('Workout plan save error:', wpError)
+      await recordAppEvent({
+        userId: user.id,
+        eventType: 'plan_generation_failed',
+        severity: 'error',
+        source: 'api/generate-plan',
+        message: `Workout plan save failed: ${wpError.message}`,
+      })
       return NextResponse.json({ error: `Failed to save workout plan: ${wpError.message}` }, { status: 500 })
     }
 
@@ -123,6 +139,13 @@ export async function POST(req: Request) {
 
     if (dpError) {
       console.error('Diet plan save error:', dpError)
+      await recordAppEvent({
+        userId: user.id,
+        eventType: 'plan_generation_failed',
+        severity: 'error',
+        source: 'api/generate-plan',
+        message: `Diet plan save failed: ${dpError.message}`,
+      })
       return NextResponse.json({ error: `Failed to save diet plan: ${dpError.message}` }, { status: 500 })
     }
 
@@ -147,6 +170,15 @@ export async function POST(req: Request) {
       })
     }
 
+    await recordAppEvent({
+      userId: user.id,
+      eventType: 'plan_generation_succeeded',
+      severity: 'info',
+      source: 'api/generate-plan',
+      message: 'Plan generated and saved',
+      metadata: { workout_plan_id: workoutPlan?.id, diet_plan_id: dietPlan?.id },
+    })
+
     // Send welcome email (fire-and-forget; do not block response)
     if (user.email) {
       sendEmail({
@@ -163,6 +195,17 @@ export async function POST(req: Request) {
     })
   } catch (err: any) {
     console.error('Generate plan error:', err?.message || err)
+    try {
+      const supabase = await createServerClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      await recordAppEvent({
+        userId: user?.id,
+        eventType: 'plan_generation_failed',
+        severity: 'error',
+        source: 'api/generate-plan',
+        message: err?.message || 'Unknown generate-plan error',
+      })
+    } catch {}
     const raw = err?.message || ''
     let friendly = "Ion couldn't build your plan right now. Please try again."
     if (raw.includes('credit balance') || raw.includes('billing') || raw.includes('quota')) {

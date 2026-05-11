@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { recordAppEvent } from '@/lib/app-events'
 
 export async function POST(req: Request) {
   try {
@@ -58,6 +59,13 @@ export async function POST(req: Request) {
 
     if (profileError) {
       console.error('Profile error:', profileError)
+      await recordAppEvent({
+        userId: user.id,
+        eventType: 'onboarding_profile_save_failed',
+        severity: 'error',
+        source: 'api/save-profile',
+        message: profileError.message,
+      })
       return NextResponse.json({ error: profileError.message }, { status: 500 })
     }
 
@@ -66,6 +74,15 @@ export async function POST(req: Request) {
       ion_gender: profileData.ion_gender || 'male',
       language: profileData.language || 'en',
     }).eq('id', user.id)
+
+    await recordAppEvent({
+      userId: user.id,
+      eventType: 'onboarding_profile_saved',
+      severity: 'info',
+      source: 'api/save-profile',
+      message: 'Profile saved',
+      metadata: { goal: profile.goal, language: profileData.language || 'en' },
+    })
 
     // Save initial measurements if provided
     if (profileData.measurements && typeof profileData.measurements === 'object') {
@@ -96,8 +113,14 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (err) {
+  } catch (err: any) {
     console.error('Save profile error:', err)
+    await recordAppEvent({
+      eventType: 'onboarding_profile_save_failed',
+      severity: 'error',
+      source: 'api/save-profile',
+      message: err?.message || 'Internal error',
+    })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
