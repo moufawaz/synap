@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import IonAvatar from '@/components/ui/IonAvatar'
-import { Send, Sparkles, Dumbbell, Utensils, TrendingUp, AlertCircle, Zap, CheckCircle, Clock } from 'lucide-react'
+import { Send, Sparkles, Dumbbell, Utensils, TrendingUp, AlertCircle, Zap, CheckCircle, Clock, PanelLeft, X } from 'lucide-react'
 import { useLanguage } from '@/lib/useLanguage'
 
 const PLAN_MODIFY_WINDOW_DAYS = 30
@@ -18,6 +18,15 @@ interface Message {
   content: string
   message_type?: MessageType
   metadata?: any
+  created_at?: string
+}
+
+interface ChatSession {
+  id: string
+  title: string
+  dateLabel: string
+  timeLabel: string
+  messages: Message[]
 }
 
 const QUICK_PROMPTS = [
@@ -49,18 +58,23 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false)
   const [profileGender, setProfileGender] = useState<'male' | 'female'>('male')
   const [planDaysLeft, setPlanDaysLeft] = useState<number | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const quickPrompts = isRTL ? QUICK_PROMPTS_AR : QUICK_PROMPTS
+  const sessions = useMemo(() => buildChatSessions(messages, isRTL), [messages, isRTL])
+  const selectedSession = selectedSessionId ? sessions.find(session => session.id === selectedSessionId) : null
+  const visibleMessages = selectedSession?.messages ?? messages
 
   useEffect(() => { loadHistory() }, [])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [visibleMessages, loading])
 
   async function loadHistory() {
-    const res = await fetch('/api/chat?limit=100', { cache: 'no-store' }).catch(() => null)
+    const res = await fetch('/api/chat?limit=250', { cache: 'no-store' }).catch(() => null)
     if (!res?.ok) return
     const data = await res.json()
 
@@ -79,7 +93,8 @@ export default function ChatPage() {
     const content = (text || input).trim()
     if (!content || loading) return
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content }
+    setSelectedSessionId(null)
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content, created_at: new Date().toISOString() }
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setLoading(true)
@@ -98,6 +113,7 @@ export default function ChatPage() {
           role: 'ion',
           content: data.reply,
           message_type: data.message_type || 'text',
+          created_at: new Date().toISOString(),
         }])
       } else {
         // API returned an error — show it in the chat as an alert
@@ -110,6 +126,7 @@ export default function ChatPage() {
           role: 'ion',
           content: errMsg,
           message_type: 'alert',
+          created_at: new Date().toISOString(),
         }])
       }
     } catch {
@@ -118,6 +135,7 @@ export default function ChatPage() {
         role: 'ion',
         content: "I lost the connection. Check your internet and try again.",
         message_type: 'alert',
+        created_at: new Date().toISOString(),
       }])
     } finally {
       setLoading(false)
@@ -126,10 +144,47 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: '#080808' }} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="flex h-screen relative" style={{ background: '#080808' }} dir={isRTL ? 'rtl' : 'ltr'}>
+      {historyOpen && (
+        <ChatHistorySidebar
+          sessions={sessions}
+          selectedSessionId={selectedSessionId}
+          isRTL={isRTL}
+          onSelect={(id) => {
+            setSelectedSessionId(id)
+            if (window.innerWidth < 768) setHistoryOpen(false)
+          }}
+          onAll={() => {
+            setSelectedSessionId(null)
+            if (window.innerWidth < 768) setHistoryOpen(false)
+          }}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
+
+      {historyOpen && (
+        <button
+          type="button"
+          aria-label={isRTL ? 'إغلاق السجل' : 'Close history'}
+          className="fixed inset-0 z-[75] bg-black/50 md:hidden"
+          onClick={() => setHistoryOpen(false)}
+        />
+      )}
+
+      <main className="flex flex-col h-screen flex-1 min-w-0">
 
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#0A0A14' }}>
+        <button
+          type="button"
+          onClick={() => setHistoryOpen(true)}
+          className="h-9 w-9 rounded-xl border flex items-center justify-center transition-all"
+          style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', color: '#94A3B8' }}
+          aria-label={isRTL ? 'فتح سجل المحادثات' : 'Open chat history'}
+          title={isRTL ? 'سجل المحادثات' : 'Chat history'}
+        >
+          <PanelLeft size={16} />
+        </button>
         <IonAvatar gender={profileGender} size="sm" animated />
         <div>
           <p className="font-heading font-bold text-sm text-white tracking-wider" style={{ letterSpacing: '0.08em' }}>ION</p>
@@ -172,7 +227,7 @@ export default function ChatPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-        {messages.length === 0 && (
+        {visibleMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
             <IonAvatar gender={profileGender} size="xl" animated />
             <div>
@@ -198,7 +253,13 @@ export default function ChatPage() {
           </div>
         )}
 
-        {messages.map(msg => (
+        {selectedSession && (
+          <div className="mx-auto mb-1 px-3 py-1 rounded-full border font-heading text-[11px]" style={{ color: '#94A3B8', borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+            {isRTL ? 'تعرض جلسة' : 'Viewing'}: {selectedSession.dateLabel} · {selectedSession.timeLabel}
+          </div>
+        )}
+
+        {visibleMessages.map(msg => (
           <MessageBubble key={msg.id} msg={msg} gender={profileGender} onPrompt={sendMessage} isRTL={isRTL} />
         ))}
 
@@ -258,8 +319,166 @@ export default function ChatPage() {
           </button>
         </form>
       </div>
+      </main>
     </div>
   )
+}
+
+function ChatHistorySidebar({
+  sessions,
+  selectedSessionId,
+  isRTL,
+  onSelect,
+  onAll,
+  onClose,
+}: {
+  sessions: ChatSession[]
+  selectedSessionId: string | null
+  isRTL: boolean
+  onSelect: (id: string) => void
+  onAll: () => void
+  onClose: () => void
+}) {
+  return (
+    <aside
+      className={`fixed top-0 bottom-0 ${isRTL ? 'right-0' : 'left-0'} z-[80] w-80 max-w-[86vw] md:relative md:max-w-none shrink-0 flex flex-col`}
+      style={{
+        background: '#0A0A0A',
+        borderInlineEnd: isRTL ? undefined : '1px solid rgba(255,255,255,0.06)',
+        borderInlineStart: isRTL ? '1px solid rgba(255,255,255,0.06)' : undefined,
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 p-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div>
+          <p className="font-heading text-xs font-bold tracking-widest uppercase" style={{ color: '#BB5CF6' }}>
+            {isRTL ? 'سجل المحادثات' : 'Chat History'}
+          </p>
+          <p className="font-heading text-[11px] mt-0.5" style={{ color: '#64748B' }}>
+            {isRTL ? 'حسب اليوم والجلسة' : 'By day and session'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-8 w-8 rounded-lg border flex items-center justify-center"
+          style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', color: '#94A3B8' }}
+          aria-label={isRTL ? 'إخفاء السجل' : 'Hide history'}
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      <div className="p-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <button
+          type="button"
+          onClick={onAll}
+          className="w-full rounded-xl px-3 py-2.5 text-start font-heading text-xs font-bold transition-all"
+          style={{
+            background: selectedSessionId === null ? 'rgba(187,92,246,0.14)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${selectedSessionId === null ? 'rgba(187,92,246,0.28)' : 'rgba(255,255,255,0.07)'}`,
+            color: selectedSessionId === null ? '#D88BFF' : '#CBD5E1',
+          }}
+        >
+          {isRTL ? 'كل المحادثة الحالية' : 'All current history'}
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {sessions.length === 0 ? (
+          <p className="font-heading text-xs text-center py-8" style={{ color: '#64748B' }}>
+            {isRTL ? 'لا توجد محادثات محفوظة بعد.' : 'No saved conversations yet.'}
+          </p>
+        ) : sessions.map(session => (
+          <button
+            key={session.id}
+            type="button"
+            onClick={() => onSelect(session.id)}
+            className="w-full rounded-xl p-3 text-start transition-all"
+            style={{
+              background: selectedSessionId === session.id ? 'rgba(187,92,246,0.14)' : 'rgba(255,255,255,0.035)',
+              border: `1px solid ${selectedSessionId === session.id ? 'rgba(187,92,246,0.28)' : 'rgba(255,255,255,0.06)'}`,
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="font-heading text-[11px] font-bold" style={{ color: '#D88BFF' }}>{session.dateLabel}</span>
+              <span className="font-heading text-[10px]" style={{ color: '#64748B' }}>{session.timeLabel}</span>
+            </div>
+            <p className="font-heading text-sm font-semibold line-clamp-2" style={{ color: '#E2E8F0' }}>
+              {session.title}
+            </p>
+            <p className="font-heading text-[10px] mt-1" style={{ color: '#475569' }}>
+              {session.messages.length} {isRTL ? 'رسائل' : session.messages.length === 1 ? 'message' : 'messages'}
+            </p>
+          </button>
+        ))}
+      </div>
+    </aside>
+  )
+}
+
+function buildChatSessions(messages: Message[], isRTL: boolean): ChatSession[] {
+  const sorted = [...messages].sort((a, b) => messageTime(a) - messageTime(b))
+  const sessions: ChatSession[] = []
+  const gapMs = 1000 * 60 * 90
+
+  for (const message of sorted) {
+    const time = messageTime(message)
+    const last = sessions[sessions.length - 1]
+    const lastMessage = last?.messages[last.messages.length - 1]
+    const shouldStart =
+      !last ||
+      !lastMessage ||
+      !sameDay(time, messageTime(lastMessage)) ||
+      time - messageTime(lastMessage) > gapMs
+
+    if (shouldStart) {
+      sessions.push({
+        id: message.created_at || message.id,
+        title: titleFromMessage(message, isRTL),
+        dateLabel: formatSessionDate(time, isRTL),
+        timeLabel: formatSessionTime(time),
+        messages: [message],
+      })
+    } else {
+      last.messages.push(message)
+      if (!last.title || last.title === (isRTL ? 'جلسة آيون' : 'Ion session')) {
+        last.title = titleFromMessage(message, isRTL)
+      }
+    }
+  }
+
+  return sessions.reverse()
+}
+
+function messageTime(message: Message) {
+  const parsed = message.created_at ? new Date(message.created_at).getTime() : Number(message.id)
+  return Number.isFinite(parsed) ? parsed : Date.now()
+}
+
+function sameDay(a: number, b: number) {
+  const da = new Date(a)
+  const db = new Date(b)
+  return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate()
+}
+
+function formatSessionDate(time: number, isRTL: boolean) {
+  const date = new Date(time)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+  if (sameDay(time, today.getTime())) return isRTL ? 'اليوم' : 'Today'
+  if (sameDay(time, yesterday.getTime())) return isRTL ? 'أمس' : 'Yesterday'
+  return date.toLocaleDateString(isRTL ? 'ar' : 'en', { month: 'short', day: 'numeric' })
+}
+
+function formatSessionTime(time: number) {
+  return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function titleFromMessage(message: Message, isRTL: boolean) {
+  const cleaned = message.content.replace(/\s+/g, ' ').trim()
+  if (!cleaned) return isRTL ? 'جلسة آيون' : 'Ion session'
+  return cleaned.length > 48 ? `${cleaned.slice(0, 48)}...` : cleaned
 }
 
 // ── Rich Message Bubble ────────────────────────────────

@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url)
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 80), 1), 150)
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 120), 1), 300)
   const admin = createAdminClient()
 
   const [profileRes, historyRes, planRes] = await Promise.all([
