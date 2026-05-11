@@ -476,15 +476,33 @@ function formatSessionTime(time: number) {
 }
 
 function titleFromMessage(message: Message, isRTL: boolean) {
-  const cleaned = message.content.replace(/\s+/g, ' ').trim()
+  const cleaned = displayChatContent(message.content).replace(/\s+/g, ' ').trim()
   if (!cleaned) return isRTL ? 'جلسة آيون' : 'Ion session'
   return cleaned.length > 48 ? `${cleaned.slice(0, 48)}...` : cleaned
 }
 
 // ── Rich Message Bubble ────────────────────────────────
+function displayChatContent(content: string) {
+  const cleaned = String(content || '')
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+
+  try {
+    const match = cleaned.match(/\{[\s\S]*\}/)
+    const parsed = JSON.parse(match ? match[0] : cleaned)
+    if (typeof parsed?.message === 'string') return parsed.message.trim()
+    if (typeof parsed?.reply === 'string') return parsed.reply.trim()
+    if (typeof parsed?.content === 'string') return parsed.content.trim()
+  } catch {}
+
+  return cleaned
+}
+
 function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender: 'male' | 'female'; onPrompt: (t: string) => void; isRTL: boolean }) {
   const isUser = msg.role === 'user'
   const type = msg.message_type || 'text'
+  const content = displayChatContent(msg.content)
 
   if (isUser) {
     return (
@@ -499,7 +517,7 @@ function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender:
            }}
         >
           <p className="font-heading text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#F0F0FF', textAlign: isRTL ? 'right' : 'left' }}>
-            {msg.content}
+            {content}
           </p>
         </div>
       </div>
@@ -544,7 +562,7 @@ function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender:
         )}
 
         <p className="font-heading text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#F0F0FF', textAlign: isRTL ? 'right' : 'left' }}>
-          {msg.content}
+          {content}
         </p>
 
         {/* Context-aware quick replies for special types */}

@@ -5,15 +5,14 @@ import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { Dumbbell, CheckCircle2, Circle, ChevronDown, ChevronUp, Clock, RotateCcw, Trophy } from 'lucide-react'
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
+import { CANONICAL_DAYS as DAYS, firstWorkoutDayName, getWorkoutDay } from '@/lib/workout-days'
 
 export const dynamic = 'force-dynamic'
-
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export default function WorkoutPage() {
   const [plan, setPlan] = useState<any>(null)
   const [gender, setGender] = useState<'male' | 'female'>('male')
-  const [selectedDay, setSelectedDay] = useState(DAYS[new Date().getDay()])
+  const [selectedDay, setSelectedDay] = useState<string>(DAYS[new Date().getDay()])
   const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set())
   const [expandedExercises, setExpandedExercises] = useState<Set<string>>(new Set())
   const [workoutStarted, setWorkoutStarted] = useState(false)
@@ -44,13 +43,19 @@ export default function WorkoutPage() {
       supabase.from('workout_log').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(10),
     ])
 
-    setPlan(planRes.data?.plan_json || null)
+    const planData = planRes.data?.plan_json || null
+    setPlan(planData)
+    if (planData) {
+      const today = DAYS[new Date().getDay()]
+      const nextSelected = getWorkoutDay(planData, today) ? today : firstWorkoutDayName(planData)
+      if (nextSelected) setSelectedDay(String(nextSelected))
+    }
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
     setLogs(logsRes.data || [])
     setLoading(false)
   }
 
-  const todayPlan = plan?.days?.find((d: any) => d.day_name === selectedDay)
+  const todayPlan = getWorkoutDay(plan, selectedDay)
   const isRestDay = !todayPlan
   const exercises = todayPlan?.exercises || []
   const allDone = exercises.length > 0 && exercises.every((_: any, i: number) => completedExercises.has(`${selectedDay}-${i}`))
@@ -125,7 +130,7 @@ export default function WorkoutPage() {
       {/* Day Selector */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
         {DAYS.map(day => {
-          const hasWorkout = plan?.days?.some((d: any) => d.day_name === day)
+          const hasWorkout = !!getWorkoutDay(plan, day)
           const isToday = day === DAYS[new Date().getDay()]
           const isSelected = day === selectedDay
           return (

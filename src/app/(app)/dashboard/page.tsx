@@ -8,6 +8,7 @@ import {
   ChevronRight, Zap, Target, Sparkles, Shield, Crown, FileText,
 } from 'lucide-react'
 import { getTrialDaysRemaining, effectivePlan } from '@/lib/subscription'
+import { CANONICAL_DAYS, getWorkoutDay } from '@/lib/workout-days'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,9 +66,8 @@ export default async function DashboardPage() {
   // legacy compat
   const isFree = isStarter
 
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const todayName = days[new Date().getDay()]
-  const todayWorkout = workoutPlan?.days?.find((d: any) => d.day_name === todayName)
+  const todayName = CANONICAL_DAYS[new Date().getDay()]
+  const todayWorkout = getWorkoutDay(workoutPlan, todayName)
   const isRestDay = !todayWorkout
 
   const currentWeight = measurements[0]?.weight_kg
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
   const hasInbody = !!profile?.inbody_url
   const displayedIonMessage = isRTL
     ? 'لديك ملاحظة تدريبية جديدة من آيون. افتح المحادثة لمراجعة التفاصيل والرد.'
-    : lastIonMessage
+    : cleanChatPreview(lastIonMessage)
 
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-4xl mx-auto pb-24 md:pb-6 relative" dir={isRTL ? 'rtl' : 'ltr'}>
@@ -591,4 +591,21 @@ function goalLabel(goal: string, isRTL = false): string {
     be_healthier: 'صحة أفضل',
   } as Record<string, string>
   return (isRTL ? ar : en)[goal] || goal
+}
+
+function cleanChatPreview(content: string | null) {
+  const cleaned = String(content || '')
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+
+  try {
+    const match = cleaned.match(/\{[\s\S]*\}/)
+    const parsed = JSON.parse(match ? match[0] : cleaned)
+    if (typeof parsed?.message === 'string') return parsed.message.trim()
+    if (typeof parsed?.reply === 'string') return parsed.reply.trim()
+    if (typeof parsed?.content === 'string') return parsed.content.trim()
+  } catch {}
+
+  return cleaned
 }

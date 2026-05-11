@@ -11,6 +11,7 @@ import {
 import confetti from 'canvas-confetti'
 
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
+import { CANONICAL_DAYS, canonicalDayName, getWorkoutDay } from '@/lib/workout-days'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,7 +45,7 @@ function loadSessionLocal(dayName: string): WorkoutSession | null {
     const raw = localStorage.getItem(SESSION_KEY)
     if (!raw) return null
     const data: WorkoutSession = JSON.parse(raw)
-    if (data.date !== new Date().toDateString() || data.dayName !== dayName) {
+    if (data.date !== new Date().toDateString() || canonicalDayName(data.dayName) !== canonicalDayName(dayName)) {
       localStorage.removeItem(SESSION_KEY)
       return null
     }
@@ -83,7 +84,7 @@ export default function WorkoutTodayPage() {
   const [sessionRestored, setSessionRestored] = useState(false)
   const confettiFired = useRef(false)
 
-  const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()]
+  const todayName = CANONICAL_DAYS[new Date().getDay()]
 
   useEffect(() => { loadData() }, [])
 
@@ -121,7 +122,7 @@ export default function WorkoutTodayPage() {
         const res = await fetch(`/api/workout-session?date=${TODAY_DATE}`)
         if (res.ok) {
           const json = await res.json()
-          if (json.session && json.session.dayName === todayName) {
+          if (json.session && canonicalDayName(json.session.dayName) === todayName) {
             saved = {
               date: new Date().toDateString(),
               dayName: json.session.dayName,
@@ -158,7 +159,7 @@ export default function WorkoutTodayPage() {
     setLoading(false)
   }
 
-  const todayPlan = plan?.days?.find((d: any) => d.day_name === todayName)
+  const todayPlan = getWorkoutDay(plan, todayName)
   const exercises: any[] = todayPlan?.exercises || []
   const allDone = exercises.length > 0 && exercises.every((_: any, i: number) => completedExercises.has(i))
 

@@ -8,6 +8,7 @@ import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { recordAppEvent } from '@/lib/app-events'
+import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
 export async function POST(req: Request) {
   // Guard: API key must be set
@@ -72,6 +73,9 @@ export async function POST(req: Request) {
     try {
       plan = extractJSON(rawContent)
       if (!plan) throw new Error('no valid JSON found')
+      if (plan.workout_plan) {
+        plan.workout_plan = normalizeWorkoutPlanDays(plan.workout_plan)
+      }
     } catch {
       console.error('[generate-plan] JSON parse failed. finish_reason:', finishReason)
       console.error('[generate-plan] Invalid response length:', rawContent.length)
@@ -340,6 +344,10 @@ HEALTH:
 - Supplements: ${p.supplements || 'None'}
 
 IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text before or after. Use this exact structure:
+IMPORTANT FOR APP COMPATIBILITY:
+- Keep every JSON key exactly as shown.
+- For workout day_name values, ALWAYS use exact English weekday names: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday.
+- Translate user-facing strings for Arabic users, but do not translate day_name weekday values because the app uses them for scheduling.
 
 {
   "summary": "2-3 sentence overview of the approach",

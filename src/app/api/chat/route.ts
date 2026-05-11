@@ -7,6 +7,7 @@ import { withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
 import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
+import { canonicalDayName, normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
 export async function GET(req: Request) {
   const supabase = await createServerClient()
@@ -177,7 +178,7 @@ export async function POST(req: Request) {
       .filter(h => h.role === 'user' || h.role === 'assistant' || h.role === 'ion')
       .map(h => ({
         role: (h.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-        content: h.content,
+        content: h.role === 'user' ? h.content : normalizeAssistantReply(h.content).content,
       }))
 
     const messages: Anthropic.MessageParam[] = [
@@ -192,8 +193,10 @@ export async function POST(req: Request) {
       messages,
     }))
 
-    const reply = response.content[0].type === 'text' ? response.content[0].text : ''
-    const messageType = 'text'
+    const rawReply = response.content[0].type === 'text' ? response.content[0].text : ''
+    const normalizedReply = normalizeAssistantReply(rawReply)
+    const reply = normalizedReply.content
+    const messageType = normalizedReply.messageType
 
     // Save assistant response
     const usageMetadata = {
@@ -311,6 +314,7 @@ async function maybeApplyPlanEdit({
     }
 
     if (intent === 'workout') {
+      edit.updated_plan = normalizeWorkoutPlanDays(edit.updated_plan)
       await enrichWorkoutVideos(edit.updated_plan)
       const { error } = await supabase
         .from('workout_plans')
@@ -455,7 +459,7 @@ function applyRestDayToday(currentPlan: any, request: string) {
 
 function moveWorkoutOffDay(days: any[], today: string, todayIndex: number) {
   const nextDays = cloneJson(days)
-  const currentIdx = nextDays.findIndex((day: any) => dayNameOf(day).toLowerCase() === today.toLowerCase())
+  const currentIdx = nextDays.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === today)
   if (currentIdx < 0) return { days: nextDays, movedTo: null }
 
   const todayWorkout = nextDays[currentIdx]
@@ -475,7 +479,10 @@ function moveWorkoutOffDay(days: any[], today: string, todayIndex: number) {
     const movedWorkout = cloneJson(todayWorkout)
     setDayName(movedWorkout, movedTo)
     nextDays.push(movedWorkout)
-    nextDays.sort((a: any, b: any) => DAY_NAMES.indexOf(dayNameOf(a)) - DAY_NAMES.indexOf(dayNameOf(b)))
+    nextDays.sort((a: any, b: any) =>
+      DAY_NAMES.indexOf(String(canonicalDayName(dayNameOf(a)))) -
+      DAY_NAMES.indexOf(String(canonicalDayName(dayNameOf(b))))
+    )
   }
 
   return { days: nextDays, movedTo }
@@ -520,6 +527,7 @@ ${aiLanguageInstruction(language, 'the summary and all user-facing string values
 - Return the full updated plan JSON, preserving the same overall shape and all useful existing fields.
 - Make only the requested change plus directly necessary balancing changes.
 - If this is a workout plan, keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group when present.
+- If this is a workout plan, day_name values must remain exact English weekdays: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday. Translate visible coaching/exercise strings, but not day_name values.
 - If replacing an exercise, choose a safe equivalent for the same muscle group and the user's equipment/injuries.
 - If this is a diet plan, keep daily calories/macros coherent and meal totals roughly aligned.
 - If this is a diet plan, every meal must include a practical recipe object with title, prep_time_min, cook_time_min, ingredients, steps, and tips.
@@ -542,6 +550,38 @@ function parseJsonObject(raw: string): any | null {
   } catch {
     return null
   }
+}
+
+type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan'
+
+function normalizeAssistantReply(raw: string): { content: string; messageType: MessageType } {
+  const cleaned = stripCodeFences(raw)
+  const parsed = parseJsonObject(cleaned)
+  if (parsed && typeof parsed === 'object') {
+    const content =
+      typeof parsed.message === 'string' ? parsed.message :
+      typeof parsed.reply === 'string' ? parsed.reply :
+      typeof parsed.content === 'string' ? parsed.content :
+      ''
+    const messageType = typeof parsed.type === 'string' && isMessageType(parsed.type)
+      ? parsed.type
+      : 'text'
+
+    if (content.trim()) return { content: content.trim(), messageType }
+  }
+
+  return { content: cleaned.trim(), messageType: 'text' }
+}
+
+function stripCodeFences(raw: string) {
+  return String(raw || '')
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+}
+
+function isMessageType(value: string): value is MessageType {
+  return ['text', 'suggestion', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan'].includes(value)
 }
 
 async function enrichWorkoutVideos(plan: any) {
@@ -653,6 +693,7 @@ ${workoutBlock}
 - For medical questions, recommend a doctor first but still be helpful with what you can
 - If they're struggling, be encouraging but honest - no empty hype
 - If the saved client language is Arabic, always reply in Arabic even if the user types English or Arabizi. If the saved client language is English, reply in English unless the user explicitly asks for Arabic.
+- Return plain natural-language text only. Do not wrap chat replies in JSON, markdown code fences, or code blocks.
 - Do NOT mention your tier or pricing - that's handled elsewhere`
 }
 
