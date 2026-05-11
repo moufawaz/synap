@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { Send, Sparkles, Dumbbell, Utensils, TrendingUp, AlertCircle, Zap, CheckCircle, Clock } from 'lucide-react'
-import { createBrowserClient } from '@/lib/supabase'
 import { useLanguage } from '@/lib/useLanguage'
 
 const PLAN_MODIFY_WINDOW_DAYS = 30
@@ -61,23 +60,16 @@ export default function ChatPage() {
   }, [messages, loading])
 
   async function loadHistory() {
-    const supabase = createBrowserClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const res = await fetch('/api/chat?limit=100', { cache: 'no-store' }).catch(() => null)
+    if (!res?.ok) return
+    const data = await res.json()
 
-    const [profileRes, historyRes, planRes] = await Promise.all([
-      supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
-      supabase.from('chat_messages').select('id, role, content, message_type, metadata')
-        .eq('user_id', user.id).order('created_at', { ascending: true }).limit(60),
-      supabase.from('workout_plans').select('created_at').eq('user_id', user.id).eq('active', true).single(),
-    ])
-
-    if (profileRes.data?.gender) setProfileGender(profileRes.data.gender as any)
-    if (historyRes.data) {
-      setMessages(historyRes.data.map((m: any, i: number) => ({ ...m, id: m.id || String(i) })))
+    if (data.profile?.gender) setProfileGender(data.profile.gender as any)
+    if (Array.isArray(data.messages)) {
+      setMessages(data.messages.map((m: any, i: number) => ({ ...m, id: m.id || String(i) })))
     }
-    if (planRes.data?.created_at) {
-      const planAge = Math.floor((Date.now() - new Date(planRes.data.created_at).getTime()) / 86400000)
+    if (data.activeWorkoutPlan?.created_at) {
+      const planAge = Math.floor((Date.now() - new Date(data.activeWorkoutPlan.created_at).getTime()) / 86400000)
       const remaining = PLAN_MODIFY_WINDOW_DAYS - planAge
       setPlanDaysLeft(remaining > 0 ? remaining : 0)
     }

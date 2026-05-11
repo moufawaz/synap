@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { canSendMessage, incrementMessageCount, isLaunchMode, getUserSubscription, effectivePlan } from '@/lib/subscription'
@@ -6,6 +6,41 @@ import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
 import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
+
+export async function GET(req: Request) {
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const url = new URL(req.url)
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 80), 1), 150)
+  const admin = createAdminClient()
+
+  const [profileRes, historyRes, planRes] = await Promise.all([
+    admin.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
+    admin.from('chat_messages')
+      .select('id, role, content, message_type, metadata, created_at')
+      .eq('user_id', user.id)
+      .in('role', ['user', 'assistant', 'ion'])
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    admin.from('workout_plans')
+      .select('created_at')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  return NextResponse.json({
+    profile: profileRes.data ?? null,
+    messages: (historyRes.data ?? []).reverse(),
+    activeWorkoutPlan: planRes.data ?? null,
+  })
+}
 
 export async function POST(req: Request) {
   // Guard: API key must be set
