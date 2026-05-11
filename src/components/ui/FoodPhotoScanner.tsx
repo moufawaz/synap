@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Camera, Upload, X, Check, RotateCcw, Loader2, AlertCircle } from 'lucide-react'
+import { Camera, Upload, X, Check, RotateCcw, Loader2, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import type { FoodProduct } from '@/components/ui/BarcodeScanner'
 
 interface FoodPhotoScannerProps {
@@ -17,18 +17,24 @@ interface ScanResult {
   ai_estimated: boolean
 }
 
+interface EditableFoodItem {
+  id: string
+  name: string
+  brand?: string
+  servingG: number
+  caloriesPer100g: string
+  proteinPer100g: string
+  carbsPer100g: string
+  fatPer100g: string
+}
+
 export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [step, setStep]               = useState<Step>('capture')
   const [preview, setPreview]         = useState<string | null>(null)
   const [result, setResult]           = useState<ScanResult | null>(null)
   const [error, setError]             = useState<string>('')
-  const [servingG, setServingG]       = useState(100)
-  const [customName, setCustomName]   = useState('')
-  const [customCal, setCustomCal]     = useState('')
-  const [customPro, setCustomPro]     = useState('')
-  const [customCarb, setCustomCarb]   = useState('')
-  const [customFat, setCustomFat]     = useState('')
+  const [items, setItems]             = useState<EditableFoodItem[]>([])
   const [editMode, setEditMode]       = useState(false)
   const [logging, setLogging]         = useState(false)
   const [logError, setLogError]       = useState('')
@@ -80,13 +86,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
       }
 
       setResult(data)
-      setServingG(data.product.serving_size_g || 100)
-      // Pre-fill editable fields
-      setCustomName(data.product.name)
-      setCustomCal(String(data.product.calories_per_100g ?? ''))
-      setCustomPro(String(data.product.protein_per_100g ?? ''))
-      setCustomCarb(String(data.product.carbs_per_100g ?? ''))
-      setCustomFat(String(data.product.fat_per_100g ?? ''))
+      setItems([productToEditable(data.product)])
       setStep('result')
     } catch {
       setError('Something went wrong. Please try again.')
@@ -101,19 +101,14 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
   }
 
   const handleConfirm = async () => {
-    if (!result) return
+    if (!result || items.length === 0) return
     setLogging(true)
     setLogError('')
-    const product = editMode ? {
-      ...result.product,
-      name:              customName || result.product.name,
-      calories_per_100g: parseFloat(customCal)  || result.product.calories_per_100g,
-      protein_per_100g:  parseFloat(customPro)  || result.product.protein_per_100g,
-      carbs_per_100g:    parseFloat(customCarb) || result.product.carbs_per_100g,
-      fat_per_100g:      parseFloat(customFat)  || result.product.fat_per_100g,
-    } : result.product
     try {
-      await onScan(product, servingG)
+      for (const item of items) {
+        const product = editableToProduct(item)
+        await onScan(product, item.servingG)
+      }
       onClose()
     } catch (err: any) {
       setLogError(err?.message || 'Food could not be saved. Please try again.')
@@ -129,15 +124,39 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
     setError('')
     setLogError('')
     setEditMode(false)
+    setItems([])
   }
 
-  // Computed macros for current serving
-  const p = result?.product
-  const factor = servingG / 100
-  const cal  = Math.round((p?.calories_per_100g  || parseFloat(customCal)  || 0) * factor)
-  const pro  = Math.round((p?.protein_per_100g   || parseFloat(customPro)  || 0) * factor)
-  const carb = Math.round((p?.carbs_per_100g     || parseFloat(customCarb) || 0) * factor)
-  const fat  = Math.round((p?.fat_per_100g       || parseFloat(customFat)  || 0) * factor)
+  function updateItem(id: string, patch: Partial<EditableFoodItem>) {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item))
+  }
+
+  function addFoodItem() {
+    setEditMode(true)
+    setItems(prev => [...prev, {
+      id: `${Date.now()}-${prev.length}`,
+      name: 'Extra food',
+      servingG: 100,
+      caloriesPer100g: '0',
+      proteinPer100g: '0',
+      carbsPer100g: '0',
+      fatPer100g: '0',
+    }])
+  }
+
+  function removeFoodItem(id: string) {
+    setItems(prev => prev.length > 1 ? prev.filter(item => item.id !== id) : prev)
+  }
+
+  const totals = items.reduce((acc, item) => {
+    const macros = itemMacros(item)
+    return {
+      cal: acc.cal + macros.cal,
+      pro: acc.pro + macros.pro,
+      carb: acc.carb + macros.carb,
+      fat: acc.fat + macros.fat,
+    }
+  }, { cal: 0, pro: 0, carb: 0, fat: 0 })
 
   const confidenceColor: Record<string, string> = {
     high: '#10B981', medium: '#F59E0B', low: '#EF4444',
@@ -267,87 +286,81 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
                 </div>
               )}
 
-              {/* Product info */}
-              <div className="rounded-2xl p-4" style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.15)' }}>
-                {editMode ? (
-                  <div className="flex flex-col gap-2">
-                    <input
-                      className="w-full px-3 py-2 rounded-xl text-sm font-heading font-bold text-white bg-transparent"
-                      style={{ border: '1px solid rgba(255,255,255,0.1)' }}
-                      value={customName}
-                      onChange={e => setCustomName(e.target.value)}
-                      placeholder="Food name"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { label: 'Cal/100g', val: customCal, set: setCustomCal },
-                        { label: 'Protein/100g', val: customPro, set: setCustomPro },
-                        { label: 'Carbs/100g', val: customCarb, set: setCustomCarb },
-                        { label: 'Fat/100g', val: customFat, set: setCustomFat },
-                      ].map(({ label, val, set }) => (
-                        <div key={label}>
-                          <p className="font-heading text-[10px] mb-1" style={{ color: '#64748B' }}>{label}</p>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            className="w-full px-3 py-2 rounded-xl text-sm font-heading text-white bg-transparent"
-                            style={{ border: '1px solid rgba(255,255,255,0.1)' }}
-                            value={val}
-                            onChange={e => set(e.target.value)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <p className="font-heading font-bold text-white text-base leading-tight">{result.product.name}</p>
-                    {result.product.brand && (
-                      <p className="font-heading text-xs mt-0.5" style={{ color: '#64748B' }}>{result.product.brand}</p>
-                    )}
-                    {result.ai_estimated && (
-                      <p className="font-heading text-[10px] mt-1" style={{ color: '#F59E0B' }}>
-                        AI-estimated nutrition - edit if needed
-                      </p>
-                    )}
-                  </>
-                )}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-heading text-xs font-bold" style={{ color: '#94A3B8' }}>DETECTED ITEMS</p>
+                  {result.ai_estimated && (
+                    <p className="font-heading text-[10px] mt-1" style={{ color: '#F59E0B' }}>AI-estimated nutrition - edit each item if needed</p>
+                  )}
+                </div>
+                <button
+                  onClick={addFoodItem}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-heading font-bold text-[10px]"
+                  style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)', color: '#F97316' }}
+                >
+                  <Plus size={12} /> ITEM
+                </button>
               </div>
 
-              {/* Serving size */}
-              <div>
-                <p className="font-heading text-xs font-bold mb-2" style={{ color: '#94A3B8' }}>SERVING SIZE</p>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setServingG(g => Math.max(10, g - 25))}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-bold text-lg"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#94A3B8' }}>
-                    -
-                  </button>
-                  <div className="flex-1 flex items-center gap-1.5 px-4 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={servingG}
-                      onChange={e => setServingG(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="flex-1 bg-transparent text-center font-heading font-bold text-xl text-white w-16 outline-none"
-                    />
-                    <span className="font-heading text-sm" style={{ color: '#64748B' }}>g</span>
-                  </div>
-                  <button onClick={() => setServingG(g => g + 25)}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-bold text-lg"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#94A3B8' }}>
-                    +
-                  </button>
-                </div>
+              <div className="flex flex-col gap-3">
+                {items.map((item, index) => {
+                  const macros = itemMacros(item)
+                  return (
+                    <div key={item.id} className="rounded-2xl p-4" style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.15)' }}>
+                      {editMode ? (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
+                            <input
+                              className="flex-1 min-w-0 px-3 py-2 rounded-xl text-sm font-heading font-bold text-white bg-transparent"
+                              style={{ border: '1px solid rgba(255,255,255,0.1)' }}
+                              value={item.name}
+                              onChange={e => updateItem(item.id, { name: e.target.value })}
+                              placeholder="Food name"
+                            />
+                            <button
+                              onClick={() => removeFoodItem(item.id)}
+                              disabled={items.length === 1}
+                              className="w-10 rounded-xl flex items-center justify-center disabled:opacity-30"
+                              style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}
+                              aria-label="Remove item"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <NumberField label="Serving g" value={String(item.servingG)} onChange={value => updateItem(item.id, { servingG: Math.max(1, parseFloat(value) || 1) })} />
+                            <NumberField label="Cal/100g" value={item.caloriesPer100g} onChange={value => updateItem(item.id, { caloriesPer100g: value })} />
+                            <NumberField label="Protein/100g" value={item.proteinPer100g} onChange={value => updateItem(item.id, { proteinPer100g: value })} />
+                            <NumberField label="Carbs/100g" value={item.carbsPer100g} onChange={value => updateItem(item.id, { carbsPer100g: value })} />
+                            <NumberField label="Fat/100g" value={item.fatPer100g} onChange={value => updateItem(item.id, { fatPer100g: value })} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-heading font-bold text-white text-base leading-tight">{item.name}</p>
+                            {item.brand && <p className="font-heading text-xs mt-0.5" style={{ color: '#64748B' }}>{item.brand}</p>}
+                            <p className="font-heading text-[10px] mt-1" style={{ color: '#64748B' }}>
+                              {item.servingG}g - {macros.cal} kcal · P:{macros.pro}g C:{macros.carb}g F:{macros.fat}g
+                            </p>
+                          </div>
+                          <span className="font-heading text-[10px] px-2 py-1 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', color: '#94A3B8' }}>
+                            #{index + 1}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
               {/* Macro preview */}
               <div className="grid grid-cols-4 gap-2">
                 {[
-                  { label: 'Calories', val: cal, unit: 'kcal', color: '#F97316' },
-                  { label: 'Protein',  val: pro,  unit: 'g',    color: '#BB5CF6' },
-                  { label: 'Carbs',    val: carb, unit: 'g',    color: '#3B82F6' },
-                  { label: 'Fat',      val: fat,  unit: 'g',    color: '#F59E0B' },
+                  { label: 'Calories', val: totals.cal, unit: 'kcal', color: '#F97316' },
+                  { label: 'Protein',  val: totals.pro,  unit: 'g',    color: '#BB5CF6' },
+                  { label: 'Carbs',    val: totals.carb, unit: 'g',    color: '#3B82F6' },
+                  { label: 'Fat',      val: totals.fat,  unit: 'g',    color: '#F59E0B' },
                 ].map(({ label, val, unit, color }) => (
                   <div key={label} className="rounded-xl p-2.5 text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                     <p className="font-heading font-bold text-base" style={{ color }}>{val}</p>
@@ -387,7 +400,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
               style={{ background: logging ? '#9A3412' : '#F97316', color: 'white', boxShadow: '0 0 24px rgba(249,115,22,0.35)', letterSpacing: '0.08em' }}
             >
               {logging ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-              {logging ? 'SAVING...' : `LOG ${servingG}g`}
+              {logging ? 'SAVING...' : `LOG ${items.length} ITEM${items.length === 1 ? '' : 'S'}`}
             </button>
             {logError && (
               <p className="font-heading text-xs text-center mt-2" style={{ color: '#F87171' }}>{logError}</p>
@@ -406,5 +419,57 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
         />
       </div>
     </div>
+  )
+}
+
+function productToEditable(product: FoodProduct): EditableFoodItem {
+  return {
+    id: `${Date.now()}-0`,
+    name: product.name || 'Detected food',
+    brand: product.brand,
+    servingG: Number(product.serving_size_g) || 100,
+    caloriesPer100g: String(product.calories_per_100g ?? 0),
+    proteinPer100g: String(product.protein_per_100g ?? 0),
+    carbsPer100g: String(product.carbs_per_100g ?? 0),
+    fatPer100g: String(product.fat_per_100g ?? 0),
+  }
+}
+
+function editableToProduct(item: EditableFoodItem): FoodProduct {
+  return {
+    barcode: 'photo',
+    name: item.name.trim() || 'Detected food',
+    brand: item.brand,
+    calories_per_100g: Number(item.caloriesPer100g) || 0,
+    protein_per_100g: Number(item.proteinPer100g) || 0,
+    carbs_per_100g: Number(item.carbsPer100g) || 0,
+    fat_per_100g: Number(item.fatPer100g) || 0,
+    serving_size_g: item.servingG,
+  }
+}
+
+function itemMacros(item: EditableFoodItem) {
+  const factor = (Number(item.servingG) || 0) / 100
+  return {
+    cal: Math.round((Number(item.caloriesPer100g) || 0) * factor),
+    pro: Math.round((Number(item.proteinPer100g) || 0) * factor),
+    carb: Math.round((Number(item.carbsPer100g) || 0) * factor),
+    fat: Math.round((Number(item.fatPer100g) || 0) * factor),
+  }
+}
+
+function NumberField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label>
+      <p className="font-heading text-[10px] mb-1" style={{ color: '#64748B' }}>{label}</p>
+      <input
+        type="number"
+        inputMode="decimal"
+        className="w-full px-3 py-2 rounded-xl text-sm font-heading text-white bg-transparent"
+        style={{ border: '1px solid rgba(255,255,255,0.1)' }}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      />
+    </label>
   )
 }

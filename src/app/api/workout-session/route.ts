@@ -40,14 +40,14 @@ export async function GET(req: Request) {
 }
 
 // PUT /api/workout-session
-// Body: { date, dayName, completedExercises: number[] }
+// Body: { date, dayName, completedExercises: number[], exercisePerformance?: object }
 export async function PUT(req: Request) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { date = TODAY(), dayName, completedExercises = [] } = body
+  const { date = TODAY(), dayName, completedExercises = [], exercisePerformance = {} } = body
 
   // Delete any existing session rows for today to keep it tidy (upsert by delete+insert)
   await supabase
@@ -68,6 +68,7 @@ export async function PUT(req: Request) {
       date,
       dayName,
       completedExercises,
+      exercisePerformance,
       updatedAt: new Date().toISOString(),
     },
   })

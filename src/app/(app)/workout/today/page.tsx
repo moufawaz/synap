@@ -6,6 +6,7 @@ import IonAvatar from '@/components/ui/IonAvatar'
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp,
   Clock, Dumbbell, Trophy, Play, RotateCcw, Pause,
+  TrendingUp,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
@@ -26,6 +27,12 @@ interface WorkoutSession {
   resumeAt: number | null
   isPaused: boolean
   completedExercises: number[]
+  exercisePerformance?: Record<string, ExercisePerformance>
+}
+
+interface ExercisePerformance {
+  weight: string
+  reps: string
 }
 
 function saveSessionLocal(data: WorkoutSession) {
@@ -47,13 +54,13 @@ function loadSessionLocal(dayName: string): WorkoutSession | null {
 
 // Debounced DB sync — avoid hammering the API on every checkbox click
 let dbSyncTimer: ReturnType<typeof setTimeout> | null = null
-function syncSessionToDB(dayName: string, completedExercises: number[]) {
+function syncSessionToDB(dayName: string, completedExercises: number[], exercisePerformance: Record<string, ExercisePerformance> = {}) {
   if (dbSyncTimer) clearTimeout(dbSyncTimer)
   dbSyncTimer = setTimeout(() => {
     fetch('/api/workout-session', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: TODAY_DATE, dayName, completedExercises }),
+      body: JSON.stringify({ date: TODAY_DATE, dayName, completedExercises, exercisePerformance }),
     }).catch(() => {})
   }, 800) // write to DB 800 ms after last change
 }
@@ -63,6 +70,8 @@ export default function WorkoutTodayPage() {
   const [plan, setPlan] = useState<any>(null)
   const [gender, setGender] = useState<'male' | 'female'>('male')
   const [completedExercises, setCompletedExercises] = useState<Set<number>>(new Set())
+  const [exercisePerformance, setExercisePerformance] = useState<Record<string, ExercisePerformance>>({})
+  const [lastPerformance, setLastPerformance] = useState<Record<string, { weight: number; reps: number }>>({})
   const [expandedExercise, setExpandedExercise] = useState<number | null>(null)
   const [workoutStarted, setWorkoutStarted] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
@@ -92,14 +101,16 @@ export default function WorkoutTodayPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const [planRes, profileRes] = await Promise.all([
+    const [planRes, profileRes, logRes] = await Promise.all([
       supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
+      fetch('/api/log-workout').then(r => r.json()).catch(() => ({ logs: [] })),
     ])
 
     const planData = planRes.data?.plan_json || null
     setPlan(planData)
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
+    setLastPerformance(buildLastPerformanceMap(logRes.logs || []))
 
     // Restore paused session — DB is source of truth, localStorage is fast fallback
     if (planData) {
@@ -118,6 +129,7 @@ export default function WorkoutTodayPage() {
               resumeAt: null,
               isPaused: true,
               completedExercises: json.session.completedExercises || [],
+              exercisePerformance: json.session.exercisePerformance || {},
             }
             // Write back to localStorage so next page load is instant
             saveSessionLocal(saved)
@@ -132,6 +144,7 @@ export default function WorkoutTodayPage() {
 
       if (saved) {
         setCompletedExercises(new Set(saved.completedExercises))
+        setExercisePerformance(saved.exercisePerformance || {})
         const ms = saved.isPaused
           ? saved.totalMs
           : saved.totalMs + (saved.resumeAt ? Date.now() - saved.resumeAt : 0)
@@ -149,8 +162,8 @@ export default function WorkoutTodayPage() {
   const exercises: any[] = todayPlan?.exercises || []
   const allDone = exercises.length > 0 && exercises.every((_: any, i: number) => completedExercises.has(i))
 
-  function buildSession(completed: Set<number>, ms: number, rAt: number | null, paused: boolean): WorkoutSession {
-    return { date: new Date().toDateString(), dayName: todayName, totalMs: ms, resumeAt: rAt, isPaused: paused, completedExercises: Array.from(completed) }
+  function buildSession(completed: Set<number>, ms: number, rAt: number | null, paused: boolean, performance = exercisePerformance): WorkoutSession {
+    return { date: new Date().toDateString(), dayName: todayName, totalMs: ms, resumeAt: rAt, isPaused: paused, completedExercises: Array.from(completed), exercisePerformance: performance }
   }
 
   function toggleComplete(i: number) {
@@ -160,7 +173,24 @@ export default function WorkoutTodayPage() {
       const ms = resumeAt ? totalMs + (Date.now() - resumeAt) : totalMs
       const session = buildSession(next, ms, resumeAt, isPaused)
       saveSessionLocal(session)
-      syncSessionToDB(todayName, Array.from(next))
+      syncSessionToDB(todayName, Array.from(next), exercisePerformance)
+      return next
+    })
+  }
+
+  function updatePerformance(index: number, key: keyof ExercisePerformance, value: string) {
+    setExercisePerformance(prev => {
+      const next = {
+        ...prev,
+        [String(index)]: {
+          weight: prev[String(index)]?.weight || '',
+          reps: prev[String(index)]?.reps || '',
+          [key]: value,
+        },
+      }
+      const ms = resumeAt ? totalMs + (Date.now() - resumeAt) : totalMs
+      saveSessionLocal(buildSession(completedExercises, ms, resumeAt, isPaused, next))
+      syncSessionToDB(todayName, Array.from(completedExercises), next)
       return next
     })
   }
@@ -173,9 +203,10 @@ export default function WorkoutTodayPage() {
     setTotalMs(0)
     setDisplaySecs(0)
     setCompletedExercises(new Set())
+    setExercisePerformance({})
     setSessionRestored(false)
-    saveSessionLocal({ date: new Date().toDateString(), dayName: todayName, totalMs: 0, resumeAt: now, isPaused: false, completedExercises: [] })
-    syncSessionToDB(todayName, [])
+    saveSessionLocal({ date: new Date().toDateString(), dayName: todayName, totalMs: 0, resumeAt: now, isPaused: false, completedExercises: [], exercisePerformance: {} })
+    syncSessionToDB(todayName, [], {})
   }
 
   function pauseWorkout() {
@@ -226,6 +257,14 @@ export default function WorkoutTodayPage() {
         duration_min: Math.round(finalSecs / 60),
         exercises_completed: completedExercises.size,
         exercises_total: exercises.length,
+        exercises: exercises.map((ex, index) => ({
+          name: ex.name,
+          planned_sets: ex.sets ?? null,
+          planned_reps: ex.reps ?? null,
+          weight_kg: Number(exercisePerformance[String(index)]?.weight) || null,
+          reps_done: Number(exercisePerformance[String(index)]?.reps) || null,
+          completed: completedExercises.has(index),
+        })),
       }),
     })
   }
@@ -264,6 +303,7 @@ export default function WorkoutTodayPage() {
       onReset={() => {
         setWorkoutDone(false); setWorkoutStarted(false)
         confettiFired.current = false; setCompletedExercises(new Set())
+        setExercisePerformance({})
         setTotalMs(0); setDisplaySecs(0)
       }}
     />
@@ -368,6 +408,9 @@ export default function WorkoutTodayPage() {
         {exercises.map((ex: any, i: number) => {
           const done = completedExercises.has(i)
           const isExpanded = expandedExercise === i
+          const performance = exercisePerformance[String(i)] || { weight: '', reps: '' }
+          const last = lastPerformance[normalizeExerciseName(ex.name)]
+          const nextSuggestion = getNextSuggestion(performance, last)
 
           return (
             <div
@@ -435,6 +478,22 @@ export default function WorkoutTodayPage() {
                       <p className="font-heading text-xs leading-relaxed" style={{ color: '#64748B' }}>{ex.weight_guidance}</p>
                     </div>
                   )}
+                  <div className="mt-3 rounded-2xl p-3" style={{ background: 'rgba(187,92,246,0.05)', border: '1px solid rgba(187,92,246,0.14)' }}>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp size={13} style={{ color: '#BB5CF6' }} />
+                        <p className="font-heading text-xs font-bold tracking-widest uppercase" style={{ color: '#D88BFF' }}>PROGRESSION</p>
+                      </div>
+                      {last && (
+                        <p className="font-heading text-[10px]" style={{ color: '#64748B' }}>Last: {last.weight}kg x {last.reps}</p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <WorkoutInput label="Weight kg" value={performance.weight} onChange={value => updatePerformance(i, 'weight', value)} />
+                      <WorkoutInput label="Best reps" value={performance.reps} onChange={value => updatePerformance(i, 'reps', value)} />
+                    </div>
+                    <p className="font-heading text-[11px] leading-relaxed mt-3" style={{ color: '#94A3B8' }}>{nextSuggestion}</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -463,6 +522,58 @@ export default function WorkoutTodayPage() {
 }
 
 // ── Finished Screen ────────────────────────────────────────
+function WorkoutInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label>
+      <span className="font-heading text-[9px] uppercase block mb-1" style={{ color: '#64748B' }}>{label}</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full rounded-xl px-3 py-2 font-heading text-sm outline-none"
+        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#E2E8F0' }}
+      />
+    </label>
+  )
+}
+
+function normalizeExerciseName(name: string) {
+  return String(name || '').trim().toLowerCase()
+}
+
+function buildLastPerformanceMap(logs: any[]) {
+  const map: Record<string, { weight: number; reps: number }> = {}
+  for (const log of logs) {
+    const exercises = Array.isArray(log.exercises) ? log.exercises : []
+    for (const exercise of exercises) {
+      const name = normalizeExerciseName(exercise.name)
+      const weight = Number(exercise.weight_kg)
+      const reps = Number(exercise.reps_done)
+      if (!name || !Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) continue
+      if (!map[name]) map[name] = { weight, reps }
+    }
+  }
+  return map
+}
+
+function getNextSuggestion(current: ExercisePerformance, last?: { weight: number; reps: number }) {
+  const weight = Number(current.weight)
+  const reps = Number(current.reps)
+  if (Number.isFinite(weight) && weight > 0 && Number.isFinite(reps) && reps > 0) {
+    if (last && weight >= last.weight && reps >= last.reps + 2) {
+      const nextWeight = Math.round((weight + 2.5) * 10) / 10
+      return `Next time: try ${nextWeight}kg and keep reps controlled.`
+    }
+    if (last && weight > last.weight) {
+      return `Good load increase. Next time: keep ${weight}kg and beat ${reps} reps before adding more.`
+    }
+    return `Next time: repeat ${weight}kg and aim for ${reps + 1} reps with clean form.`
+  }
+  if (last) return `Suggestion: start around ${last.weight}kg and try to beat ${last.reps} reps.`
+  return 'Log weight and best reps today so Ion can suggest the next increase.'
+}
+
 function FinishedScreen({ elapsed, completed, total, gender, onReset }: any) {
   const mins = Math.round(elapsed / 60)
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0

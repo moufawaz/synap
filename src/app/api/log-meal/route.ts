@@ -53,3 +53,28 @@ export async function DELETE(req: Request) {
   await admin.from('meals_log').delete().eq('id', id).eq('user_id', user.id)
   return NextResponse.json({ ok: true })
 }
+
+export async function PUT(req: Request) {
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json()
+  const { id, meal_name, ...rest } = body
+  if (!id) return NextResponse.json({ error: 'Missing log id' }, { status: 400 })
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('meals_log')
+    .update({
+      ...rest,
+      description: meal_name ?? body.description,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ log: data })
+}

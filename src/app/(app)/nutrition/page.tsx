@@ -3,7 +3,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import Link from 'next/link'
 import { createBrowserClient } from '@/lib/supabase'
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame, Camera, X, Sparkles, ShoppingBasket, UtensilsCrossed } from 'lucide-react'
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, Droplets, Flame, Camera, X, Sparkles, ShoppingBasket, UtensilsCrossed, Pencil, Save } from 'lucide-react'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { RecipeButton } from '@/components/ui/RecipeModal'
 import UpgradeModal from '@/components/ui/UpgradeModal'
@@ -71,6 +71,8 @@ export default function NutritionPage() {
   const [upgradeOpen,       setUpgradeOpen]       = useState(false)
   const [tier,              setTier]              = useState<'starter' | 'trial' | 'pro' | 'elite'>('starter')
   const [mealNow,           setMealNow]           = useState<any>(null)
+  const [editingScannedId,  setEditingScannedId]  = useState<string | null>(null)
+  const [scannedDraft,      setScannedDraft]      = useState<ScannedItem | null>(null)
 
   useEffect(() => {
     // Restore today's state instantly from localStorage while DB loads
@@ -275,6 +277,53 @@ export default function NutritionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: dbId }),
       }).catch(() => {})
+    }
+  }
+
+  function startEditScanned(item: ScannedItem) {
+    setEditingScannedId(item.id)
+    setScannedDraft({ ...item })
+  }
+
+  function updateScannedDraft(key: keyof ScannedItem, value: string) {
+    setScannedDraft(prev => {
+      if (!prev) return prev
+      if (key === 'name') return { ...prev, name: value }
+      const numeric = Number(value)
+      return { ...prev, [key]: Number.isFinite(numeric) ? numeric : 0 }
+    })
+  }
+
+  async function saveScannedEdit() {
+    if (!scannedDraft) return
+    const updatedItem = { ...scannedDraft }
+    setScannedItems(prev => {
+      const updated = prev.map(item => item.id === updatedItem.id ? updatedItem : item)
+      saveScanned(updated)
+      return updated
+    })
+    setEditingScannedId(null)
+    setScannedDraft(null)
+
+    if (updatedItem.dbId) {
+      try {
+        const res = await fetch('/api/log-meal', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: updatedItem.dbId,
+            meal_name: `${updatedItem.name} - ${updatedItem.servingG}g`,
+            calories_estimated: updatedItem.calories,
+            protein_g: updatedItem.protein_g,
+            carbs_g: updatedItem.carbs_g,
+            fats_g: updatedItem.fat_g,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || data.error) throw new Error(data.error || 'Food update failed.')
+      } catch {
+        await loadData()
+      }
     }
   }
 
@@ -541,27 +590,65 @@ export default function NutritionPage() {
             </span>
           </div>
           <div className="flex flex-col gap-2">
-            {scannedItems.map(item => (
-              <div key={item.id} className="flex items-center gap-3 p-3.5 rounded-2xl"
-                style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.15)' }}>
-                <div className="flex-1 min-w-0">
-                  <p className="font-heading font-semibold text-sm text-white truncate">{item.name}</p>
-                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    <span className="font-heading text-xs" style={{ color: '#F97316' }}>
-                      <Flame size={10} className="inline mr-0.5" />{item.calories} kcal
-                    </span>
-                    <span className="font-heading text-[10px]" style={{ color: '#475569' }}>
-                      {item.servingG}g - P:{item.protein_g}g C:{item.carbs_g}g F:{item.fat_g}g
-                    </span>
-                  </div>
+            {scannedItems.map(item => {
+              const editing = editingScannedId === item.id && scannedDraft
+              return (
+                <div key={item.id} className="p-3.5 rounded-2xl"
+                  style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.15)' }}>
+                  {editing ? (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        value={scannedDraft.name}
+                        onChange={e => updateScannedDraft('name', e.target.value)}
+                        className="w-full rounded-xl px-3 py-2 font-heading text-sm outline-none"
+                        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#E2E8F0' }}
+                      />
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        <LoggedFoodField label="g" value={scannedDraft.servingG} onChange={v => updateScannedDraft('servingG', v)} />
+                        <LoggedFoodField label="kcal" value={scannedDraft.calories} onChange={v => updateScannedDraft('calories', v)} />
+                        <LoggedFoodField label="protein" value={scannedDraft.protein_g} onChange={v => updateScannedDraft('protein_g', v)} />
+                        <LoggedFoodField label="carbs" value={scannedDraft.carbs_g} onChange={v => updateScannedDraft('carbs_g', v)} />
+                        <LoggedFoodField label="fat" value={scannedDraft.fat_g} onChange={v => updateScannedDraft('fat_g', v)} />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={saveScannedEdit} className="flex-1 py-2 rounded-xl font-heading font-bold text-xs flex items-center justify-center gap-2" style={{ background: '#F97316', color: 'white' }}>
+                          <Save size={12} /> SAVE
+                        </button>
+                        <button onClick={() => { setEditingScannedId(null); setScannedDraft(null) }} className="px-4 py-2 rounded-xl font-heading font-bold text-xs" style={{ border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}>
+                          CANCEL
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-heading font-semibold text-sm text-white truncate">{item.name}</p>
+                        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                          <span className="font-heading text-xs" style={{ color: '#F97316' }}>
+                            <Flame size={10} className="inline mr-0.5" />{item.calories} kcal
+                          </span>
+                          <span className="font-heading text-[10px]" style={{ color: '#475569' }}>
+                            {item.servingG}g - P:{item.protein_g}g C:{item.carbs_g}g F:{item.fat_g}g
+                          </span>
+                        </div>
+                      </div>
+                      <button onClick={() => startEditScanned(item)}
+                        className="p-1.5 rounded-lg flex-shrink-0 hover:bg-white/5"
+                        style={{ color: '#64748B' }}
+                        aria-label="Edit logged food">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => removeScanned(item.id)}
+                        className="p-1.5 rounded-lg flex-shrink-0 hover:bg-white/5"
+                        style={{ color: '#475569' }}
+                        aria-label="Remove logged food">
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button onClick={() => removeScanned(item.id)}
-                  className="p-1.5 rounded-lg flex-shrink-0 hover:bg-white/5"
-                  style={{ color: '#475569' }}>
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -599,6 +686,22 @@ function MacroRow({ label, eaten, total, color }: { label: string; eaten: number
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color, transition: 'width 0.5s ease' }} />
       </div>
     </div>
+  )
+}
+
+function LoggedFoodField({ label, value, onChange }: { label: string; value: number; onChange: (value: string) => void }) {
+  return (
+    <label>
+      <span className="font-heading text-[9px] uppercase block mb-1" style={{ color: '#64748B' }}>{label}</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full rounded-xl px-2 py-2 font-heading text-xs outline-none"
+        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#E2E8F0' }}
+      />
+    </label>
   )
 }
 
