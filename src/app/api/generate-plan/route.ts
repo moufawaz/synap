@@ -109,11 +109,9 @@ export async function POST(req: Request) {
       })
     )
 
-    // Deactivate any existing plans first
-    await Promise.all([
-      supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id),
-      supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id),
-    ])
+    // Deactivate existing plans sequentially to avoid inconsistent state if one fails
+    await supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id)
+    await supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id)
 
     // Save workout plan
     const { data: workoutPlan, error: wpError } = await supabase.from('workout_plans').insert({

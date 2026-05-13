@@ -99,44 +99,88 @@ export default function ChatPage() {
     setInput('')
     setLoading(true)
 
+    const ionMsgId = (Date.now() + 1).toString()
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: content }),
       })
-      const data = await res.json()
 
-      if (data.reply) {
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'ion',
-          content: data.reply,
-          message_type: data.message_type || 'text',
-          created_at: new Date().toISOString(),
-        }])
-      } else {
-        // API returned an error — show it in the chat as an alert
+      // Plan-edit path returns JSON; regular chat path streams SSE
+      if (res.headers.get('Content-Type')?.includes('application/json')) {
+        const data = await res.json()
         const isLimitError = data.error === 'daily_limit_reached' || data.error === 'starter_expired'
         const errMsg = isLimitError
           ? `${data.message} [Upgrade to Pro](/pricing)`
           : (data.message || data.error || 'Something went wrong. Try again.')
         setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'ion',
-          content: errMsg,
-          message_type: 'alert',
+          id: ionMsgId,
+          role: 'ion' as Role,
+          content: data.reply || errMsg,
+          message_type: (data.reply ? (data.message_type || 'text') : 'alert') as MessageType,
           created_at: new Date().toISOString(),
         }])
+        return
       }
-    } catch {
+
+      if (!res.ok || !res.body) {
+        throw new Error('Stream unavailable')
+      }
+
+      // Add an empty streaming bubble immediately
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'ion',
-        content: "I lost the connection. Check your internet and try again.",
-        message_type: 'alert',
+        id: ionMsgId,
+        role: 'ion' as Role,
+        content: '',
+        message_type: 'text' as MessageType,
         created_at: new Date().toISOString(),
       }])
+      setLoading(false)
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() ?? ''
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue
+          try {
+            const evt = JSON.parse(part.slice(6))
+            if (evt.type === 'chunk') {
+              setMessages(prev => prev.map(m =>
+                m.id === ionMsgId ? { ...m, content: m.content + evt.text } : m
+              ))
+            } else if (evt.type === 'done') {
+              setMessages(prev => prev.map(m =>
+                m.id === ionMsgId ? { ...m, message_type: evt.message_type || 'text' } : m
+              ))
+            } else if (evt.type === 'error') {
+              setMessages(prev => prev.map(m =>
+                m.id === ionMsgId ? { ...m, content: evt.error || 'Something went wrong.', message_type: 'alert' } : m
+              ))
+            }
+          } catch { /* malformed SSE line — skip */ }
+        }
+      }
+      return
+    } catch (err) {
+      // Network / unknown error — show alert in chat
+      const isLimitError = (err as any)?.error === 'daily_limit_reached' || (err as any)?.error === 'starter_expired'
+      const errMsg = isLimitError
+        ? `${(err as any).message} [Upgrade to Pro](/pricing)`
+        : ((err as any)?.message || 'Something went wrong. Try again.')
+      setMessages(prev => {
+        const exists = prev.find(m => m.id === ionMsgId)
+        const newMsg: Message = { id: ionMsgId, role: 'ion', content: errMsg, message_type: 'alert', created_at: new Date().toISOString() }
+        return exists ? prev.map(m => m.id === ionMsgId ? { ...m, content: errMsg, message_type: 'alert' } : m) : [...prev, newMsg]
+      })
     } finally {
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 100)

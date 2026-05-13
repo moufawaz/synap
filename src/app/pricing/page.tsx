@@ -7,18 +7,18 @@ import { Shield, Star, Lock, Check, X, ChevronRight, Globe } from 'lucide-react'
 import { useCurrency } from '@/lib/currency'
 import { useLanguage } from '@/lib/useLanguage'
 
+import { PRICING } from '@/lib/pricing'
+
 // ── Base prices in SAR ────────────────────────────────────────────────────────
 const PRICES = {
-  proMonthly:    { sar: 39.99,  variantId: process.env.NEXT_PUBLIC_LS_PRO_MONTHLY_ID    || '1600605' },
-  proAnnual:     { sar: 319.99, variantId: process.env.NEXT_PUBLIC_LS_PRO_ANNUAL_ID     || '1602045' },
-  eliteMonthly:  { sar: 69.99,  variantId: process.env.NEXT_PUBLIC_LS_ELITE_MONTHLY_ID  || '' },
-  eliteAnnual:   { sar: 559.99, variantId: process.env.NEXT_PUBLIC_LS_ELITE_ANNUAL_ID   || '' },
+  proMonthly:   PRICING.pro.monthly,
+  proAnnual:    PRICING.pro.annual,
+  eliteMonthly: PRICING.elite.monthly,
+  eliteAnnual:  PRICING.elite.annual,
 }
 
-const PRO_COMPARE_AT   = PRICES.proMonthly.sar   * 12  // 479.88
-const ELITE_COMPARE_AT = PRICES.eliteMonthly.sar * 12  // 839.88
-const PRO_SAVE         = Math.round(PRO_COMPARE_AT   - PRICES.proAnnual.sar)   // 159
-const ELITE_SAVE       = Math.round(ELITE_COMPARE_AT - PRICES.eliteAnnual.sar) // 280
+const PRO_SAVE   = PRICING.pro.annual.savingsSar    // 159.99
+const ELITE_SAVE = PRICING.elite.annual.savingsSar  // 279.99
 
 // ── Comparison table rows ─────────────────────────────────────────────────────
 type RowVal = boolean | string

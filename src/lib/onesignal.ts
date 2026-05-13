@@ -17,6 +17,11 @@ export type PushType =
   | 'plan_renewal'
   | 'ion_message'
 
+export const VALID_PUSH_TYPES: PushType[] = [
+  'morning_checkin', 'pre_workout', 'meal_reminder', 'measurement_reminder',
+  'plateau_alert', 'streak_milestone', 'plan_renewal', 'ion_message',
+]
+
 const PUSH_TEMPLATES: Record<PushType, { title: string; body: string; url: string }> = {
   morning_checkin: {
     title: '☀️ Good morning — Ion checking in',
@@ -80,7 +85,7 @@ export async function sendPushNotification({ userId, type, overrides }: SendPush
     target_channel: 'push',
     headings: { en: overrides?.title || template.title },
     contents: { en: overrides?.body || template.body },
-    url: `https://synapfit.app${overrides?.url || template.url}`,
+    url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://synapfit.app'}${overrides?.url || template.url}`,
     ttl: 86400,
   }
 

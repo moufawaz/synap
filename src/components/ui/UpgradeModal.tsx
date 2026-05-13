@@ -2,6 +2,7 @@
 
 import { X, Zap, Crown, Check, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
+import { PRICING } from '@/lib/pricing'
 
 interface UpgradeModalProps {
   isOpen: boolean
@@ -84,7 +85,7 @@ export default function UpgradeModal({ isOpen, onClose, featureName, currentPlan
                   <p className="font-heading font-black text-base text-white tracking-wide">Pro</p>
                 </div>
                 <div className="text-right">
-                  <span className="font-heading font-black text-xl text-white">39.99</span>
+                  <span className="font-heading font-black text-xl text-white">{PRICING.pro.monthly.sar}</span>
                   <span className="font-heading text-xs ml-1" style={{ color: '#64748B' }}>SAR/mo</span>
                 </div>
               </div>
@@ -128,7 +129,7 @@ export default function UpgradeModal({ isOpen, onClose, featureName, currentPlan
                 <p className="font-heading font-black text-base text-white tracking-wide">Elite</p>
               </div>
               <div className="text-right">
-                <span className="font-heading font-black text-xl text-white">69.99</span>
+                <span className="font-heading font-black text-xl text-white">{PRICING.elite.monthly.sar}</span>
                 <span className="font-heading text-xs ml-1" style={{ color: '#64748B' }}>SAR/mo</span>
               </div>
             </div>

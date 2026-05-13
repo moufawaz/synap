@@ -26,6 +26,13 @@ export type EmailType =
   | 'upgrade_confirmation'
   | 'onboarding_reminder'
 
+export const VALID_EMAIL_TYPES: EmailType[] = [
+  'welcome', 'weekly_summary', 'weekly_report', 'plan_renewal_warning', 'new_plan',
+  'milestone', 'trial_started', 'trial_ending_day5', 'trial_ending_day6',
+  'trial_cancelled', 'subscription_cancelled', 'subscription_renewed',
+  'payment_failed', 'upgrade_confirmation', 'onboarding_reminder',
+]
+
 interface SendEmailOptions {
   to: string
   type: EmailType

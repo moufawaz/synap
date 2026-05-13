@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, ArrowRight, Shield } from 'lucide-react'
 import { useCurrency } from '@/lib/currency'
 import { type Language } from '@/lib/i18n'
+import { PRICING } from '@/lib/pricing'
 
 interface Props { lang: Language }
 
@@ -34,8 +35,8 @@ const EN = {
       key:       'pro',
       name:      'PRO',
       badge:     'MOST POPULAR',
-      priceSAR:  39.99,
-      annualSAR: 319.99,
+      priceSAR:  PRICING.pro.monthly.sar,
+      annualSAR: PRICING.pro.annual.sar,
       priceLabel: '',
       features:  ['Unlimited Ion messages / day', 'Everything in Starter', '7-day free trial', 'Barcode food scanner', 'Proactive check-ins', 'Plan renewal that learns', 'Progress photo storage'],
       missing:   ['Goal timeline prediction', 'Weekly body report', 'Supplement recommendations'],
@@ -47,8 +48,8 @@ const EN = {
       key:       'elite',
       name:      'ELITE ⭐',
       badge:     '⭐ BEST VALUE',
-      priceSAR:  69.99,
-      annualSAR: 559.99,
+      priceSAR:  PRICING.elite.monthly.sar,
+      annualSAR: PRICING.elite.annual.sar,
       priceLabel: '',
       features:  ['Everything in Pro', '7-day free trial', 'Goal timeline prediction', 'Weekly body composition report', 'Supplement recommendations', 'Wearable integration (coming soon)', 'Community feed (coming soon)', 'First access to new features'],
       missing:   [] as string[],
@@ -88,8 +89,8 @@ const AR = {
       key:       'pro',
       name:      'برو',
       badge:     'الأكثر شعبية',
-      priceSAR:  39.99,
-      annualSAR: 319.99,
+      priceSAR:  PRICING.pro.monthly.sar,
+      annualSAR: PRICING.pro.annual.sar,
       priceLabel: '',
       features:  ['رسائل Ion غير محدودة يومياً', 'كل مزايا المجاني', 'تجربة مجانية 7 أيام', 'ماسح باركود الطعام', 'متابعة استباقية', 'تجديد الخطة الذكي', 'تخزين صور التقدم'],
       missing:   ['التنبؤ بالجدول الزمني للهدف', 'تقرير الجسم الأسبوعي', 'توصيات المكملات'],
@@ -101,8 +102,8 @@ const AR = {
       key:       'elite',
       name:      'إيليت ⭐',
       badge:     '⭐ أفضل قيمة',
-      priceSAR:  69.99,
-      annualSAR: 559.99,
+      priceSAR:  PRICING.elite.monthly.sar,
+      annualSAR: PRICING.elite.annual.sar,
       priceLabel: '',
       features:  ['كل مزايا برو', 'تجربة مجانية 7 أيام', 'التنبؤ بالجدول الزمني للهدف', 'تقرير تركيبة الجسم الأسبوعي', 'توصيات المكملات الغذائية', 'تكامل الأجهزة (قريباً)', 'مجتمع المستخدمين (قريباً)', 'أولوية الوصول للميزات الجديدة'],
       missing:   [] as string[],

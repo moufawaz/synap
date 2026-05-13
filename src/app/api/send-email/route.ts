@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
-import { sendEmail, type EmailType } from '@/lib/resend'
+import { sendEmail, VALID_EMAIL_TYPES, type EmailType } from '@/lib/resend'
 
 export async function POST(req: Request) {
   try {
@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { type, data }: { type: EmailType; data: Record<string, any> } = await req.json()
-    if (!type) return NextResponse.json({ error: 'Missing type' }, { status: 400 })
+    if (!type || !VALID_EMAIL_TYPES.includes(type)) return NextResponse.json({ error: 'Invalid or missing type' }, { status: 400 })
 
     const result = await sendEmail({ to: user.email!, type, data })
 

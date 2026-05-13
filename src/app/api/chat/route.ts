@@ -95,10 +95,10 @@ export async function POST(req: Request) {
 
     // Load user profile + plans + context in parallel
     const [profileRes, userLangRes, workoutRes, dietRes, historyRes, subRes, measureRes, workoutLogRes, mealLogRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
-      supabase.from('workout_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).single(),
-      supabase.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).single(),
+      supabase.from('workout_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
       supabase.from('chat_messages').select('role, content').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
       getUserSubscription(user.id),
       // Latest 3 measurements
@@ -186,54 +186,73 @@ export async function POST(req: Request) {
       { role: 'user', content: message },
     ]
 
-    const response = await withAnthropicRetry(() => client.messages.create({
-      model: 'claude-sonnet-4-5',
+    // Stream the response via SSE
+    const stream = client.messages.stream({
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: systemPrompt,
       messages,
-    }))
-
-    const rawReply = response.content[0].type === 'text' ? response.content[0].text : ''
-    const normalizedReply = normalizeAssistantReply(rawReply)
-    const reply = normalizedReply.content
-    const messageType = normalizedReply.messageType
-
-    // Save assistant response
-    const usageMetadata = {
-      model: response.model,
-      input_tokens: response.usage.input_tokens,
-      output_tokens: response.usage.output_tokens,
-      cache_creation_input_tokens: response.usage.cache_creation_input_tokens || 0,
-      cache_read_input_tokens: response.usage.cache_read_input_tokens || 0,
-      estimated_cost_usd: estimateAnthropicCostUsd(response.usage, response.model),
-    }
-    await recordAiUsage({
-      userId: user.id,
-      feature: 'ion_chat',
-      model: response.model,
-      usage: response.usage,
     })
-    const totalEstimatedCostUsd = usageMetadata.estimated_cost_usd
 
-    await supabase.from('chat_messages').insert({
-      user_id: user.id,
-      role: 'assistant',
-      content: reply,
-      message_type: messageType,
-      metadata: {
-        usage: usageMetadata,
-        total_estimated_cost_usd: totalEstimatedCostUsd,
+    const encoder = new TextEncoder()
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          let fullText = ''
+          for await (const chunk of stream) {
+            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+              const text = chunk.delta.text
+              fullText += text
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', text })}\n\n`))
+            }
+          }
+
+          const finalMessage = await stream.finalMessage()
+          const normalizedReply = normalizeAssistantReply(fullText)
+          const reply = normalizedReply.content
+          const messageType = normalizedReply.messageType
+
+          const usageMetadata = {
+            model: finalMessage.model,
+            input_tokens: finalMessage.usage.input_tokens,
+            output_tokens: finalMessage.usage.output_tokens,
+            cache_creation_input_tokens: (finalMessage.usage as any).cache_creation_input_tokens || 0,
+            cache_read_input_tokens: (finalMessage.usage as any).cache_read_input_tokens || 0,
+            estimated_cost_usd: estimateAnthropicCostUsd(finalMessage.usage, finalMessage.model),
+          }
+
+          await Promise.all([
+            recordAiUsage({ userId: user.id, feature: 'ion_chat', model: finalMessage.model, usage: finalMessage.usage }),
+            supabase.from('chat_messages').insert({
+              user_id: user.id,
+              role: 'assistant',
+              content: reply,
+              message_type: messageType,
+              metadata: { usage: usageMetadata, total_estimated_cost_usd: usageMetadata.estimated_cost_usd },
+            }),
+          ])
+
+          if (!isLaunchMode()) {
+            await incrementMessageCount(user.id).catch(() => {})
+          }
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', message_type: messageType, plan_edit: null })}\n\n`))
+          controller.close()
+        } catch (err: any) {
+          console.error('Chat stream error:', err?.status, err?.message)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: anthropicFriendlyError(err) })}\n\n`))
+          controller.close()
+        }
       },
     })
 
-    if (!isLaunchMode()) {
-      await incrementMessageCount(user.id).catch(() => {})
-    }
-
-    return NextResponse.json({
-      reply,
-      message_type: messageType,
-      plan_edit: null,
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
     })
   } catch (err: any) {
     console.error('Chat error:', err?.status, err?.error?.type, err?.message)
@@ -302,7 +321,7 @@ async function maybeApplyPlanEdit({
     })
 
     const editResponse = await withAnthropicRetry(() => client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: intent === 'workout' ? 10000 : 6000,
       messages: [{ role: 'user', content: prompt }],
     }))
@@ -684,16 +703,19 @@ ${dietBlock}
 ${workoutBlock}
 
 === YOUR ROLE & BEHAVIOUR ===
-- You are a real coach: direct, confident, warm - not a chatbot reciting facts
-- You ALWAYS personalise your response using the data above - never give generic advice
-- Use the client's name naturally, reference their specific plan, logs, and measurements
-- Short punchy responses (2-4 sentences) unless detailed analysis is genuinely needed
-- If you notice something in their logs or measurements (plateau, imbalance, missed sessions, macros off) - call it out proactively
-- If asked to modify their plan, detect the intent and make the change directly
-- For medical questions, recommend a doctor first but still be helpful with what you can
-- If they're struggling, be encouraging but honest - no empty hype
-- If the saved client language is Arabic, always reply in Arabic even if the user types English or Arabizi. If the saved client language is English, reply in English unless the user explicitly asks for Arabic.
-- Return plain natural-language text only. Do not wrap chat replies in JSON, markdown code fences, or code blocks.
-- Do NOT mention your tier or pricing - that's handled elsewhere`
+1. You are a real coach: direct, confident, warm — not a chatbot reciting facts.
+2. You ALWAYS personalise every response using the CLIENT PROFILE, logs, and measurements above. Never give generic advice.
+3. Use the client's name naturally. Reference their specific plan exercises, meal names, and logged numbers — not made-up examples.
+4. Keep responses short and punchy (2–4 sentences) unless a detailed breakdown is genuinely needed.
+5. Proactively call out patterns you see in the data: weight plateaus (< 0.5 kg change over 3+ measurements), 3+ consecutive missed sessions, protein intake below 70% of daily target, or left/right body symmetry gaps > 1.5 cm. Don't wait to be asked.
+6. When the client asks to modify their plan, detect the intent and apply the change directly — do not ask them to go to the plan page.
+7. For medical or injury questions, recommend a doctor first, then still give practical guidance within safe limits.
+8. If the client is struggling or feeling demotivated, be honest and encouraging — no hollow praise. Name what's actually going well.
+9. Language rule: If the saved client language is Arabic, ALWAYS reply in Arabic even if the user types English or Arabizi. If English, reply in English unless the user explicitly asks to switch.
+10. Format rule: Return plain natural-language text only. Never wrap replies in JSON, markdown code fences, or code blocks.
+11. Supplement rule: If CLIENT TIER is ELITE, you may give detailed personalised supplement protocols with timing, dosing, and stacking. For STARTER or PRO clients, acknowledge supplement questions briefly and let them know personalised protocols are available on the Elite plan — do not give a full protocol.
+12. Data integrity rule: Never fabricate body metrics, food calories, exercise names, or plan data. If a data point is missing, say so clearly rather than estimating a number.
+13. Billing rule: If the client asks about their subscription plan, pricing, upgrading, or cancelling, direct them politely to Settings → Billing. Do not discuss plan pricing or feature tiers in chat.
+14. Goal timeline rule: If CLIENT TIER is ELITE, you may give a detailed month-by-month projection toward their goal based on current rate of change. For STARTER or PRO clients, give general progress encouragement only — no specific timeline projections.`
 }
 

@@ -18,7 +18,7 @@ export async function GET() {
 
     const admin = createAdminClient()
     const [profileRes, userLangRes, measurementsRes, workoutLogsRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       admin.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('measurements').select('*').eq('user_id', user.id).gte('date', thirtyDaysAgo).order('date'),
       supabase.from('workout_log').select('*').eq('user_id', user.id).gte('logged_at', `${thirtyDaysAgo}T00:00:00`),
@@ -48,7 +48,7 @@ ${aiLanguageInstruction(language, 'the full monthly summary')}
 Write a monthly summary in ${aiLanguageName(language)} as Ion. Make it personal, data-driven, and motivating. Max 4 sentences. Include what went well, one honest observation, and one focus for next month. Do NOT use generic phrases.`
 
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     })

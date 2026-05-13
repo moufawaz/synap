@@ -439,6 +439,11 @@ export default function SettingsPage() {
             <MessageUsage userId={user?.id} plan={isLaunchMode ? 'unlimited' : planName} status={status} />
           </div>
 
+          {/* Billing history */}
+          {!isStarter && !isLaunchMode && (
+            <BillingHistory />
+          )}
+
           {/* Cancel section */}
           {canCancel && !isLaunchMode && (
             <div className="glass-card p-5">
@@ -678,6 +683,43 @@ function Field({ label, value, onChange, type = 'text' }: { label: string; value
         onFocus={e => e.target.style.borderColor = 'rgba(187,92,246,0.4)'}
         onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.07)'}
       />
+    </div>
+  )
+}
+
+function BillingHistory() {
+  const [events, setEvents] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/billing/history')
+      .then(r => r.json())
+      .then(d => setEvents(d.events || []))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return null
+  if (events.length === 0) return null
+
+  return (
+    <div className="glass-card p-5">
+      <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>BILLING HISTORY</p>
+      <div className="flex flex-col gap-2">
+        {events.map((ev, i) => (
+          <div key={i} className="flex items-center justify-between py-2" style={{ borderBottom: i < events.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+            <div>
+              <p className="font-heading text-xs font-semibold text-white">{ev.label}</p>
+              <p className="font-heading text-[10px] mt-0.5" style={{ color: '#475569' }}>
+                {new Date(ev.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+            <div className="text-right">
+              {ev.amount && <p className="font-heading text-xs font-semibold" style={{ color: '#BB5CF6' }}>{ev.amount}</p>}
+              {ev.status && <p className="font-heading text-[10px] mt-0.5 capitalize" style={{ color: ev.type === 'subscription_payment_failed' ? '#EF4444' : '#10B981' }}>{ev.status}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

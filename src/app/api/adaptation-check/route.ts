@@ -24,12 +24,12 @@ export async function POST(req: Request) {
     // 1. Load data
     const admin = createAdminClient()
     const [profileRes, userLangRes, measurementsRes, workoutLogsRes, dietPlanRes, workoutPlanRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       admin.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('measurements').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(10),
       supabase.from('workout_log').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(30),
-      supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
-      supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
+      supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
     ])
 
     const profile = profileRes.data

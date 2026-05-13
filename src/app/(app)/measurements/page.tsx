@@ -63,6 +63,7 @@ export default function MeasurementsPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState<'stats' | 'symmetry' | 'photos' | 'inbody'>('stats')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [signedPhotoUrls, setSignedPhotoUrls] = useState<Record<string, string>>({})
   const [compareMode, setCompareMode] = useState(false)
   const [compareSelected, setCompareSelected] = useState<number[]>([])
   const [inbodyUrl, setInbodyUrl] = useState<string | null>(null)
@@ -78,8 +79,20 @@ export default function MeasurementsPage() {
   async function loadMeasurements() {
     const res = await fetch('/api/measurements')
     const data = await res.json()
-    setMeasurements(data.measurements || [])
+    const list = data.measurements || []
+    setMeasurements(list)
     setLoading(false)
+    // Generate signed URLs for private progress-photos bucket
+    const photoPaths = list.filter((m: any) => m.photo_url && !m.photo_url.startsWith('http')).map((m: any) => m.photo_url as string)
+    if (photoPaths.length > 0) {
+      const supabase = createBrowserClient()
+      const signed: Record<string, string> = {}
+      await Promise.all(photoPaths.map(async (path: string) => {
+        const { data: sd } = await supabase.storage.from('progress-photos').createSignedUrl(path, 3600)
+        if (sd?.signedUrl) signed[path] = sd.signedUrl
+      }))
+      setSignedPhotoUrls(signed)
+    }
   }
 
   async function loadInbody() {
@@ -199,13 +212,14 @@ export default function MeasurementsPage() {
       const path = `${user.id}/${Date.now()}.${ext}`
       const { data, error } = await supabase.storage.from('progress-photos').upload(path, file, { upsert: false })
       if (error) throw error
-      const { data: { publicUrl } } = supabase.storage.from('progress-photos').getPublicUrl(data.path)
+      // Store the storage path (not public URL) — bucket is private, use signed URLs for display
+      const storagePath = data.path
       const today = new Date().toISOString().split('T')[0]
       const latest = measurements[0]
       if (latest && latest.date === today) {
-        await supabase.from('measurements').update({ photo_url: publicUrl }).eq('id', latest.id)
+        await supabase.from('measurements').update({ photo_url: storagePath }).eq('id', latest.id)
       } else {
-        await supabase.from('measurements').insert({ user_id: user.id, date: today, photo_url: publicUrl })
+        await supabase.from('measurements').insert({ user_id: user.id, date: today, photo_url: storagePath })
       }
       loadMeasurements()
     } catch (err) {
@@ -537,7 +551,7 @@ export default function MeasurementsPage() {
                         <div key={idx} className="flex flex-col gap-1.5">
                           <p className="font-heading text-[10px] tracking-widest uppercase" style={{ color: idx === 0 ? '#F59E0B' : '#10B981' }}>{label}</p>
                           <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: '3/4' }}>
-                            <img src={photo.photo_url} alt={photo.date} className="w-full h-full object-cover" />
+                            <img src={photo.photo_url?.startsWith('http') ? photo.photo_url : (signedPhotoUrls[photo.photo_url] || '')} alt={photo.date} className="w-full h-full object-cover" />
                             <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}>
                               <p className="font-heading text-[10px] text-white">{fmtDate(photo.date)}</p>
                               {photo.weight_kg && <p className="font-heading text-[10px]" style={{ color: '#D88BFF' }}>{photo.weight_kg} kg</p>}
@@ -592,7 +606,7 @@ export default function MeasurementsPage() {
                           }
                         }}
                       >
-                        <img src={m.photo_url} alt={m.date} className="w-full h-full object-cover" />
+                        <img src={m.photo_url?.startsWith('http') ? m.photo_url : (signedPhotoUrls[m.photo_url] || '')} alt={m.date} className="w-full h-full object-cover" />
 
                         {/* Selection badge */}
                         {compareMode && isSelected && (
