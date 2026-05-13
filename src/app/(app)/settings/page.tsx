@@ -155,14 +155,15 @@ export default function SettingsPage() {
   const isFree = isStarter
 
   // Map raw plan names to display labels
+  // isStarter covers all "effectively free" states: no sub, status=starter/free/expired, cancelled+expired
   const planLabel = isFreeTrial ? 'Elite'
-    : cancelledAndExpired ? 'Starter'
+    : isStarter ? 'Starter'
     : rawPlanName === 'elite' ? 'Elite'
     : rawPlanName === 'pro' || rawPlanName === 'unlimited' ? 'Pro'
     : 'Starter'
   const planName = isStarter ? 'starter' : rawPlanName
 
-  const billingLabel = cancelledAndExpired ? '' : sub?.billing_period === 'annual' ? 'Annual' : sub?.billing_period === 'monthly' ? 'Monthly' : ''
+  const billingLabel = isStarter ? '' : sub?.billing_period === 'annual' ? 'Annual' : sub?.billing_period === 'monthly' ? 'Monthly' : ''
   const canCancel = (isTrial || isActive) && sub?.lemon_squeezy_subscription_id
 
   return (
@@ -380,7 +381,7 @@ export default function SettingsPage() {
                     Access until {periodEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 )}
-                {cancelledAndExpired && (
+                {(cancelledAndExpired || status === 'free' || status === 'expired') && (
                   <p className="font-heading text-xs mt-1" style={{ color: '#EF4444' }}>
                     Subscription ended — you&apos;re on the free plan
                   </p>
