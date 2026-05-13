@@ -1,6 +1,7 @@
 ﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
+import { getUserSubscription, isEliteUser, isLaunchMode } from '@/lib/subscription'
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse } from 'next/server'
 
@@ -14,6 +15,13 @@ export async function POST(req: Request) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!isLaunchMode()) {
+    const sub = await getUserSubscription(user.id)
+    if (!isEliteUser(sub)) {
+      return NextResponse.json({ error: 'Elite plan required' }, { status: 403 })
+    }
   }
 
   const body = await req.json().catch(() => ({}))

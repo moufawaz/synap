@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createServerClient, createAdminClient } from '@/lib/supabase-server'
-import { effectivePlan } from '@/lib/subscription'
+import { createServerClient } from '@/lib/supabase-server'
+import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 
 // GET /api/me/subscription
-// Returns the authenticated user's effective plan tier using the service-role
-// key so RLS never blocks the read.
+// Returns the authenticated user's effective plan tier.
+// Uses getUserSubscription so free-trial users get 'elite' not 'starter'.
 export async function GET() {
   const supabase = await createServerClient()
   const { data: { user }, error } = await supabase.auth.getUser()
@@ -12,13 +12,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const admin = createAdminClient()
-  const { data: sub } = await admin
-    .from('subscriptions')
-    .select('plan_name, plan_type, status, trial_ends_at, current_period_ends_at')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
+  const sub = await getUserSubscription(user.id)
   const tier = effectivePlan(sub)
 
   return NextResponse.json({

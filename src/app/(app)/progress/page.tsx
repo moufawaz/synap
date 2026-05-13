@@ -51,12 +51,11 @@ export default function ProgressPage() {
 
     // Fetch subscription tier + goal target
     if (user) {
-      const [subRes, profileRes] = await Promise.all([
-        supabase.from('subscriptions').select('plan_type, status, trial_ends_at, current_period_ends_at').eq('user_id', user.id).maybeSingle(),
+      const [subApiRes, profileRes] = await Promise.all([
+        fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),
         supabase.from('profiles').select('goal_target').eq('user_id', user.id).maybeSingle(),
       ])
-      const sub = subRes.data
-      const tier = deriveClientTier(sub)
+      const tier = subApiRes.tier ?? 'starter'
       setPlanTier(tier)
       if (profileRes.data?.goal_target) {
         const parsed = parseFloat(profileRes.data.goal_target)
@@ -446,20 +445,6 @@ export default function ProgressPage() {
   )
 }
 
-// ── Client-side tier derivation (no server call needed) ────────
-function deriveClientTier(sub: any): 'starter' | 'pro' | 'elite' | 'trial' {
-  if (!sub) return 'starter'
-  if (sub.status === 'trial') {
-    const end = sub.trial_ends_at ? new Date(sub.trial_ends_at) : null
-    return (!end || end > new Date()) ? 'trial' : 'starter'
-  }
-  if (sub.status === 'active' || (sub.status === 'cancelled' && sub.current_period_ends_at && new Date(sub.current_period_ends_at) > new Date())) {
-    const name = (sub.plan_type || '').toLowerCase()
-    if (name === 'elite') return 'elite'
-    if (name === 'pro' || name === 'unlimited') return 'pro'
-  }
-  return 'starter'
-}
 
 // ── Goal Timeline Prediction card ──────────────────────────────
 function GoalTimelinePrediction({

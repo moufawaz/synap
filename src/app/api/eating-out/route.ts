@@ -2,6 +2,7 @@
 import { getAnthropicClient, withAnthropicRetry } from '@/lib/anthropic'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
+import { getUserSubscription, isProUser, isLaunchMode } from '@/lib/subscription'
 import { NextResponse } from 'next/server'
 
 function todayKey() {
@@ -36,6 +37,13 @@ export async function POST(req: Request) {
   const server = await createServerClient()
   const { data: { user } } = await server.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  if (!isLaunchMode()) {
+    const sub = await getUserSubscription(user.id)
+    if (!isProUser(sub)) {
+      return NextResponse.json({ error: 'Pro plan required' }, { status: 403 })
+    }
+  }
 
   const { situation } = await req.json().catch(() => ({}))
   const promptText = String(situation ?? '').trim()
