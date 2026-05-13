@@ -140,16 +140,6 @@ export default function SettingsPage() {
   const isFreeTrial = status === 'free_trial'
   const isActive = status === 'active'
   const isCancelled = status === 'cancelled'
-  const isStarter = !sub || status === 'starter' || status === 'free' || status === 'expired'
-  // legacy compat
-  const isFree = isStarter
-
-  // Map raw plan names to display labels
-  const planLabel = isFreeTrial ? 'Elite'
-    : rawPlanName === 'elite' ? 'Elite'
-    : rawPlanName === 'pro' || rawPlanName === 'unlimited' ? 'Pro'
-    : 'Starter'
-  const planName = rawPlanName  // keep for MessageUsage compat
 
   const trialEnd = sub?.trial_ends_at ? new Date(sub.trial_ends_at) : null
   const trialDaysLeft = trialEnd
@@ -158,7 +148,21 @@ export default function SettingsPage() {
 
   const periodEnd = sub?.current_period_ends_at ? new Date(sub.current_period_ends_at) : null
 
-  const billingLabel = sub?.billing_period === 'annual' ? 'Annual' : sub?.billing_period === 'monthly' ? 'Monthly' : ''
+  // Cancelled with no period end (or period already passed) = effectively Starter
+  const cancelledAndExpired = isCancelled && (!periodEnd || periodEnd <= new Date())
+  const isStarter = !sub || status === 'starter' || status === 'free' || status === 'expired' || cancelledAndExpired
+  // legacy compat
+  const isFree = isStarter
+
+  // Map raw plan names to display labels
+  const planLabel = isFreeTrial ? 'Elite'
+    : cancelledAndExpired ? 'Starter'
+    : rawPlanName === 'elite' ? 'Elite'
+    : rawPlanName === 'pro' || rawPlanName === 'unlimited' ? 'Pro'
+    : 'Starter'
+  const planName = isStarter ? 'starter' : rawPlanName
+
+  const billingLabel = cancelledAndExpired ? '' : sub?.billing_period === 'annual' ? 'Annual' : sub?.billing_period === 'monthly' ? 'Monthly' : ''
   const canCancel = (isTrial || isActive) && sub?.lemon_squeezy_subscription_id
 
   return (
@@ -371,9 +375,14 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                {isCancelled && periodEnd && (
+                {isCancelled && periodEnd && periodEnd > new Date() && (
                   <p className="font-heading text-xs mt-1" style={{ color: '#F59E0B' }}>
                     Access until {periodEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                )}
+                {cancelledAndExpired && (
+                  <p className="font-heading text-xs mt-1" style={{ color: '#EF4444' }}>
+                    Subscription ended — you&apos;re on the free plan
                   </p>
                 )}
 

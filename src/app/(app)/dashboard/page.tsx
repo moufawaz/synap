@@ -174,7 +174,7 @@ export default async function DashboardPage() {
               <div>
                 <p className="font-heading font-bold text-xs text-white tracking-wider">{isRTL ? 'أنت على خطة Starter' : 'YOU\'RE ON THE STARTER PLAN'}</p>
                 <p className="font-heading text-[10px] mt-0.5" style={{ color: C.silverDim }}>
-                  {isRTL ? '5 رسائل يومياً لمدة 7 أيام، ثم تتوقف. ارفع إلى Pro أو Elite للرسائل غير المحدودة.' : '5 messages/day for 7 days, then pause. Upgrade to Pro or Elite for unlimited.'}
+                  {isRTL ? '5 رسائل يومياً مجاناً للأبد. ارفع إلى Pro أو Elite للرسائل غير المحدودة.' : '5 messages/day, free forever. Upgrade to Pro or Elite for unlimited.'}
                 </p>
               </div>
             </div>
