@@ -1,4 +1,4 @@
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
 function today() {
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,date' })
     .select('date,glasses,liters,target_liters,updated_at')
-    .single()
+    .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ hydration: data })

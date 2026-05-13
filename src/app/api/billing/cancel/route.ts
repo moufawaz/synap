@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+﻿import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { cancelSubscription } from '@/lib/lemon-squeezy'
 
@@ -15,7 +15,7 @@ export async function POST(_req: Request) {
       .from('subscriptions')
       .select('lemon_squeezy_subscription_id, status, trial_ends_at')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     if (subError || !sub) {
       return NextResponse.json({ error: 'No active subscription found' }, { status: 404 })

@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase-server'
+﻿import { createAdminClient } from '@/lib/supabase-server'
 
 export const DAILY_LIMITS: Record<string, number> = {
   starter: 5,
@@ -68,7 +68,7 @@ export async function getTodayMessageCount(userId: string): Promise<number> {
     .select('count')
     .eq('user_id', userId)
     .eq('date', today)
-    .single()
+    .maybeSingle()
   return data?.count || 0
 }
 

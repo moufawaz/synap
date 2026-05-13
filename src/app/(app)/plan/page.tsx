@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -36,9 +36,9 @@ export default function PlanPage() {
     if (!user) return
 
     const [dietRes, workoutRes, profileRes, tierRes] = await Promise.all([
-      supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
-      supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).single(),
-      supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
+      supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),
     ])
 

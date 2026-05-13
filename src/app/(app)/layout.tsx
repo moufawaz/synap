@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+﻿import { createServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileNav from '@/components/dashboard/MobileNav'
@@ -13,8 +13,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect('/auth/login')
 
   const [{ data: profile }, { data: userData }] = await Promise.all([
-    supabase.from('profiles').select('name, gender').eq('user_id', user.id).single(),
-    supabase.from('users').select('language').eq('id', user.id).single(),
+    supabase.from('profiles').select('name, gender').eq('user_id', user.id).maybeSingle(),
+    supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
   ])
 
   const adminEmail = process.env.ADMIN_EMAIL

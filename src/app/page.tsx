@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { useLanguage } from '@/lib/useLanguage'
@@ -30,7 +30,7 @@ export default function LandingPage() {
             .from('profiles')
             .select('name')
             .eq('user_id', user.id)
-            .single()
+            .maybeSingle()
           if (data?.name) setUserName(data.name)
         }
       } catch {}

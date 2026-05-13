@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -99,7 +99,7 @@ export default function MeasurementsPage() {
     const supabase = createBrowserClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data } = await supabase.from('profiles').select('inbody_url').eq('user_id', user.id).single()
+    const { data } = await supabase.from('profiles').select('inbody_url').eq('user_id', user.id).maybeSingle()
     if (data?.inbody_url) {
       setInbodyUrl(data.inbody_url)
       // Load cached analysis from localStorage

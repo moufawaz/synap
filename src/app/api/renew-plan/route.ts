@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
@@ -24,11 +24,11 @@ export async function POST(req: Request) {
 
     // Load profile + measurements
     const [profileRes, userLangRes, measureRes, oldPlanRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('measurements').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(4),
       supabase.from(planType === 'diet' ? 'diet_plans' : 'workout_plans')
-        .select('*').eq('user_id', user.id).eq('active', true).single(),
+        .select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
     ])
 
     const profile = profileRes.data

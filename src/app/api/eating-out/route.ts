@@ -1,4 +1,4 @@
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { getAnthropicClient, withAnthropicRetry } from '@/lib/anthropic'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
@@ -116,7 +116,7 @@ Give the best order now.`
   try {
     const client = getAnthropicClient()
     const response = await withAnthropicRetry(() => client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1200,
       system,
       messages: [{ role: 'user', content: userPrompt }],

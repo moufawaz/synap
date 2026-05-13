@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyWebhookSignature, VARIANT_TO_PLAN } from '@/lib/lemon-squeezy'
 import { sendEmail } from '@/lib/resend'
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   // ── Get user email for notifications ──────────────────────
   const { data: authUser } = await supabase.auth.admin.getUserById(userId)
   const userEmail = authUser?.user?.email
-  const { data: profileRow } = await supabase.from('profiles').select('name').eq('user_id', userId).single()
+  const { data: profileRow } = await supabase.from('profiles').select('name').eq('user_id', userId).maybeSingle()
   const userName = profileRow?.name || 'Athlete'
 
   const lsSubId: string = data?.id || attrs?.subscription_id || ''
@@ -131,7 +131,7 @@ export async function POST(req: Request) {
         .from('subscriptions')
         .select('*')
         .eq('user_id', userId)
-        .single()
+        .maybeSingle()
 
       const isInTrial = existingSub?.status === 'trial'
       const trialEnd = existingSub?.trial_ends_at ? new Date(existingSub.trial_ends_at) : null

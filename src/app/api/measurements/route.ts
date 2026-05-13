@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+﻿import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const { data, error } = await supabase.from('measurements').insert({
     user_id: user.id,
     ...body,
-  }).select().single()
+  }).select().maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ measurement: data })

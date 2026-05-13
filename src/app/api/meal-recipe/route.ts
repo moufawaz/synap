@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
     const client = new Anthropic({ apiKey })
     const response = await withAnthropicRetry(() => client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1200,
       messages: [
         {

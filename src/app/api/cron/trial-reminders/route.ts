@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendEmail } from '@/lib/resend'
 
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
   // ── Day 5 reminders ──────────────────────────────────────
   for (const sub of day5Trials || []) {
     const { data: authUser } = await supabase.auth.admin.getUserById(sub.user_id)
-    const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', sub.user_id).single()
+    const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', sub.user_id).maybeSingle()
     const name = profile?.name || 'Athlete'
     const email = authUser?.user?.email
     const planLabel = sub.plan_name === 'unlimited' ? 'Pro+Unlimited' : 'Pro'
@@ -73,7 +73,7 @@ export async function GET(req: Request) {
   // ── Day 6 reminders ──────────────────────────────────────
   for (const sub of day6Trials || []) {
     const { data: authUser } = await supabase.auth.admin.getUserById(sub.user_id)
-    const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', sub.user_id).single()
+    const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', sub.user_id).maybeSingle()
     const name = profile?.name || 'Athlete'
     const email = authUser?.user?.email
 

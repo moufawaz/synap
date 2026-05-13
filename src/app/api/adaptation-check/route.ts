@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendPushNotification } from '@/lib/onesignal'
@@ -139,7 +139,7 @@ User goal: ${profile.goal}
 Language: ${language}`
 
       const aiMsg = await client.messages.create({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 300,
         messages: [{ role: 'user', content: ionPrompt }],
       })

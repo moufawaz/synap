@@ -1,4 +1,4 @@
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import Anthropic from '@anthropic-ai/sdk'
@@ -52,7 +52,7 @@ Return ONLY valid JSON:
 Do not diagnose medical conditions. If the image is unclear, say that clearly and give safe general cues.`
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-5',
+    model: 'claude-sonnet-4-6',
     max_tokens: 700,
     messages: [
       {

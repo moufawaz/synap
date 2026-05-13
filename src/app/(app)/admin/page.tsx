@@ -1,4 +1,4 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+﻿import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -178,7 +178,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
     const tokens = estimateTokensFromText(row.content)
     const input = isAssistant ? 0 : tokens
     const output = isAssistant ? tokens : 0
-    const cost = estimateAnthropicCostUsd({ input_tokens: input, output_tokens: output }, 'claude-sonnet-4-5')
+    const cost = estimateAnthropicCostUsd({ input_tokens: input, output_tokens: output }, 'claude-sonnet-4-6')
     const createdDate = row.created_at?.slice(0, 10) || ''
     const isThisMonth = row.created_at >= monthAgo
     bucket.messages += isAssistant ? 1 : 0

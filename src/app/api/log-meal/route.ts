@@ -1,4 +1,4 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+﻿import { createServerClient, createAdminClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
 // Use admin client for all reads/writes so RLS never silently drops rows.
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     logged_at:  new Date().toISOString(),
     ...rest,
     description: meal_name ?? body.description,
-  }).select().single()
+  }).select().maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ log: data })
@@ -73,7 +73,7 @@ export async function PUT(req: Request) {
     .eq('id', id)
     .eq('user_id', user.id)
     .select()
-    .single()
+    .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ log: data })

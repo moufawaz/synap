@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+﻿import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     exercises: body.exercises ?? null,
     notes: body.notes || body.muscle_focus || null,
     logged_at: new Date().toISOString(),
-  }).select().single()
+  }).select().maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ log: data })

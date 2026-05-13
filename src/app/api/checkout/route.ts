@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+﻿import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { createCheckout, VARIANT_IDS } from '@/lib/lemon-squeezy'
 
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       .from('profiles')
       .select('name')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     const checkoutUrl = await createCheckout({
       variantId,

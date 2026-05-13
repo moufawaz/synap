@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -103,8 +103,8 @@ export default function WorkoutTodayPage() {
     if (!user) { setLoading(false); return }
 
     const [planRes, profileRes, logRes] = await Promise.all([
-      supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
-      supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
+      supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       fetch('/api/log-workout').then(r => r.json()).catch(() => ({ logs: [] })),
     ])
 

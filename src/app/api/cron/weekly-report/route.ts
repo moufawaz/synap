@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import { recordAiUsage } from '@/lib/ai-usage'
@@ -72,7 +72,7 @@ async function generateReportForUser(
 
   // Fetch user profile, measurements this week, workout logs this week, meal logs this week
   const [profileRes, userLangRes, measureRes, workoutRes, mealRes] = await Promise.all([
-    supabase.from('profiles').select('*').eq('user_id', userId).single(),
+    supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('users').select('language').eq('id', userId).maybeSingle(),
     supabase.from('measurements').select('*').eq('user_id', userId)
       .gte('date', weekStart).lte('date', weekEnd).order('date', { ascending: true }),

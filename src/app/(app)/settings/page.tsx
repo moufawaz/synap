@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -40,8 +40,8 @@ export default function SettingsPage() {
     setUser(user)
 
     const [profileRes, subRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('subscriptions').select('*').eq('user_id', user.id).single(),
+      supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+      supabase.from('subscriptions').select('*').eq('user_id', user.id).maybeSingle(),
     ])
     setProfile(profileRes.data || {})
     setSubscription(subRes.data || null)
@@ -622,7 +622,7 @@ function MessageUsage({ userId, plan, status }: { userId?: string; plan: string;
       .select('count')
       .eq('user_id', userId)
       .eq('date', today)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         const limits: Record<string, number> = {
           starter: 5, free: 5,

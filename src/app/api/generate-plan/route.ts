@@ -118,7 +118,7 @@ export async function POST(req: Request) {
       user_id: user.id,
       plan_json: plan.workout_plan,
       active: true,
-    }).select().single()
+    }).select().maybeSingle()
 
     if (wpError) {
       console.error('Workout plan save error:', wpError)
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
       user_id: user.id,
       plan_json: plan.diet_plan,
       active: true,
-    }).select().single()
+    }).select().maybeSingle()
 
     if (dpError) {
       console.error('Diet plan save error:', dpError)

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -31,7 +31,7 @@ export function useLanguage() {
         .from('users')
         .select('language')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
         .then(({ data }) => {
           const dbLang = data?.language as Language | undefined
           if (dbLang === 'en' || dbLang === 'ar') {

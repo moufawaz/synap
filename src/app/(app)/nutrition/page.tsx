@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, lazy, Suspense } from 'react'
 import Link from 'next/link'
@@ -88,8 +88,8 @@ export default function NutritionPage() {
     if (!user) { setLoading(false); return }
 
     const [planRes, profileRes, logsRes, hydrationRes, subRes, coachRes] = await Promise.all([
-      supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
-      supabase.from('profiles').select('gender').eq('user_id', user.id).single(),
+      supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       fetch(`/api/log-meal?date=${TODAY}`).then(r => r.json()).catch(() => ({ logs: [] })),
       fetch(`/api/hydration?date=${TODAY}`).then(r => r.json()).catch(() => ({ hydration: null })),
       fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),

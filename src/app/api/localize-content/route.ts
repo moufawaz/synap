@@ -1,4 +1,4 @@
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import { getAnthropicClient, withAnthropicRetry } from '@/lib/anthropic'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { normalizeAiLanguage } from '@/lib/ai-language'
@@ -89,7 +89,7 @@ async function localizeJson(
   label: string,
 ) {
   const response = await withAnthropicRetry(() => client.messages.create({
-    model: 'claude-sonnet-4-5',
+    model: 'claude-sonnet-4-6',
     max_tokens: 12000,
     system: [
       'You translate stored SYNAP coaching content to Arabic.',

@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+﻿import { createServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import IonAvatar from '@/components/ui/IonAvatar'
@@ -35,14 +35,14 @@ export default async function DashboardPage() {
   if (!user) redirect('/auth/login')
 
   const [profileRes, userLangRes, workoutRes, dietRes, measurementsRes, workoutLogRes, chatRes, subRes] = await Promise.all([
-    supabase.from('profiles').select('*').eq('user_id', user.id).single(),
-    supabase.from('users').select('language').eq('id', user.id).single(),
-    supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
-    supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).single(),
+    supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+    supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
+    supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+    supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
     supabase.from('measurements').select('weight_kg, date').eq('user_id', user.id).order('date', { ascending: false }).limit(8),
     supabase.from('workout_log').select('logged_at').eq('user_id', user.id).gte('logged_at', new Date(Date.now() - 7 * 86400000).toISOString()),
     supabase.from('chat_messages').select('content, role').eq('user_id', user.id).in('role', ['ion', 'assistant']).order('created_at', { ascending: false }).limit(1),
-    supabase.from('subscriptions').select('*').eq('user_id', user.id).single(),
+    supabase.from('subscriptions').select('*').eq('user_id', user.id).maybeSingle(),
   ])
 
   const profile = profileRes.data

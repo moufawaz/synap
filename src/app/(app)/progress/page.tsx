@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { TrendingDown, TrendingUp, Minus, Sparkles, Flame, Target, Lock, FileText, ChevronDown, ChevronUp, Brain } from 'lucide-react'
@@ -53,7 +53,7 @@ export default function ProgressPage() {
     if (user) {
       const [subRes, profileRes] = await Promise.all([
         supabase.from('subscriptions').select('plan_type, status, trial_ends_at, current_period_ends_at').eq('user_id', user.id).maybeSingle(),
-        supabase.from('profiles').select('goal_target').eq('user_id', user.id).single(),
+        supabase.from('profiles').select('goal_target').eq('user_id', user.id).maybeSingle(),
       ])
       const sub = subRes.data
       const tier = deriveClientTier(sub)
