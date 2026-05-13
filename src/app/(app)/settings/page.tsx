@@ -44,7 +44,11 @@ export default function SettingsPage() {
       supabase.from('subscriptions').select('*').eq('user_id', user.id).maybeSingle(),
     ])
     setProfile(profileRes.data || {})
-    setSubscription(subRes.data || null)
+    let sub = subRes.data || null
+    if (!sub && profileRes.data?.trial_ends_at && new Date(profileRes.data.trial_ends_at) > new Date()) {
+      sub = { status: 'free_trial', plan_type: 'elite', trial_ends_at: profileRes.data.trial_ends_at, _is_free_trial: true }
+    }
+    setSubscription(sub)
   }
 
   async function saveProfile() {
@@ -132,7 +136,8 @@ export default function SettingsPage() {
   const sub = subscription
   const status = sub?.status || 'starter'
   const rawPlanName = (sub?.plan_type || sub?.plan_name || 'starter').toLowerCase()
-  const isTrial = status === 'trial'
+  const isTrial = status === 'trial' || status === 'free_trial'
+  const isFreeTrial = status === 'free_trial'
   const isActive = status === 'active'
   const isCancelled = status === 'cancelled'
   const isStarter = !sub || status === 'starter' || status === 'free' || status === 'expired'
@@ -140,7 +145,8 @@ export default function SettingsPage() {
   const isFree = isStarter
 
   // Map raw plan names to display labels
-  const planLabel = rawPlanName === 'elite' ? 'Elite'
+  const planLabel = isFreeTrial ? 'Elite'
+    : rawPlanName === 'elite' ? 'Elite'
     : rawPlanName === 'pro' || rawPlanName === 'unlimited' ? 'Pro'
     : 'Starter'
   const planName = rawPlanName  // keep for MessageUsage compat

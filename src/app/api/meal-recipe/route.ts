@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { withAnthropicRetry } from '@/lib/anthropic'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
+import { getUserSubscription, isProUser, isLaunchMode } from '@/lib/subscription'
 
 export const runtime = 'nodejs'
 export const maxDuration = 20
@@ -19,6 +20,13 @@ export async function POST(req: Request) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (!isLaunchMode()) {
+      const sub = await getUserSubscription(user.id)
+      if (!isProUser(sub)) {
+        return NextResponse.json({ error: 'Pro plan required' }, { status: 403 })
+      }
     }
 
     const { meal } = await req.json()
