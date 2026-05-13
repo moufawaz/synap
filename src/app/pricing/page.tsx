@@ -17,8 +17,10 @@ const PRICES = {
   eliteAnnual:  PRICING.elite.annual,
 }
 
-const PRO_SAVE   = PRICING.pro.annual.savingsSar    // 159.99
-const ELITE_SAVE = PRICING.elite.annual.savingsSar  // 279.99
+const PRO_SAVE        = PRICING.pro.annual.savingsSar          // 159.99
+const ELITE_SAVE      = PRICING.elite.annual.savingsSar        // 279.99
+const PRO_COMPARE_AT  = PRICING.pro.monthly.sar * 12           // 479.88
+const ELITE_COMPARE_AT = PRICING.elite.monthly.sar * 12        // 839.88
 
 // ── Comparison table rows ─────────────────────────────────────────────────────
 type RowVal = boolean | string
