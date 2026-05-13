@@ -12,7 +12,7 @@ const rows = [
   { en: 'Adapts your plan based on results', ar: 'يكيّف خطتك بناءً على نتائجك' },
   { en: 'Shows exercise videos',             ar: 'يعرض مقاطع تمارين' },
   { en: 'Tracks body symmetry',              ar: 'يتتبع تناسق الجسم' },
-  { en: 'Scans food barcodes',               ar: 'يمسح بارکود الطعام' },
+  { en: 'Food calories scanner',               ar: 'ماسح سعرات الطعام' },
   { en: 'Sends push notifications',          ar: 'يرسل إشعارات فورية' },
   { en: 'Built specifically for fitness',    ar: 'مبني خصيصاً للياقة البدنية' },
   { en: 'Remembers your full history',       ar: 'يتذكر تاريخك الكامل' },

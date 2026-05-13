@@ -16,7 +16,7 @@ interface UpgradeModalProps {
 const PRO_FEATURES = [
   'Unlimited Ion messages',
   'Full diet & workout plans',
-  'Nutrition logging & barcode scanner',
+  'Nutrition logging & food calories scanner',
   'Progress photos & body measurements',
   'Workout tracking & logging',
   'Goal timeline prediction',

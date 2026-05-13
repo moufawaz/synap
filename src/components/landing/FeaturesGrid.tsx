@@ -12,7 +12,7 @@ const EN = {
     { icon: Utensils, title: 'Adaptive Diet Plans', body: "Ion builds meal plans from food you love — timed to your exact schedule. Log in plain text: 'I had kabsa for lunch.' Ion handles the math.", badge: null },
     { icon: Dumbbell, title: 'Smart Workout Programs', body: 'Gym or home. 6-week progressive programs with video for every exercise. Ion shows you exactly how — and increases difficulty as you get stronger.', badge: null },
     { icon: BarChart2, title: 'Full Body Tracking', body: '13 body measurements tracked from day one. Symmetry gaps detected. Charts showing every change. Progress photos stored privately.', badge: null },
-    { icon: Camera, title: 'Barcode Food Scanner', body: 'Point your camera at any product. Ion reads the label and logs the macros instantly. No manual entry. No guessing.', badge: null },
+    { icon: Camera, title: 'Food Calories Scanner', body: 'Point your camera at any product. Ion reads the label and logs the macros instantly. No manual entry. No guessing.', badge: null },
     { icon: Bell, title: 'Proactive Check-ins', body: "Ion reaches out — you don't have to remember. Morning messages, pre-workout reminders, meal log nudges, plateau alerts.", badge: null },
     { icon: RefreshCw, title: 'Plan Renewal That Learns', body: 'Every cycle Ion reviews your results, asks what worked, and rebuilds your plan around your new reality.', badge: null },
     { icon: BarChart2, title: 'Coach Memory Timeline', body: 'Ion remembers first scans, weight shifts, workouts, meal patterns, and coaching notes so your plan gets smarter over time.', badge: null },

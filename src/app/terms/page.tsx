@@ -66,7 +66,7 @@ export default function TermsPage() {
             <P>SYNAP offers the following subscription tiers:</P>
             <ul className="list-disc pl-6 space-y-1.5 text-sm" style={{ color: '#94A3B8' }}>
               <li><strong className="text-white">Starter:</strong> Free forever. Limited to 5 Ion messages per day.</li>
-              <li><strong className="text-white">Pro:</strong> Paid monthly or annually. Unlocks unlimited messages, barcode scanner, proactive check-ins, and progress photo storage.</li>
+              <li><strong className="text-white">Pro:</strong> Paid monthly or annually. Unlocks unlimited messages, food calories scanner, proactive check-ins, and progress photo storage.</li>
               <li><strong className="text-white">Elite:</strong> Paid monthly or annually. Includes all Pro features plus goal timeline prediction, weekly reports, and supplement recommendations.</li>
             </ul>
 

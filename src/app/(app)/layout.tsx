@@ -1,10 +1,12 @@
-﻿import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileNav from '@/components/dashboard/MobileNav'
 import AdaptationChecker from '@/components/dashboard/AdaptationChecker'
+import TrialBanner from '@/components/dashboard/TrialBanner'
 import OneSignalInit from '@/components/OneSignalInit'
 import ArabicUiTranslator from '@/components/i18n/ArabicUiTranslator'
+import { getUserSubscription, getTrialDaysRemaining, isFreeTrial } from '@/lib/subscription'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createServerClient()
@@ -12,13 +14,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const [{ data: profile }, { data: userData }] = await Promise.all([
+  const [{ data: profile }, { data: userData }, sub] = await Promise.all([
     supabase.from('profiles').select('name, gender').eq('user_id', user.id).maybeSingle(),
     supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
+    getUserSubscription(user.id),
   ])
 
   const adminEmail = process.env.ADMIN_EMAIL
   const isAdmin = user.email === adminEmail
+  const lang = (userData?.language || 'en') as 'en' | 'ar'
 
   const userInfo = {
     name: profile?.name || user.email?.split('@')[0] || 'Athlete',
@@ -27,7 +31,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     isAdmin,
   }
 
-  const lang = (userData?.language || 'en') as 'en' | 'ar'
+  const trialDaysLeft = getTrialDaysRemaining(sub)
+  const isFreeTrialActive = isFreeTrial(sub)
 
   return (
     <div
@@ -37,8 +42,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       lang={lang}
     >
       <Sidebar user={userInfo} lang={lang} />
-      <main className="flex-1 min-w-0 pb-20 md:pb-0">
-        {children}
+      <main className="flex-1 min-w-0 pb-20 md:pb-0 flex flex-col">
+        {isFreeTrialActive && trialDaysLeft !== null && (
+          <TrialBanner
+            daysLeft={trialDaysLeft}
+            isFreeTrial={isFreeTrialActive}
+            lang={lang}
+          />
+        )}
+        <div className="flex-1">
+          {children}
+        </div>
       </main>
       <MobileNav lang={lang} />
       <ArabicUiTranslator lang={lang} />

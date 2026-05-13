@@ -35,7 +35,7 @@ const TABLE_ROWS: TableRow[] = [
   { label: 'Bilingual Arabic + English',       labelAr: 'العربية والإنجليزية',            starter: true,        pro: true,           elite: true },
   // ── Pro & Elite ──────────────────────────────────────────
   { label: 'Daily Ion messages',               labelAr: 'رسائل Ion اليومية',              starter: '5 / day',   pro: 'Unlimited',    elite: 'Unlimited' },
-  { label: 'Barcode food scanner',             labelAr: 'ماسح باركود الطعام',             starter: false,       pro: true,           elite: true },
+  { label: 'Food calories scanner',             labelAr: 'ماسح سعرات الطعام',              starter: false,       pro: true,           elite: true },
   { label: 'Eating out guidance',              labelAr: 'إرشادات الأكل خارجاً',           starter: false,       pro: true,           elite: true },
   { label: 'Meal recipe generator',            labelAr: 'مولّد وصفات الوجبات',            starter: false,       pro: true,           elite: true },
   { label: 'Proactive check-ins',              labelAr: 'متابعات استباقية',               starter: false,       pro: true,           elite: true },
@@ -70,13 +70,13 @@ export default function PricingPage() {
   const copy = isRTL ? {
     pricing: 'الأسعار',
     title: 'أسعار واضحة وبسيطة',
-    subtitle: 'تجربة مجانية 7 أيام. ألغِ قبل اليوم السابع ولن يتم خصم أي مبلغ.',
+    subtitle: 'كل خطة تبدأ بتجربة مجانية 7 أيام بوصول كامل. ألغِ قبل اليوم السابع ولن يتم خصم أي مبلغ.',
     guarantee: 'ضمان الإلغاء بدون رسوم',
     annual: 'سنوي',
     monthly: 'شهري',
     save33: 'وفر 33%',
-    starterDesc: 'مجاني دائماً - بدون بطاقة',
-    getStarted: 'ابدأ مجاناً',
+    starterDesc: '7 أيام وصول كامل — ثم 5 رسائل / يوم مجاناً للأبد',
+    getStarted: 'ابدأ التجربة المجانية',
     mostPopular: 'الأكثر اختياراً',
     bestValue: 'أفضل قيمة',
     year: 'سنة',
@@ -98,13 +98,13 @@ export default function PricingPage() {
   } : {
     pricing: 'PRICING',
     title: 'Simple, Transparent Pricing',
-    subtitle: "7-day free trial. Cancel before day 7 and you'll never be charged - not even a single riyal.",
+    subtitle: 'Every plan starts with a 7-day full access trial. Cancel before day 7 and you\'ll never be charged.',
     guarantee: 'ZERO-CHARGE CANCEL GUARANTEE',
     annual: 'Annual',
     monthly: 'Monthly',
     save33: 'SAVE 33%',
-    starterDesc: 'Free forever - no card needed',
-    getStarted: 'GET STARTED FREE',
+    starterDesc: '7-day full access trial — then 5 messages / day free forever',
+    getStarted: 'START FREE TRIAL',
     mostPopular: 'MOST POPULAR',
     bestValue: 'BEST VALUE',
     year: 'yr',
@@ -246,14 +246,15 @@ export default function PricingPage() {
             </div>
 
             <div className="flex flex-col gap-2.5 mb-7 flex-1">
-              <PlanFeature text={isRTL ? '5 رسائل Ion يومياً' : '5 Ion messages / day'} />
+              <PlanFeature text={isRTL ? '✦ 7 أيام وصول كامل (كل الميزات)' : '✦ 7-day full access trial'} highlight />
+              <PlanFeature text={isRTL ? 'بعد التجربة: 5 رسائل Ion يومياً' : 'After trial: 5 Ion messages / day'} />
               <PlanFeature text={isRTL ? 'خطة تغذية متكيفة' : 'Adaptive diet plan'} />
               <PlanFeature text={isRTL ? 'برنامج تمرين ذكي' : 'Smart workout program'} />
               <PlanFeature text={isRTL ? 'تتبع الجسم (13 قياس)' : 'Body tracking (13 measurements)'} />
               <PlanFeature text={isRTL ? 'مولّد قائمة التسوق' : 'Grocery list generator'} />
               <PlanFeature text={isRTL ? 'العربية والإنجليزية' : 'Bilingual Arabic + English'} />
               <PlanFeatureMissing text={isRTL ? 'رسائل يومية غير محدودة' : 'Unlimited daily messages'} />
-              <PlanFeatureMissing text={isRTL ? 'ماسح باركود الطعام' : 'Barcode food scanner'} />
+              <PlanFeatureMissing text={isRTL ? 'ماسح سعرات الطعام' : 'Food calories scanner'} />
               <PlanFeatureMissing text={isRTL ? 'إرشادات الأكل خارجاً' : 'Eating out guidance'} />
             </div>
 
@@ -315,7 +316,7 @@ export default function PricingPage() {
               <PlanFeature text={isRTL ? 'رسائل Ion غير محدودة يومياً' : 'Unlimited Ion messages / day'} highlight />
               <PlanFeature text={isRTL ? 'كل ميزات Starter' : 'Everything in Starter'} />
               <PlanFeature text={isRTL ? 'تجربة مجانية 7 أيام' : '7-day free trial'} />
-              <PlanFeature text={isRTL ? 'ماسح باركود الطعام' : 'Barcode food scanner'} />
+              <PlanFeature text={isRTL ? 'ماسح سعرات الطعام' : 'Food calories scanner'} />
               <PlanFeature text={isRTL ? 'إرشادات الأكل خارجاً ووصفات الوجبات' : 'Eating out guidance & meal recipes'} />
               <PlanFeature text={isRTL ? 'متابعات استباقية' : 'Proactive check-ins'} />
               <PlanFeature text={isRTL ? 'تجديد خطة يتعلم من نتائجك' : 'Plan renewal that learns'} />
