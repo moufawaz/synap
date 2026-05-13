@@ -69,7 +69,7 @@ export function effectivePlan(sub: any): 'starter' | 'trial' | 'pro' | 'elite' {
     return 'starter'
   }
 
-  if (sub.status === 'active') {
+  if (sub.status === 'active' || sub.status === 'past_due') {
     return planTierFromSubscription(sub)
   }
 

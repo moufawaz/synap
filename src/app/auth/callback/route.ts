@@ -7,8 +7,9 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   
-  // 1. Capture the 'next' parameter from the URL, defaulting to '/dashboard'
-  const next = requestUrl.searchParams.get('next') ?? '/dashboard'
+  // 1. Capture the 'next' parameter — only allow relative paths to prevent open redirect
+  const rawNext = requestUrl.searchParams.get('next') ?? '/dashboard'
+  const next = rawNext.startsWith('/') ? rawNext : '/dashboard'
 
   if (code) {
     const cookieStore = await cookies()
