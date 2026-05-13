@@ -27,20 +27,29 @@ type RowVal = boolean | string
 interface TableRow { label: string; labelAr: string; starter: RowVal; pro: RowVal; elite: RowVal }
 
 const TABLE_ROWS: TableRow[] = [
-  { label: 'Adaptive diet plan',               labelAr: 'خطة تغذية متكيفة', starter: true,        pro: true,             elite: true },
-  { label: 'Smart workout program',            labelAr: 'برنامج تمرين ذكي', starter: true,        pro: true,             elite: true },
-  { label: 'Body tracking (13 measurements)',  labelAr: 'تتبع الجسم (13 قياس)', starter: true,        pro: true,             elite: true },
-  { label: 'Bilingual Arabic + English',       labelAr: 'العربية والإنجليزية', starter: true,        pro: true,             elite: true },
-  { label: 'Daily Ion messages',               labelAr: 'رسائل Ion اليومية', starter: '5 / day',   pro: 'Unlimited',      elite: 'Unlimited' },
-  { label: 'Barcode food scanner',             labelAr: 'ماسح باركود الطعام', starter: false,       pro: true,             elite: true },
-  { label: 'Proactive check-ins',              labelAr: 'متابعات استباقية', starter: false,       pro: true,             elite: true },
-  { label: 'Plan renewal that learns',         labelAr: 'تجديد خطة يتعلم من نتائجك', starter: false,       pro: true,             elite: true },
-  { label: 'Progress photo storage',           labelAr: 'حفظ صور التقدم', starter: false,       pro: true,             elite: true },
-  { label: 'Goal timeline prediction',         labelAr: 'توقع موعد الوصول للهدف', starter: false,       pro: false,            elite: true },
-  { label: 'Weekly body composition report',   labelAr: 'تقرير تكوين الجسم الأسبوعي', starter: false,       pro: false,            elite: true },
-  { label: 'Supplement recommendations',       labelAr: 'توصيات المكملات', starter: false,       pro: false,            elite: true },
-  { label: 'Wearable integration',             labelAr: 'ربط الأجهزة القابلة للارتداء', starter: false,       pro: 'Coming Soon',    elite: 'Coming Soon' },
-  { label: 'Community feed',                   labelAr: 'المجتمع', starter: false,       pro: 'Coming Soon',    elite: 'Coming Soon' },
+  // ── All plans ────────────────────────────────────────────
+  { label: 'Adaptive diet plan',               labelAr: 'خطة تغذية متكيفة',              starter: true,        pro: true,           elite: true },
+  { label: 'Smart workout program',            labelAr: 'برنامج تمرين ذكي',              starter: true,        pro: true,           elite: true },
+  { label: 'Body tracking (13 measurements)',  labelAr: 'تتبع الجسم (13 قياس)',           starter: true,        pro: true,           elite: true },
+  { label: 'Grocery list generator',           labelAr: 'مولّد قائمة التسوق',             starter: true,        pro: true,           elite: true },
+  { label: 'Bilingual Arabic + English',       labelAr: 'العربية والإنجليزية',            starter: true,        pro: true,           elite: true },
+  // ── Pro & Elite ──────────────────────────────────────────
+  { label: 'Daily Ion messages',               labelAr: 'رسائل Ion اليومية',              starter: '5 / day',   pro: 'Unlimited',    elite: 'Unlimited' },
+  { label: 'Barcode food scanner',             labelAr: 'ماسح باركود الطعام',             starter: false,       pro: true,           elite: true },
+  { label: 'Eating out guidance',              labelAr: 'إرشادات الأكل خارجاً',           starter: false,       pro: true,           elite: true },
+  { label: 'Meal recipe generator',            labelAr: 'مولّد وصفات الوجبات',            starter: false,       pro: true,           elite: true },
+  { label: 'Proactive check-ins',              labelAr: 'متابعات استباقية',               starter: false,       pro: true,           elite: true },
+  { label: 'Plan renewal that learns',         labelAr: 'تجديد خطة يتعلم من نتائجك',     starter: false,       pro: true,           elite: true },
+  { label: 'Progress photo storage',           labelAr: 'حفظ صور التقدم',                 starter: false,       pro: true,           elite: true },
+  // ── Elite only ───────────────────────────────────────────
+  { label: 'Goal timeline prediction',         labelAr: 'توقع موعد الوصول للهدف',         starter: false,       pro: false,          elite: true },
+  { label: 'Weekly body composition report',   labelAr: 'تقرير تكوين الجسم الأسبوعي',    starter: false,       pro: false,          elite: true },
+  { label: 'Weekly macro auto-adjustments',    labelAr: 'تعديل ماكرو أسبوعي تلقائي',     starter: false,       pro: false,          elite: true },
+  { label: 'Supplement recommendations',       labelAr: 'توصيات المكملات',                starter: false,       pro: false,          elite: true },
+  { label: 'Exercise form check (AI photo)',   labelAr: 'فحص شكل التمرين (ذكاء اصطناعي)', starter: false,      pro: false,          elite: true },
+  // ── Coming soon ──────────────────────────────────────────
+  { label: 'Wearable integration',             labelAr: 'ربط الأجهزة القابلة للارتداء',   starter: false,       pro: 'Coming Soon',  elite: 'Coming Soon' },
+  { label: 'Community feed',                   labelAr: 'المجتمع',                         starter: false,       pro: 'Coming Soon',  elite: 'Coming Soon' },
 ]
 
 export default function PricingPage() {
@@ -237,14 +246,15 @@ export default function PricingPage() {
             </div>
 
             <div className="flex flex-col gap-2.5 mb-7 flex-1">
-              <PlanFeature text={isRTL ? '5 رسائل Ion يومياً (7 أيام)' : '5 Ion messages / day (7 days)'} />
+              <PlanFeature text={isRTL ? '5 رسائل Ion يومياً' : '5 Ion messages / day'} />
               <PlanFeature text={isRTL ? 'خطة تغذية متكيفة' : 'Adaptive diet plan'} />
               <PlanFeature text={isRTL ? 'برنامج تمرين ذكي' : 'Smart workout program'} />
               <PlanFeature text={isRTL ? 'تتبع الجسم (13 قياس)' : 'Body tracking (13 measurements)'} />
+              <PlanFeature text={isRTL ? 'مولّد قائمة التسوق' : 'Grocery list generator'} />
               <PlanFeature text={isRTL ? 'العربية والإنجليزية' : 'Bilingual Arabic + English'} />
               <PlanFeatureMissing text={isRTL ? 'رسائل يومية غير محدودة' : 'Unlimited daily messages'} />
               <PlanFeatureMissing text={isRTL ? 'ماسح باركود الطعام' : 'Barcode food scanner'} />
-              <PlanFeatureMissing text={isRTL ? 'متابعات استباقية' : 'Proactive check-ins'} />
+              <PlanFeatureMissing text={isRTL ? 'إرشادات الأكل خارجاً' : 'Eating out guidance'} />
             </div>
 
             <Link href="/auth/signup">
@@ -306,12 +316,13 @@ export default function PricingPage() {
               <PlanFeature text={isRTL ? 'كل ميزات Starter' : 'Everything in Starter'} />
               <PlanFeature text={isRTL ? 'تجربة مجانية 7 أيام' : '7-day free trial'} />
               <PlanFeature text={isRTL ? 'ماسح باركود الطعام' : 'Barcode food scanner'} />
+              <PlanFeature text={isRTL ? 'إرشادات الأكل خارجاً ووصفات الوجبات' : 'Eating out guidance & meal recipes'} />
               <PlanFeature text={isRTL ? 'متابعات استباقية' : 'Proactive check-ins'} />
               <PlanFeature text={isRTL ? 'تجديد خطة يتعلم من نتائجك' : 'Plan renewal that learns'} />
               <PlanFeature text={isRTL ? 'حفظ صور التقدم' : 'Progress photo storage'} />
               <PlanFeatureMissing text={isRTL ? 'توقع موعد الوصول للهدف' : 'Goal timeline prediction'} />
-              <PlanFeatureMissing text={isRTL ? 'تقرير تكوين الجسم الأسبوعي' : 'Weekly body composition report'} />
-              <PlanFeatureMissing text={isRTL ? 'توصيات المكملات' : 'Supplement recommendations'} />
+              <PlanFeatureMissing text={isRTL ? 'تقرير الجسم الأسبوعي' : 'Weekly body report'} />
+              <PlanFeatureMissing text={isRTL ? 'بروتوكول المكملات' : 'Supplement protocol'} />
             </div>
 
             <button
@@ -386,9 +397,9 @@ export default function PricingPage() {
               <PlanFeature text={isRTL ? 'تجربة مجانية 7 أيام' : '7-day free trial'} />
               <PlanFeature text={isRTL ? 'توقع موعد الوصول للهدف' : 'Goal timeline prediction'} highlight />
               <PlanFeature text={isRTL ? 'تقرير تكوين الجسم الأسبوعي' : 'Weekly body composition report'} highlight />
-              <PlanFeature text={isRTL ? 'توصيات المكملات' : 'Supplement recommendations'} highlight />
-              <PlanFeature text={isRTL ? 'ربط الأجهزة القابلة للارتداء (قريباً)' : 'Wearable integration (coming soon)'} />
-              <PlanFeature text={isRTL ? 'المجتمع (قريباً)' : 'Community feed (coming soon)'} />
+              <PlanFeature text={isRTL ? 'تعديل ماكرو أسبوعي تلقائي' : 'Weekly macro auto-adjustments'} highlight />
+              <PlanFeature text={isRTL ? 'بروتوكول المكملات الغذائية' : 'Supplement protocol'} highlight />
+              <PlanFeature text={isRTL ? 'فحص شكل التمرين بالذكاء الاصطناعي' : 'Exercise form check (AI photo)'} highlight />
               <PlanFeature text={isRTL ? 'وصول مبكر للميزات الجديدة' : 'First access to new features'} />
             </div>
 
