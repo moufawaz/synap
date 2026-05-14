@@ -140,12 +140,12 @@ export async function POST(req: Request) {
       await supabase
         .from('subscriptions')
         .update({
-          status: cancelledInTrial ? 'starter' : 'cancelled',
+          status: cancelledInTrial ? 'free' : 'cancelled',
           cancelled_at: new Date().toISOString(),
-          // If cancelled during trial → revert to Starter immediately
+          // If cancelled during trial → revert to Starter immediately (status='free' matches billing cancel API)
           ...(cancelledInTrial ? {
-            plan_type: 'starter',
-            plan_name: 'starter',
+            plan_type: 'free',
+            plan_name: 'free',
             trial_ends_at: null,
             lemon_squeezy_subscription_id: null,
           } : {
