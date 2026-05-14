@@ -151,7 +151,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#0A0A0A' }} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen" style={{ background: '#0A0A0A', colorScheme: 'dark' }} dir={isRTL ? 'rtl' : 'ltr'}>
 
       {/* ── Keyframe animations ── */}
       <style>{`
@@ -271,7 +271,7 @@ export default function PricingPage() {
 
         {/* Billing toggle — annual default */}
         <div className="flex justify-center mb-10">
-          <div className="flex items-center gap-1 p-1 rounded-2xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-1 p-1 rounded-2xl" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <button
               onClick={() => setBilling('annual')}
               className="relative px-6 py-2.5 rounded-xl font-heading text-sm font-bold tracking-wider transition-all"

@@ -40,7 +40,8 @@ export default function LandingPage() {
 
   return (
     <div
-      className="relative min-h-screen bg-charcoal overflow-x-hidden"
+      className="relative min-h-screen overflow-x-hidden"
+      style={{ background: '#0A0A0A' }}
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
       <div className="noise-overlay" />

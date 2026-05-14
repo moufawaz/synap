@@ -125,7 +125,7 @@ export default function LandingPricing({ lang }: Props) {
   const copy = isRTL ? AR : EN
 
   return (
-    <section id="pricing" className="relative py-24 overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
+    <section id="pricing" className="relative py-24 overflow-hidden" style={{ background: '#0A0A0A' }} dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="orb w-[700px] h-[500px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
         style={{ background: 'rgba(187,92,246,0.06)' }} />
 
@@ -145,7 +145,7 @@ export default function LandingPricing({ lang }: Props) {
         {/* Billing toggle */}
         <div className="flex justify-center mb-10">
           <div className="flex items-center gap-1 p-1 rounded-2xl"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
             {(['annual', 'monthly'] as const).map((b) => (
               <button
                 key={b}
