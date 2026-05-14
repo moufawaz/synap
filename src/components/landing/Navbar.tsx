@@ -38,8 +38,8 @@ export default function Navbar({ lang, onLangChange, isLoggedIn = false, userNam
   const publicLinks = [
     { label: t(lang, 'nav_features'), href: '#features' },
     { label: t(lang, 'nav_how_it_works'), href: '#how-it-works' },
-    { label: lang === 'ar' ? 'PRICING' : 'PRICING', href: '/pricing' },
-    { label: lang === 'ar' ? 'CONTACT US' : 'CONTACT US', href: '/contact' },
+    { label: lang === 'ar' ? 'الأسعار' : 'PRICING', href: '/pricing' },
+    { label: lang === 'ar' ? 'تواصل معنا' : 'CONTACT US', href: '/contact' },
   ]
 
   const appLinks = [

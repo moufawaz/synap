@@ -153,8 +153,77 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen" style={{ background: '#0A0A0A' }} dir={isRTL ? 'rtl' : 'ltr'}>
 
+      {/* ── Keyframe animations ── */}
+      <style>{`
+        @keyframes pulse-border {
+          0%,100% { box-shadow: 0 0 60px rgba(187,92,246,0.22), inset 0 0 40px rgba(187,92,246,0.04); border-color: rgba(187,92,246,0.55); }
+          50%      { box-shadow: 0 0 90px rgba(187,92,246,0.45), 0 0 140px rgba(187,92,246,0.18), inset 0 0 50px rgba(187,92,246,0.08); border-color: rgba(187,92,246,0.85); }
+        }
+        @keyframes badge-float {
+          0%,100% { transform: translateX(-50%) translateY(0px); }
+          50%      { transform: translateX(-50%) translateY(-5px); }
+        }
+        @keyframes shimmer-sweep {
+          0%   { transform: translateX(-120%) skewX(-18deg); }
+          100% { transform: translateX(220%)  skewX(-18deg); }
+        }
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(28px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes orb-drift {
+          0%,100% { transform: translate(0,0) scale(1); }
+          33%     { transform: translate(40px,-30px) scale(1.08); }
+          66%     { transform: translate(-25px,20px) scale(0.95); }
+        }
+        @keyframes orb-drift-2 {
+          0%,100% { transform: translate(0,0) scale(1); }
+          40%     { transform: translate(-50px,35px) scale(1.06); }
+          70%     { transform: translate(30px,-15px) scale(0.96); }
+        }
+        @keyframes top-line-glow {
+          0%,100% { opacity: 0.5; }
+          50%      { opacity: 1; }
+        }
+        .shimmer-btn { position: relative; overflow: hidden; }
+        .shimmer-btn::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.22) 50%, transparent 60%);
+          animation: shimmer-sweep 2.8s ease-in-out infinite;
+          pointer-events: none;
+        }
+      `}</style>
+
+      {/* Animated ambient orbs */}
+      <div aria-hidden="true" style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', top: '10%', left: '15%', width: 500, height: 500,
+          borderRadius: '50%', background: 'radial-gradient(circle, rgba(187,92,246,0.07) 0%, transparent 70%)',
+          animation: 'orb-drift 18s ease-in-out infinite', filter: 'blur(40px)',
+        }} />
+        <div style={{
+          position: 'absolute', top: '55%', right: '8%', width: 380, height: 380,
+          borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.06) 0%, transparent 70%)',
+          animation: 'orb-drift-2 22s ease-in-out infinite', filter: 'blur(50px)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '15%', left: '40%', width: 300, height: 300,
+          borderRadius: '50%', background: 'radial-gradient(circle, rgba(187,92,246,0.05) 0%, transparent 70%)',
+          animation: 'orb-drift 26s ease-in-out infinite 4s', filter: 'blur(60px)',
+        }} />
+      </div>
+
+      {/* Top glow line */}
+      <div aria-hidden="true" style={{
+        position: 'fixed', top: 0, left: 0, right: 0, height: 1, zIndex: 50,
+        background: 'linear-gradient(90deg, transparent 0%, #BB5CF6 30%, #8B5CF6 50%, #BB5CF6 70%, transparent 100%)',
+        animation: 'top-line-glow 4s ease-in-out infinite',
+      }} />
+
       {/* Nav */}
-      <nav className="px-6 py-4 flex items-center justify-between gap-4 max-w-6xl mx-auto">
+      <nav className="px-6 py-4 flex items-center justify-between gap-4 max-w-6xl mx-auto" style={{ position: 'relative', zIndex: 10 }}>
         <Link href="/" className="font-heading font-black text-xl tracking-widest" style={{ color: '#BB5CF6', letterSpacing: '0.15em' }}>
           SYNAP
         </Link>
@@ -172,7 +241,7 @@ export default function PricingPage() {
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-4 pb-24 pt-8">
+      <div className="max-w-6xl mx-auto px-4 pb-24 pt-8" style={{ position: 'relative', zIndex: 1 }}>
 
         {/* Header */}
         <div className="text-center mb-12">
@@ -232,10 +301,10 @@ export default function PricingPage() {
         </div>
 
         {/* Plans grid — 3 cards */}
-        <div className="grid md:grid-cols-3 gap-5 mb-14">
+        <div className="grid md:grid-cols-3 gap-5 mb-14" style={{ position: 'relative', zIndex: 1 }}>
 
           {/* ── Starter ── */}
-          <div className="rounded-2xl p-6 flex flex-col" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="rounded-2xl p-6 flex flex-col" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', animation: 'fade-in-up 0.6s ease both', animationDelay: '0.05s' }}>
             <div className="mb-6">
               <p className="font-heading font-black text-xs tracking-widest uppercase mb-3" style={{ color: '#475569', letterSpacing: '0.15em' }}>STARTER</p>
               <div className="flex items-end gap-1 mb-1">
@@ -259,9 +328,9 @@ export default function PricingPage() {
             </div>
 
             <Link href="/auth/signup">
-              <button className="w-full py-3 rounded-xl font-heading font-bold text-sm tracking-wider transition-all"
-                style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#475569', letterSpacing: '0.08em' }}>
-                {copy.getStarted}
+              <button className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+                style={{ border: '1.5px solid rgba(255,255,255,0.22)', color: 'white', letterSpacing: '0.08em', background: 'rgba(255,255,255,0.06)' }}>
+                {copy.getStarted} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} />
               </button>
             </Link>
           </div>
@@ -271,12 +340,14 @@ export default function PricingPage() {
             background: 'linear-gradient(135deg, rgba(187,92,246,0.12), rgba(187,92,246,0.06))',
             border: '1px solid rgba(187,92,246,0.4)',
             boxShadow: '0 0 40px rgba(187,92,246,0.15)',
+            animation: 'fade-in-up 0.6s ease both',
+            animationDelay: '0.18s',
           }}>
             {/* Top accent */}
             <div className="absolute top-0 inset-x-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, #BB5CF6, transparent)' }} />
 
             {/* Badge */}
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+            <div className="absolute -top-3.5 left-1/2" style={{ animation: 'badge-float 3s ease-in-out infinite' }}>
               <span className="font-heading font-black text-[10px] tracking-widest px-4 py-1.5 rounded-full"
                 style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.15em' }}>
                 {copy.mostPopular}
@@ -329,7 +400,7 @@ export default function PricingPage() {
             <button
               onClick={() => handleCheckout(proPrice.variantId)}
               disabled={!!loading || !proAvailable}
-              className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+              className="shimmer-btn w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
               style={{
                 background: loading === proPrice.variantId ? 'rgba(187,92,246,0.5)' : '#BB5CF6',
                 color: 'white',
@@ -351,16 +422,17 @@ export default function PricingPage() {
           <div className="rounded-2xl p-6 flex flex-col relative" style={{
             background: 'linear-gradient(135deg, rgba(187,92,246,0.18), rgba(139,92,246,0.10))',
             border: '1.5px solid rgba(187,92,246,0.55)',
-            boxShadow: '0 0 60px rgba(187,92,246,0.22), inset 0 0 40px rgba(187,92,246,0.04)',
+            animation: 'pulse-border 3.5s ease-in-out infinite, fade-in-up 0.6s ease both',
+            animationDelay: '0s, 0.32s',
           }}>
             {/* Top accent — brighter */}
             <div className="absolute top-0 inset-x-0 h-px" style={{ background: 'linear-gradient(90deg, transparent, #BB5CF6 40%, #8B5CF6, transparent)' }} />
 
             {/* Badge */}
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+            <div className="absolute -top-3.5 left-1/2" style={{ animation: 'badge-float 3s ease-in-out infinite 0.6s' }}>
               <span className="font-heading font-black text-[10px] tracking-widest px-4 py-1.5 rounded-full"
                 style={{ background: 'linear-gradient(90deg, #BB5CF6, #8B5CF6)', color: 'white', letterSpacing: '0.15em', boxShadow: '0 0 20px rgba(187,92,246,0.5)' }}>
-          {copy.bestValue}
+                {copy.bestValue}
               </span>
             </div>
 
@@ -407,12 +479,12 @@ export default function PricingPage() {
             <button
               onClick={() => handleCheckout(elitePrice.variantId)}
               disabled={!!loading || !eliteAvailable}
-              className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+              className="shimmer-btn w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
               style={{
-                background: loading === elitePrice.variantId ? 'rgba(187,92,246,0.4)' : 'rgba(187,92,246,0.2)',
-                border: '1px solid rgba(187,92,246,0.5)',
-                color: loading === elitePrice.variantId ? '#94A3B8' : '#E9D5FF',
+                background: loading === elitePrice.variantId ? 'rgba(187,92,246,0.5)' : 'linear-gradient(135deg, #BB5CF6, #8B5CF6)',
+                color: 'white',
                 letterSpacing: '0.1em',
+                boxShadow: loading === elitePrice.variantId ? 'none' : '0 0 30px rgba(139,92,246,0.5), 0 0 60px rgba(187,92,246,0.2)',
               }}
             >
               {!eliteAvailable ? (

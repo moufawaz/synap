@@ -147,7 +147,7 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
                 ))}
               </div>
               <p className="text-silver-muted/60 text-xs font-heading tracking-wider">
-                {isRTL ? 'JOINED BY THOUSANDS' : 'JOINED BY THOUSANDS'}
+                {isRTL ? 'انضم إليه الآلاف' : 'JOINED BY THOUSANDS'}
               </p>
             </div>
           </div>

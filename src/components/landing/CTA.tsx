@@ -56,7 +56,7 @@ export default function CTA({ lang, isLoggedIn = false }: CTAProps) {
                 {isRTL ? 'ابدأ مجاناً — قابل آيون الآن' : 'Start Free — Meet Ion Now'}
                 <ArrowRight
                   size={20}
-                  className={`transition-transform group-hover:translate-x-1 ${isRTL ? 'rotate-180 group-hover:-translate-x-1 group-hover:translate-x-0' : ''}`}
+                  className={`transition-transform ${isRTL ? 'rotate-180 group-hover:-translate-x-1' : 'group-hover:translate-x-1'}`}
                 />
               </Link>
             )}
