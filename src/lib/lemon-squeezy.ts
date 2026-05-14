@@ -10,10 +10,10 @@ function getApiKey() {
 
 // ── Variant IDs ────────────────────────────────────────────────
 export const VARIANT_IDS = {
-  PRO_MONTHLY:    process.env.LEMON_SQUEEZY_PRO_MONTHLY_VARIANT_ID    || '1600605',
-  PRO_ANNUAL:     process.env.LEMON_SQUEEZY_PRO_ANNUAL_VARIANT_ID     || '1602045',
-  ELITE_MONTHLY:  process.env.LEMON_SQUEEZY_ELITE_MONTHLY_VARIANT_ID  || '1602017',
-  ELITE_ANNUAL:   process.env.LEMON_SQUEEZY_ELITE_ANNUAL_VARIANT_ID   || '1602053',
+  PRO_MONTHLY:    process.env.LEMON_SQUEEZY_PRO_MONTHLY_VARIANT_ID    || '1653825',
+  PRO_ANNUAL:     process.env.LEMON_SQUEEZY_PRO_ANNUAL_VARIANT_ID     || '1653826',
+  ELITE_MONTHLY:  process.env.LEMON_SQUEEZY_ELITE_MONTHLY_VARIANT_ID  || '1653822',
+  ELITE_ANNUAL:   process.env.LEMON_SQUEEZY_ELITE_ANNUAL_VARIANT_ID   || '1653824',
 } as const
 
 // ── Plan metadata by variant ID ────────────────────────────────
