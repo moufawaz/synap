@@ -6,20 +6,28 @@ import { sendEmail } from '@/lib/resend'
  * GET /api/cron/onboarding-reminder
  *
  * Runs daily at 10:00 UTC via Vercel Cron.
- * Finds users who:
- *   - Signed up more than 24 hours ago
- *   - Have NOT completed onboarding (no active workout_plan)
- *   - Are within the first 7 days (after that, let them be)
- *   - Have NOT already received this reminder
+ * Two-stage re-engagement for users who never completed onboarding:
  *
- * Uses chat_messages (role='system', message_type='onboarding_reminder_sent')
- * as a lightweight sent-log — zero schema changes needed.
- * Also inserts an Ion chat message they can see and reply to.
+ *   Stage 1 — 24h reminder
+ *     Triggered: user created > 24h ago and not yet reminded
+ *     Sends:     Ion chat message + email (type: onboarding_reminder)
+ *     Marker:    message_type = 'onboarding_reminder_24h'
+ *
+ *   Stage 2 — 7-day reminder
+ *     Triggered: user created ≥ 7 days ago and 7d reminder not yet sent
+ *     Sends:     Ion chat message + email (type: onboarding_reminder_7d)
+ *     Marker:    message_type = 'onboarding_reminder_7d'
+ *
+ * Onboarding completion = having an active workout_plan row.
+ * Markers are stored as invisible system messages in chat_messages.
+ * Per run, each user receives at most one reminder (7d takes priority).
  */
 
-const REMINDER_TYPE = 'onboarding_reminder_sent'
-const MIN_AGE_H     = 24   // wait at least 24 h before nudging
-const MAX_AGE_DAYS  = 7    // stop nudging after 7 days
+const MARKER_24H   = 'onboarding_reminder_24h'
+const MARKER_7D    = 'onboarding_reminder_7d'
+const MIN_AGE_H    = 24   // hours before first nudge
+const STAGE2_DAYS  = 7    // days before second nudge
+const MAX_AGE_DAYS = 12   // stop reminding after this many days
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization')
@@ -31,25 +39,26 @@ export async function GET(req: Request) {
   }
 
   const admin = createAdminClient()
+  const now = new Date()
 
-  const now        = new Date()
-  const minAgeDate = new Date(now.getTime() - MIN_AGE_H * 3600 * 1000).toISOString()
-  const maxAgeDate = new Date(now.getTime() - MAX_AGE_DAYS * 86400 * 1000).toISOString()
+  // Outer window: users created between 24h ago and 12 days ago
+  const windowStart = new Date(now.getTime() - MIN_AGE_H * 3600 * 1000).toISOString()
+  const windowEnd   = new Date(now.getTime() - MAX_AGE_DAYS * 86400 * 1000).toISOString()
 
-  // ── 1. All auth users in the nudge window (1–7 days old) ──────
+  // ── 1. Fetch all auth users in the nudge window ───────────────
   const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 })
   const windowUsers = (authData?.users || []).filter(u =>
-    u.created_at < minAgeDate &&   // older than 24 h
-    u.created_at > maxAgeDate      // within 7 days
+    u.created_at < windowStart &&  // older than 24h
+    u.created_at > windowEnd       // within 12 days
   )
 
   if (windowUsers.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0, reason: 'no_users_in_window' })
+    return NextResponse.json({ ok: true, sent_24h: 0, sent_7d: 0, reason: 'no_users_in_window' })
   }
 
   const userIds = windowUsers.map(u => u.id)
 
-  // ── 2. Users who already have a plan (onboarded) ──────────────
+  // ── 2. Users who already completed onboarding (have an active plan) ──
   const { data: plannedData } = await admin
     .from('workout_plans')
     .select('user_id')
@@ -57,82 +66,119 @@ export async function GET(req: Request) {
     .eq('active', true)
   const plannedSet = new Set((plannedData || []).map((r: any) => r.user_id))
 
-  // ── 3. Users who already received this reminder ────────────────
-  const { data: remindedData } = await admin
+  // ── 3. Fetch all existing reminder markers in one query ───────
+  const { data: markerData } = await admin
     .from('chat_messages')
-    .select('user_id')
+    .select('user_id, message_type')
     .in('user_id', userIds)
     .eq('role', 'system')
-    .eq('message_type', REMINDER_TYPE)
-  const remindedSet = new Set((remindedData || []).map((r: any) => r.user_id))
+    .in('message_type', [MARKER_24H, MARKER_7D])
 
-  // ── 4. Target = in window, no plan, not reminded yet ──────────
-  const targets = windowUsers.filter(
-    u => !plannedSet.has(u.id) && !remindedSet.has(u.id)
+  const sent24hSet = new Set(
+    (markerData || []).filter((r: any) => r.message_type === MARKER_24H).map((r: any) => r.user_id)
+  )
+  const sent7dSet = new Set(
+    (markerData || []).filter((r: any) => r.message_type === MARKER_7D).map((r: any) => r.user_id)
   )
 
-  if (targets.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0, reason: 'all_already_reminded_or_onboarded' })
-  }
-
-  // ── 5. Fetch profiles in one batch ────────────────────────────
+  // ── 4. Fetch profiles (name) in one batch ─────────────────────
   const { data: profiles } = await admin
     .from('profiles')
     .select('user_id, name')
-    .in('user_id', targets.map(u => u.id))
+    .in('user_id', userIds)
   const profileMap: Record<string, string> = {}
   for (const p of profiles || []) profileMap[p.user_id] = p.name
 
-  // ── 6. Send reminders ─────────────────────────────────────────
+  // ── 5. Process each user ──────────────────────────────────────
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.synapfit.app'
-  let sent = 0
+  let sent24h = 0
+  let sent7d   = 0
   const errors: string[] = []
 
-  for (const u of targets) {
-    const name  = profileMap[u.id] || u.email?.split('@')[0] || 'Athlete'
-    const email = u.email
-    const daysSince = Math.floor((now.getTime() - new Date(u.created_at).getTime()) / 86400000)
+  for (const u of windowUsers) {
+    // Skip users who completed onboarding
+    if (plannedSet.has(u.id)) continue
+
+    const name       = profileMap[u.id] || u.email?.split('@')[0] || 'Athlete'
+    const email      = u.email
+    const ageMs      = now.getTime() - new Date(u.created_at).getTime()
+    const daysSince  = Math.floor(ageMs / 86400000)
+    const hoursSince = ageMs / 3600000
 
     try {
-      // Ion chat message (visible in their app inbox)
-      await admin.from('chat_messages').insert({
-        user_id:      u.id,
-        role:         'assistant',
-        content:      `Hey ${name} 👋 I've been waiting to build your plan! You signed up ${daysSince} day${daysSince !== 1 ? 's' : ''} ago but I still don't know your goals, schedule, or body metrics. It only takes 3 minutes — answer my questions and I'll build your personalised training and nutrition plan from scratch. Ready? 💪`,
-        message_type: 'text',
-      })
+      // ── Stage 2: 7-day reminder (higher priority) ─────────────
+      if (daysSince >= STAGE2_DAYS && !sent7dSet.has(u.id)) {
+        // In-app Ion message
+        await admin.from('chat_messages').insert({
+          user_id:      u.id,
+          role:         'assistant',
+          content:      `${name}, it's been a week 🗓️\n\nI know life gets busy — but your personalised plan is still waiting for you here. While your free trial has been ticking away, I haven't been able to help yet.\n\nAnswer my questions (takes 3 minutes) and I'll build your complete training and nutrition system from scratch — calibrated to your goals, schedule, and body. Ready to start? 💪`,
+          message_type: 'text',
+        })
 
-      // System marker — prevents duplicate reminders (invisible in chat UI)
-      await admin.from('chat_messages').insert({
-        user_id:      u.id,
-        role:         'system',
-        content:      '',
-        message_type: REMINDER_TYPE,
-        metadata:     { sentAt: now.toISOString(), daysSincSignup: daysSince },
-      })
+        // Invisible system marker — prevents sending this stage again
+        await admin.from('chat_messages').insert({
+          user_id:      u.id,
+          role:         'system',
+          content:      '',
+          message_type: MARKER_7D,
+          metadata:     { sentAt: now.toISOString(), daysSince },
+        })
 
-      // Email
-      if (email) {
-        await sendEmail({
-          to:   email,
-          type: 'onboarding_reminder',
-          data: { name, daysSince, onboardingUrl: `${APP_URL}/onboarding` },
-        }).catch(err => errors.push(`email:${u.id}:${err?.message}`))
+        // Email
+        if (email) {
+          await sendEmail({
+            to:   email,
+            type: 'onboarding_reminder_7d',
+            data: { name, daysSince, onboardingUrl: `${APP_URL}/onboarding` },
+          }).catch(err => errors.push(`email_7d:${u.id}:${err?.message}`))
+        }
+
+        sent7d++
+        continue // one reminder per cron run per user
       }
 
-      sent++
+      // ── Stage 1: 24h reminder ──────────────────────────────────
+      if (hoursSince >= MIN_AGE_H && !sent24hSet.has(u.id)) {
+        // In-app Ion message
+        await admin.from('chat_messages').insert({
+          user_id:      u.id,
+          role:         'assistant',
+          content:      `Hey ${name} 👋 I've been waiting to build your plan!\n\nYou signed up ${daysSince} day${daysSince !== 1 ? 's' : ''} ago but I still don't know your goals, schedule, or body metrics. It only takes 3 minutes — answer my questions and I'll build your personalised training and nutrition plan from scratch.\n\nReady? 💪`,
+          message_type: 'text',
+        })
+
+        // Invisible system marker — prevents sending this stage again
+        await admin.from('chat_messages').insert({
+          user_id:      u.id,
+          role:         'system',
+          content:      '',
+          message_type: MARKER_24H,
+          metadata:     { sentAt: now.toISOString(), daysSince },
+        })
+
+        // Email
+        if (email) {
+          await sendEmail({
+            to:   email,
+            type: 'onboarding_reminder',
+            data: { name, daysSince, onboardingUrl: `${APP_URL}/onboarding` },
+          }).catch(err => errors.push(`email_24h:${u.id}:${err?.message}`))
+        }
+
+        sent24h++
+      }
     } catch (err: any) {
       errors.push(`user:${u.id}:${err?.message}`)
     }
   }
 
   return NextResponse.json({
-    ok:       true,
-    window:   windowUsers.length,
+    ok:        true,
+    window:    windowUsers.length,
     onboarded: plannedSet.size,
-    already_reminded: remindedSet.size,
-    targeted: targets.length,
-    sent,
-    errors: errors.length > 0 ? errors : undefined,
+    sent_24h:  sent24h,
+    sent_7d:   sent7d,
+    errors:    errors.length > 0 ? errors : undefined,
   })
 }

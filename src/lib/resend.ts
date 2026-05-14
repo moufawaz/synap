@@ -25,12 +25,13 @@ export type EmailType =
   | 'payment_failed'
   | 'upgrade_confirmation'
   | 'onboarding_reminder'
+  | 'onboarding_reminder_7d'
 
 export const VALID_EMAIL_TYPES: EmailType[] = [
   'welcome', 'weekly_summary', 'weekly_report', 'plan_renewal_warning', 'new_plan',
   'milestone', 'trial_started', 'trial_ending_day5', 'trial_ending_day6',
   'trial_cancelled', 'subscription_cancelled', 'subscription_renewed',
-  'payment_failed', 'upgrade_confirmation', 'onboarding_reminder',
+  'payment_failed', 'upgrade_confirmation', 'onboarding_reminder', 'onboarding_reminder_7d',
 ]
 
 interface SendEmailOptions {
@@ -154,6 +155,75 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
             "Every athlete I've coached had one thing in common — they started. The plan, the progress, the results all come after that first step. I'm ready to build something specifically for you."
           </p>
           <p style="color:#6D28D9;font-size:12px;font-weight:700;margin:10px 0 0;letter-spacing:0.08em">— ION · YOUR AI COACH</p>
+        </div>
+      `),
+    },
+
+    onboarding_reminder_7d: {
+      subject: `${data.name}, a week has passed — your plan is still unbuilt`,
+      html: layout(`
+        <!-- Hero banner — amber accent to visually distinguish from day-1 email -->
+        <div style="background:linear-gradient(135deg,#0D0D1A 0%,#140E0A 50%,#0A0A0F 100%);border-radius:16px;padding:36px 28px;margin-bottom:28px;border:1px solid rgba(245,158,11,0.2);position:relative;overflow:hidden">
+          <!-- Glow orb -->
+          <div style="position:absolute;top:-30px;right:-30px;width:160px;height:160px;background:radial-gradient(circle,rgba(245,158,11,0.12) 0%,transparent 70%);border-radius:50%"></div>
+          <!-- SYNAP wordmark -->
+          <p style="font-size:11px;font-weight:900;letter-spacing:0.22em;color:#92400E;margin:0 0 20px;text-transform:uppercase">SYNAP · YOUR BODY IS A SYSTEM</p>
+          <!-- Headline -->
+          <h1 style="font-size:28px;font-weight:900;margin:0 0 12px;line-height:1.2;letter-spacing:-0.01em">
+            <span style="color:#FFFFFF">${data.name}, it's been</span><br>
+            <span style="background:linear-gradient(90deg,#F59E0B,#FBBF24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">a full week.</span>
+          </h1>
+          <p style="color:#94A3B8;font-size:15px;line-height:1.6;margin:0">
+            You signed up ${data.daysSince} days ago. We get it — life gets busy. But your plan is still sitting here unbuilt, and your free trial days have been ticking away unused.
+          </p>
+        </div>
+
+        <!-- What you're missing -->
+        <div style="margin-bottom:24px">
+          <p style="font-size:11px;font-weight:800;letter-spacing:0.15em;color:#92400E;margin:0 0 14px;text-transform:uppercase">While you've been away, others are already:</p>
+          <div style="display:grid;gap:8px">
+
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#0E0E14;border-radius:10px;border-left:3px solid #BB5CF6">
+              <span style="font-size:16px;flex-shrink:0">💪</span>
+              <p style="color:#D4D4D8;font-size:13px;margin:0">Completing week-1 of their custom workout programme</p>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#0E0E14;border-radius:10px;border-left:3px solid #10B981">
+              <span style="font-size:16px;flex-shrink:0">🥗</span>
+              <p style="color:#D4D4D8;font-size:13px;margin:0">Eating on a plan — macros tracked, meals planned</p>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#0E0E14;border-radius:10px;border-left:3px solid #F59E0B">
+              <span style="font-size:16px;flex-shrink:0">📉</span>
+              <p style="color:#D4D4D8;font-size:13px;margin:0">Already seeing the scale move in the right direction</p>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Trial urgency block -->
+        <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:18px 20px;margin-bottom:24px">
+          <p style="font-weight:800;font-size:13px;color:#F59E0B;margin:0 0 6px;letter-spacing:0.05em">⏱ YOUR FREE TRIAL IS RUNNING</p>
+          <p style="color:#94A3B8;font-size:13px;margin:0;line-height:1.6">You signed up for 7 days of full access — completely free. Every day you wait is a day of free coaching you're leaving on the table. It takes <strong style="color:white">3 minutes</strong> to unlock everything.</p>
+        </div>
+
+        <!-- CTA -->
+        <div style="text-align:center;margin-top:8px">
+          <a href="${data.onboardingUrl}" style="display:inline-block;padding:16px 48px;background:linear-gradient(135deg,#B45309,#F59E0B);color:white;border-radius:12px;text-decoration:none;font-weight:800;font-size:15px;letter-spacing:0.06em;box-shadow:0 8px 32px rgba(245,158,11,0.28)">
+            COMPLETE MY SETUP →
+          </a>
+          <p style="color:#334155;font-size:12px;margin:14px 0 0">3 minutes · free for 7 days · no credit card needed to start</p>
+        </div>
+
+        <!-- Separator -->
+        <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(245,158,11,0.2),transparent);margin:32px 0"></div>
+
+        <!-- Ion quote -->
+        <div style="padding:0 4px">
+          <p style="color:#475569;font-size:13px;font-style:italic;line-height:1.7;margin:0">
+            "The athletes I've watched succeed didn't have more time — they just made a decision. Three minutes to answer my questions, and I'll take it from there. Your plan, your goals, your body. Let's build it."
+          </p>
+          <p style="color:#92400E;font-size:12px;font-weight:700;margin:10px 0 0;letter-spacing:0.08em">— ION · YOUR AI COACH</p>
         </div>
       `),
     },
