@@ -35,17 +35,31 @@ export async function POST(req: Request) {
     }
 
     const admin = createAdminClient()
-    const { data: languageRow } = await admin
-      .from('users')
-      .select('language')
-      .eq('id', user.id)
-      .maybeSingle()
+    const [languageRow, latestMeasurementRow, measurementHistoryRow] = await Promise.all([
+      admin.from('users').select('language').eq('id', user.id).maybeSingle(),
+      // Most recent measurement — used for LBM-based macro calculation
+      admin.from('measurements')
+        .select('weight_kg, body_fat_pct, date')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      // Last 5 measurements — trend context for the AI
+      admin.from('measurements')
+        .select('date, weight_kg, body_fat_pct, waist_cm')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .limit(5),
+    ])
+
+    const latestMeasurement = latestMeasurementRow.data
+    const measurementHistory = measurementHistoryRow.data || []
 
     const profileForPlan = {
       ...profileData,
-      language: languageRow?.language ?? profileData?.language ?? 'en',
+      language: languageRow.data?.language ?? profileData?.language ?? 'en',
     }
-    const prompt = buildPrompt(profileForPlan)
+    const prompt = buildPrompt(profileForPlan, latestMeasurement, measurementHistory)
 
     const message = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-opus-4-5',
@@ -187,7 +201,7 @@ export async function POST(req: Request) {
       supabase,
       client,
       user.id,
-      { ...profileForPlan, ...profileData },
+      { ...profileForPlan, ...profileData, body_fat_pct: latestMeasurement?.body_fat_pct },
       plan.diet_plan,
       normalizeAiLanguage(profileForPlan.language),
     ).catch(e => console.error('[generate-plan] supplement gen failed:', e))
@@ -295,154 +309,246 @@ function repairTruncatedJSON(s: string): string | null {
   }
 }
 
-/** Pre-calculate evidence-based macro targets from profile data. */
-function calculateMacros(p: any) {
-  const weight  = parseFloat(p.weight_kg)  || 70
-  const height  = parseFloat(p.height_cm)  || 170
-  const age     = parseInt(p.age)          || 25
+/**
+ * Evidence-based macro targets using Lean Body Mass when body composition data is available.
+ * LBM-based protein is more accurate — a 90kg person at 30% BF needs far less protein
+ * than a 90kg person at 10% BF, despite the same total weight.
+ */
+function calculateMacros(p: any, latestMeasurement?: any) {
+  const weight  = parseFloat(latestMeasurement?.weight_kg || p.weight_kg) || 70
+  const height  = parseFloat(p.height_cm) || 170
+  const age     = parseInt(p.age)         || 25
   const female  = p.gender === 'female'
+  const days    = parseInt(p.training_days) || 3
+  const duration = parseInt(p.session_duration) || 60
+  const speed   = p.goal_speed || 'moderate'
 
-  // Mifflin-St Jeor BMR
+  // ── Body composition ─────────────────────────────────────────────
+  // Use measured body fat % if available; otherwise use population averages
+  const measuredBf  = latestMeasurement?.body_fat_pct ? parseFloat(latestMeasurement.body_fat_pct) : null
+  const defaultBf   = female ? 28 : 20
+  const bodyFatPct  = measuredBf ?? defaultBf
+  const leanMass    = weight * (1 - bodyFatPct / 100)
+  const usingRealBf = !!measuredBf
+
+  // ── TDEE (Mifflin-St Jeor + training-specific burn) ───────────────
   const bmr = female
     ? 10 * weight + 6.25 * height - 5 * age - 161
     : 10 * weight + 6.25 * height - 5 * age + 5
 
-  // Activity multiplier (training days)
-  const days = parseInt(p.training_days) || 3
-  const mult = days <= 2 ? 1.375 : days <= 3 ? 1.55 : days <= 5 ? 1.65 : 1.725
-  const tdee = Math.round(bmr * mult)
+  // NEAT multiplier (daily life, work type)
+  const workType   = (p.work_schedule || 'work').toLowerCase()
+  const neatMult   = workType.includes('shift') ? 1.5 : workType === 'flexible' ? 1.45 : 1.4
+  // Add weekly training kcal amortised per day (~5 kcal/min moderate training, 7 kcal/min intense)
+  const weeklyTrainKcal = days * duration * (days >= 5 ? 6 : 5)
+  const tdee = Math.round(bmr * neatMult + weeklyTrainKcal / 7)
 
-  // Calorie adjustment by goal + speed
-  const speed = p.goal_speed || 'moderate'
-  const deficit = speed === 'aggressive' ? 600 : speed === 'slow' ? 250 : 400
-  const surplus = speed === 'aggressive' ? 400 : speed === 'slow' ? 150 : 250
+  // ── Calorie target ────────────────────────────────────────────────
+  // Deficit/surplus scaled to bodyweight — scientifically more appropriate than flat numbers
+  const weeklyRateKg = speed === 'aggressive' ? weight * 0.01 : speed === 'slow' ? weight * 0.005 : weight * 0.007
+  const deficit   = Math.min(700, Math.round(weeklyRateKg * 7700 / 7))  // 7700 kcal ≈ 1 kg fat
+  const surplus   = speed === 'aggressive' ? 350 : speed === 'slow' ? 150 : 250
 
+  const minCalories = female ? 1300 : 1500
   let calories: number
   switch (p.goal) {
-    case 'lose_fat':      calories = Math.max(female ? 1300 : 1500, tdee - deficit); break
+    case 'lose_fat':      calories = Math.max(minCalories, tdee - deficit); break
     case 'build_muscle':  calories = tdee + surplus; break
-    case 'recomposition': calories = tdee; break
-    default:              calories = Math.max(1500, tdee - 150) // slight deficit for health/fitness
+    case 'recomposition': calories = tdee;  break
+    default:              calories = Math.max(minCalories, tdee - 100)
   }
 
-  // Protein: 1.8–2.0 g/kg for body composition goals; 1.6 g/kg for general health
-  const protGKg = ['lose_fat', 'build_muscle', 'recomposition'].includes(p.goal) ? 1.9 : 1.6
-  const protein = Math.round(weight * protGKg)
+  // ── Protein (LBM-based) ───────────────────────────────────────────
+  // Cutting: higher (muscle preservation) · Building: moderate · Maintenance: lower
+  const protGKgLBM = p.goal === 'lose_fat' ? 2.5
+    : p.goal === 'recomposition' ? 2.3
+    : p.goal === 'build_muscle' ? 2.0
+    : 1.8
+  const protein = Math.round(leanMass * protGKgLBM)
 
-  // Fat: ~0.85 g/kg (minimum 40 g)
-  const fat = Math.max(40, Math.round(weight * 0.85))
+  // ── Fat (25-30% of calories for hormonal health) ──────────────────
+  const fatFromPct   = Math.round(calories * 0.27 / 9)
+  const fatFromLBM   = Math.round(leanMass * 0.8)
+  const fat          = Math.max(fatFromPct, fatFromLBM, 40)
 
-  // Carbs: remaining calories
+  // ── Carbs (fill remaining) ────────────────────────────────────────
   const carbs = Math.max(50, Math.round((calories - protein * 4 - fat * 9) / 4))
 
-  // Water: 35 ml/kg base + 500 ml per training day (up to +1.5 L)
-  const water = Math.round((weight * 35 + Math.min(days, 3) * 500) / 100) / 10
+  // ── Water ─────────────────────────────────────────────────────────
+  const water = Math.round((weight * 35 + Math.min(days, 5) * 400) / 100) / 10
 
-  return { calories, protein, fat, carbs, water, tdee }
+  return {
+    calories, protein, fat, carbs, water, tdee,
+    leanMass: Math.round(leanMass),
+    bodyFatPct: Math.round(bodyFatPct),
+    usingRealBf,
+    weeklyWeightChangeKg: Math.round(weeklyRateKg * 100) / 100,
+  }
 }
 
-function buildPrompt(p: any): string {
+function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[]): string {
   const language = normalizeAiLanguage(p.language)
-  const macros = calculateMacros(p)
+  const m = calculateMacros(p, latestMeasurement)
+  const ar = language === 'ar'
+
   const goalLabels: Record<string, string> = {
-    lose_fat: 'Lose Body Fat',
-    build_muscle: 'Build Muscle',
-    recomposition: 'Body Recomposition (lose fat + gain muscle)',
-    improve_fitness: 'Improve General Fitness',
-    be_healthier: 'Improve Overall Health',
+    lose_fat:       'Lose Body Fat',
+    build_muscle:   'Build Muscle & Strength',
+    recomposition:  'Body Recomposition (simultaneous fat loss + muscle gain)',
+    improve_fitness:'Improve General Fitness & Endurance',
+    be_healthier:   'Improve Overall Health & Wellbeing',
   }
 
-  return `You are Ion, a world-class AI personal trainer and nutritionist. Create a complete, personalized 12-week fitness and nutrition plan for this specific person.
+  // Build a measurement history block if we have data
+  const measureBlock = (measurementHistory && measurementHistory.length > 0)
+    ? measurementHistory.map(m =>
+        `  ${m.date}: ${m.weight_kg}kg${m.body_fat_pct ? ` / ${m.body_fat_pct}% BF` : ''}${m.waist_cm ? ` / waist ${m.waist_cm}cm` : ''}`
+      ).join('\n')
+    : '  No measurement history — this is the user\'s first plan.'
+
+  // Dietary restrictions as a hard list
+  const dietPrefs = Array.isArray(p.dietary_preference)
+    ? p.dietary_preference : (p.dietary_preference || '').split(',').filter(Boolean)
+  const supplements = Array.isArray(p.supplements)
+    ? p.supplements : (p.supplements || '').split(',').filter(Boolean)
+
+  return `You are Ion, a world-class AI personal trainer and clinical nutritionist. Build a complete, hyper-personalised 12-week fitness and nutrition plan for this specific client.
 
 ${aiLanguageInstruction(language, 'all user-facing JSON string values including plan names, meal names, recipes, exercise tips, coaching notes, summaries, and ion_message')}
 
-PERSON PROFILE:
-- Name: ${p.name}
-- Age: ${p.age}
-- Gender: ${p.gender}
-- Weight: ${p.weight_kg} kg
-- Height: ${p.height_cm} cm
-- Goal: ${goalLabels[p.goal] || p.goal}
-- Goal Speed: ${p.goal_speed}
-- Target: ${p.goal_target || 'Not specified'}
-- Deadline: ${p.goal_date || 'No specific date'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPLETE CLIENT PROFILE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Name: ${p.name} | Age: ${p.age} | Gender: ${p.gender}
+Weight: ${latestMeasurement?.weight_kg || p.weight_kg} kg | Height: ${p.height_cm} cm
+Goal: ${goalLabels[p.goal] || p.goal}
+Target: ${p.goal_target || 'Not specified'} | Deadline: ${p.goal_date || 'No deadline set'}
+Goal speed: ${p.goal_speed || 'moderate'}
 
-LIFESTYLE:
-- Schedule: ${p.work_schedule}
-- Hours: ${p.work_hours || 'Standard'}
-- Wake: ${p.wake_time} | Sleep: ${p.sleep_time}
-- Lunch: ${p.lunch_break || 'Flexible'}
-- Stress: ${p.stress_level} | Sleep quality: ${p.sleep_quality}
+BODY COMPOSITION:
+  Lean Body Mass: ${m.leanMass} kg
+  Estimated body fat: ${m.bodyFatPct}% (${m.usingRealBf ? 'measured' : 'estimated — no scan yet'})
+
+MEASUREMENT HISTORY:
+${measureBlock}
+
+LIFESTYLE & SCHEDULE:
+  Wake: ${p.wake_time || '7:00'} | Sleep: ${p.sleep_time || '23:00'}
+  Work: ${p.work_schedule || 'standard'} | Stress: ${p.stress_level || 'moderate'}
+  Sleep quality: ${p.sleep_quality || 'average'} | Lunch break: ${p.lunch_break || 'flexible'}
 
 TRAINING:
-- Experience: ${p.currently_training === 'already' ? 'Currently training' : 'Starting fresh'}
-- Current routine: ${p.current_training_desc || 'None'}
-- Training location: ${p.gym_access || 'gym'}
-- Equipment (if home): ${p.equipment || 'N/A'}
-- Days/week: ${p.training_days}
-- Session duration: ${p.session_duration} min
-- Best time to train: ${p.training_time}
-- Preferred style: ${p.training_style || 'mix'}
-- Exercises to avoid: ${p.exercises_hated || 'None'}
+  Location: ${p.gym_access ? 'Gym' : 'Home'} | Equipment: ${Array.isArray(p.equipment) ? p.equipment.join(', ') : p.equipment || (p.gym_access ? 'Full gym' : 'Bodyweight only')}
+  Days/week: ${p.training_days} | Session: ${p.session_duration} min | Preferred time: ${p.training_time || 'morning'}
+  Experience: ${p.currently_training === 'already' ? 'Currently training' : 'Beginner / returning'} | Style: ${p.training_style || 'mix'}
+  Exercises to NEVER program: ${p.exercises_hated || 'None'}
+  Injuries: ${p.injuries || 'None'} | Medical: ${p.medical_conditions || 'None'}
+  Strength levels: ${p.strength_levels || 'Not provided'}
 
-NUTRITION:
-- Foods loved: ${p.foods_loved}
-- Foods hated: ${p.foods_hated || 'None'}
-- Dietary restrictions: ${p.dietary_preference || 'None'}
-- Allergies: ${p.allergies || 'None'}
-- Meals per day: ${p.meals_per_day}
-- Cooking ability: ${p.cooking_ability}
-- Food budget: ${p.food_budget}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NUTRITION PROFILE — READ CAREFULLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Foods LOVED (MUST appear in meals): ${p.foods_loved || 'Not specified — use common whole foods'}
+Foods HATED (NEVER include): ${p.foods_hated || 'None'}
+Allergies (NEVER include — safety critical): ${p.allergies || 'None'}
+Dietary restrictions: ${dietPrefs.join(', ') || 'None'}
+Meals per day: ${p.meals_per_day || 3}
+Cooking ability: ${p.cooking_ability || 'moderate'} | Budget: ${p.food_budget || 'moderate'}
+Current supplements: ${supplements.join(', ') || 'None'}
 
-HEALTH:
-- Injuries: ${p.injuries || 'None'}
-- Medical conditions: ${p.medical_conditions || 'None'}
-- Current supplements: ${p.supplements || 'None'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CALCULATED MACRO TARGETS
+(derived from LBM + TDEE formula below — adjust ±5% if strongly justified)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TDEE: ${m.tdee} kcal/day
+Goal adjustment: ${p.goal === 'lose_fat' ? `–${m.tdee - m.calories} kcal deficit (${m.weeklyWeightChangeKg} kg/week expected loss)` : p.goal === 'build_muscle' ? `+${m.calories - m.tdee} kcal surplus (lean gain)` : 'maintenance'}
+→ daily_calories: ${m.calories} kcal
 
-⚠️ MACRO TARGETS — USE THESE EXACT VALUES IN THE DIET PLAN (do not recalculate):
-- TDEE estimated: ${macros.tdee} kcal/day
-- daily_calories: ${macros.calories} kcal  (${p.goal === 'lose_fat' ? `${macros.tdee - macros.calories} kcal deficit` : p.goal === 'build_muscle' ? `${macros.calories - macros.tdee} kcal surplus` : 'maintenance'})
-- protein_g: ${macros.protein} g  (${(macros.protein / (parseFloat(p.weight_kg) || 70)).toFixed(1)} g/kg bodyweight — do NOT exceed this)
-- fat_g: ${macros.fat} g  (~0.85 g/kg)
-- carbs_g: ${macros.carbs} g  (remaining calories)
-- water_l: ${macros.water} L
-The meal totals must sum to exactly the daily_calories target (±30 kcal tolerance).
-Never use more than 2.2 g protein per kg bodyweight regardless of goal.
+Protein: ${m.protein} g  (${(m.protein / m.leanMass).toFixed(1)} g/kg LBM — LBM-based, not total weight)
+Fat:     ${m.fat} g  (27% of calories for hormonal health)
+Carbs:   ${m.carbs} g  (fills remaining energy after protein + fat)
+Water:   ${m.water} L/day
 
-⚠️ MEAL PERSONALISATION RULES:
-- MUST include foods from "Foods loved" in the meal plan
-- MUST NOT include any food from "Foods hated" or "Allergies"
-- Respect all dietary restrictions
-- Meal times must fit the user's wake time (${p.wake_time}), sleep time (${p.sleep_time}), and work schedule (${p.work_schedule})
+METHODOLOGY:
+- BMR = Mifflin-St Jeor using ${latestMeasurement?.weight_kg || p.weight_kg} kg
+- TDEE = BMR × ${p.work_schedule?.includes('shift') ? '1.5' : '1.4'} NEAT + ${Math.round(parseInt(p.training_days || '3') * parseInt(p.session_duration || '60') * 5 / 7)} kcal/day training burn
+- Protein set at ${(m.protein / m.leanMass).toFixed(1)} g/kg LBM (lean body mass = ${m.leanMass} kg)
+- Protein from TOTAL weight = ${(m.protein / (parseFloat(latestMeasurement?.weight_kg || p.weight_kg) || 70)).toFixed(1)} g/kg — verify this is reasonable (2.0 g/kg total weight is the MAX)
+- Fat floored at 27% of calories for hormone production
+- Meal totals MUST sum to ±40 kcal of daily_calories target
 
-IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text before or after. Use this exact structure:
-IMPORTANT FOR APP COMPATIBILITY:
-- Keep every JSON key exactly as shown.
-- For workout day_name values, ALWAYS use exact English weekday names: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday.
-- Translate user-facing strings for Arabic users, but do not translate day_name weekday values because the app uses them for scheduling.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DIET PLAN BUILDING RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. PERSONALISATION — this is not a generic plan:
+   - Every meal must contain at least one food from the "Foods LOVED" list
+   - Zero exceptions: never include foods from "Foods HATED" or "Allergies"
+   - Recipes must match cooking ability (${p.cooking_ability || 'moderate'})
+   - Ingredient costs must align with budget (${p.food_budget || 'moderate'})
+
+2. MEAL TIMING — built around the user's real day:
+   - First meal ≈ 1 hour after wake (${p.wake_time || '7:00'})
+   - Last meal ≥ 1.5 hours before sleep (${p.sleep_time || '23:00'})
+   - Pre-workout meal: ~60–90 min before training, rich in carbs + moderate protein, low fat
+   - Post-workout meal: within 45 min, high protein + carbs, low fat
+   - Meals spaced ~${Math.max(2, Math.round(14 / (parseInt(p.meals_per_day || '3'))))} hours apart
+
+3. MACRO DISTRIBUTION — NOT uniform:
+   - Higher carbs before and after training; lower carbs in evening
+   - Fat distributed away from workout windows
+   - Each meal should hit its micro-targets for this specific day's energy needs
+
+4. MICRONUTRIENTS — whole food first, not supplements:
+   - Ensure variety of vegetables across meals (minimum 2 different veg per day)
+   - Include iron sources if female or if intense training
+   - Ensure omega-3 sources (oily fish, walnuts, chia) unless allergic
+   - If vegan/vegetarian: explicitly include B12, zinc, and calcium sources
+
+5. RECIPE QUALITY:
+   - Every meal must have a recipe with realistic steps and exact gram amounts
+   - Ingredients must be specific: "150g boneless chicken breast" not "chicken"
+   - Steps must be practical for the user's cooking level
+   - Include meal prep tips for batch cooking
+
+6. GOAL-SPECIFIC FOCUS:
+${p.goal === 'lose_fat' ? `   - Calorie accuracy is critical — meal totals MUST match targets
+   - Prioritise high-volume low-calorie foods for satiety (vegetables, lean protein)
+   - Include a note on flexible eating / calorie cycling if appropriate
+   - Flag that scale fluctuations ±1kg are water and not fat — reassure the user` : ''}
+${p.goal === 'build_muscle' ? `   - Sufficient carbs to fuel training and recovery
+   - Post-workout meal is the highest priority meal of the day
+   - Include calorie-dense options for the surplus (nuts, oats, whole milk, avocado)
+   - Protein spread across ALL meals (minimum 25g per meal)` : ''}
+${p.goal === 'recomposition' ? `   - Calorie cycling: slightly higher on training days, maintenance on rest
+   - Protein at every meal is non-negotiable for simultaneous fat loss + muscle retention
+   - Carb timing is critical — carbs mostly around training` : ''}
+
+IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text.
+JSON key names must stay exactly as shown. For workout day_name, ALWAYS use English weekdays (Sunday–Saturday) even for Arabic users — only translate user-facing display strings.
 
 {
-  "summary": "2-3 sentence overview of the approach",
+  "summary": "3-sentence personalised overview: what the approach is, why it fits this person, what result to expect in 12 weeks",
   "workout_plan": {
     "name": "Plan name",
-    "schedule": "X days/week",
+    "schedule": "${p.training_days} days/week",
     "split_type": "push_pull_legs / upper_lower / full_body / etc",
     "weeks": 12,
-    "notes": "Key training principles for this person",
+    "notes": "Key training principles personalised for this person",
+    "progressive_overload": "How to progress each week",
     "rest_days": ["list", "of", "rest", "days"],
     "days": [
       {
         "day_name": "Monday",
         "muscle_focus": "Push / Upper / Full Body / etc",
         "warmup_min": 10,
-        "duration_min": 60,
+        "duration_min": ${p.session_duration || 60},
         "exercises": [
           {
             "name": "Exercise Name",
             "sets": 4,
             "reps": "8-12",
             "rest_sec": 90,
-            "weight_guidance": "Start moderate, RPE 7-8",
+            "weight_guidance": "Specific starting weight or RPE guidance based on strength_levels",
             "form_tip": "Key form cue in one sentence",
             "muscle_group": "Primary muscle"
           }
@@ -451,35 +557,36 @@ IMPORTANT FOR APP COMPATIBILITY:
     ]
   },
   "diet_plan": {
-    "daily_calories": ${macros.calories},
-    "protein_g": ${macros.protein},
-    "carbs_g": ${macros.carbs},
-    "fat_g": ${macros.fat},
-    "water_l": ${macros.water},
-    "approach": "e.g. Moderate caloric deficit of 400 kcal to promote fat loss",
-    "pre_workout": "Suggested pre-workout meal timing and content",
-    "post_workout": "Suggested post-workout meal timing and content",
+    "daily_calories": ${m.calories},
+    "protein_g": ${m.protein},
+    "carbs_g": ${m.carbs},
+    "fat_g": ${m.fat},
+    "water_l": ${m.water},
+    "approach": "Specific caloric strategy for this goal (e.g. 400 kcal deficit via high-protein, food-variety approach)",
+    "calorie_methodology": "Brief explanation of how the ${m.calories} kcal target was derived for this user",
+    "pre_workout": "Exact meal timing and food composition for pre-workout nutrition",
+    "post_workout": "Exact meal timing and food composition for post-workout recovery",
     "meals": [
       {
-        "name": "Breakfast",
-        "time": "7:30 AM",
+        "name": "Meal name matching the user's preference",
+        "time": "Time matching wake/sleep/workout schedule",
         "calories": 600,
         "protein_g": 40,
         "carbs_g": 70,
         "fat_g": 15,
-        "description": "Short meal description",
+        "description": "Why this meal works for this specific person at this time",
         "recipe": {
-          "title": "Simple recipe name",
+          "title": "Recipe name",
           "prep_time_min": 5,
           "cook_time_min": 15,
-          "ingredients": ["Ingredient with exact amount from foods list"],
-          "steps": ["Short practical cooking step 1", "Short practical cooking step 2", "Short practical cooking step 3"],
-          "tips": "One helpful cooking or meal-prep tip for this user"
+          "ingredients": ["150g boneless chicken breast", "80g basmati rice (dry)", "100g broccoli"],
+          "steps": ["Practical step 1", "Practical step 2", "Practical step 3"],
+          "tips": "Meal-prep or substitution tip for this user"
         },
         "foods": [
           {
-            "item": "Specific food name",
-            "amount": "80g / 1 cup / 2 slices",
+            "item": "Specific food with brand/type if relevant",
+            "amount": "Exact weight or portion",
             "calories": 300,
             "protein_g": 10,
             "carbs_g": 55,
@@ -489,7 +596,7 @@ IMPORTANT FOR APP COMPATIBILITY:
       }
     ]
   },
-  "ion_message": "A warm, personal, motivating message from Ion to this specific person. Reference their name, their specific goal, and something personal from their profile. 3-4 sentences. Sound like a real coach."
+  "ion_message": "Warm, direct, personal 3-4 sentence message from Ion. Reference the client's name, their specific goal target, one thing from their food preferences, and what to expect. Sound like a real elite coach."
 }`
 }
 
