@@ -640,10 +640,14 @@ CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
    - Each session must fit within ${p.session_duration || 60} min total
 
 2. EXERCISE SELECTION — NON-NEGOTIABLE:
-   - Equipment available: ${Array.isArray(p.equipment) ? p.equipment.join(', ') : p.equipment || (p.gym_access ? 'Full gym' : 'Bodyweight only')} — ONLY use what is available
-   - Injuries/limitations: ${p.injuries || 'None'} — design AROUND these, never THROUGH them. Provide safe alternatives
-   - Exercises NEVER to include: ${p.exercises_hated || 'None'}
-   - All exercise names must be specific and searchable (e.g. "Barbell Back Squat" not just "Squats")
+   Available equipment: ${Array.isArray(p.equipment) ? p.equipment.join(' | ') : p.equipment || (p.gym_access ? 'Full gym' : 'Bodyweight only')}
+   NEVER use: ${p.exercises_hated || 'None'} | Design around injuries: ${p.injuries || 'None'}
+
+   For EVERY exercise, pick the BEST variant (barbell, dumbbell, machine, or cable) based on what produces the best outcome for this person's goal and experience — not just the most common option:
+   - Compound movements (squat, hinge, press, row): use BARBELL or DUMBBELL variants — greater muscle activation and hormonal stimulus
+   - Isolation and accessory work: MACHINES and CABLES are often SUPERIOR — they provide constant tension, safer joint loading, and better mind-muscle connection (e.g. Cable Fly > Dumbbell Fly for chest isolation; Leg Extension Machine for quad; Seated Cable Row for lat engagement)
+   - When both options are equally effective, prefer machines for safety and load consistency
+   - ALWAYS write the SPECIFIC variant name: "Lat Pulldown Machine", "Seated Leg Curl Machine", "Cable Tricep Pushdown (Rope)", "Chest Press Machine", "Leg Press Machine", "Seated Cable Row" — never vague names like "leg press" or "row"
    - Balance push/pull volume — equal sets of horizontal push + horizontal pull per week
    - Balance left/right — if unilateral exercises are used, both sides must be trained equally
 
@@ -670,9 +674,10 @@ CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
 
 7. GOAL-SPECIFIC WORKOUT FOCUS:
 ${p.goal === 'lose_fat' ? `   - Prioritise compound movements for metabolic effect — no isolation-only days
-   - Include at least 1 metabolic finisher per session (e.g., 10 min circuit at end) if duration allows
-   - Higher rep ranges build more lactate and burn more calories — lean into the upper rep range
-   - Cardio is separate from resistance training unless HIIT is the training_style` : ''}
+   - Include a 5-min metabolic finisher at the END of each session (e.g., 3 rounds: 15 goblet squats + 15 cable rows + 12 dumbbell thrusters) — this maximises calorie burn without adding session length
+   - Higher rep ranges (10–15) build more lactate and burn more total calories — lean into the upper end of the rep range
+   - Rest 60s between sets to keep heart rate elevated; only extend rest if form breaks down
+   - Cardio is separate from resistance training unless HIIT is the stated training_style` : ''}
 ${p.goal === 'build_muscle' ? `   - Hypertrophy rep ranges (6–12) with strict form — ego lifting defeats the purpose
    - Mind-muscle connection cues in every form_tip
    - Compound lifts first, heavy and controlled; accessories with controlled eccentric
