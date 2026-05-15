@@ -296,6 +296,12 @@ type PlanEditIntent = 'workout' | 'diet' | 'rest_today'
 
 // ── Detect if user is confirming a previous proposal ─────────────
 function detectConfirmation(message: string): boolean {
+  const text = message.trim().toLowerCase()
+  if (!text) return false
+
+  const askingForExplanation = /\?|^(how|what|why|where|when|can you explain|explain|tell me|show me)\b|\b(how to|how do i|how can i|what does|what is|don'?t understand|do not understand|not understand|confused|explain|help me understand)\b|ÙƒÙŠÙ|Ù…Ø§Ø°Ø§|Ù„ÙŠØ´|Ù„Ù…Ø§Ø°Ø§|Ø§Ø´Ø±Ø­|Ù…Ø´ ÙØ§Ù‡Ù…|Ù„Ø§ Ø£ÙÙ‡Ù…|Ù…Ø§ ÙÙ‡Ù…Øª/.test(text)
+  const rejectingChange = /\b(no|nope|don't|do not|not now|stop|cancel|return|revert|undo|don't change|do not change)\b|Ù„Ø§|Ø§Ù„Øº|Ø§Ù„ØºÙŠ|ØªØ±Ø§Ø¬Ø¹|Ø§Ø±Ø¬Ø¹/.test(text)
+  if (askingForExplanation || rejectingChange) return false
   return /\b(yes|yeah|sure|ok|okay|do it|apply|apply it|go ahead|confirm|confirmed|that's fine|that's good|perfect|sounds good|looks good|sounds great|do that|make it|change it|update it|save it|use it|let's do it|let's go)\b|^(yes|yeah|sure|ok|okay|yep|yup|نعم|أجل|موافق|طبق|حسناً|تمام|اعمله|صح|جيد|بالتأكيد|افعل|نعم افعله|طبق التغيير)/i.test(message.trim())
 }
 
