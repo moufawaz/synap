@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       training_experience: profileData.currently_training === 'already' ? 'intermediate' : 'beginner',
       ion_gender: profileData.ion_gender || 'male',
       goal_speed: profileData.goal_speed || null,
+      ...(profileData.inbody_url ? { inbody_url: profileData.inbody_url } : {}),
     }
 
     const { error: profileError } = await supabase

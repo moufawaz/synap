@@ -357,8 +357,8 @@ export default function OnboardingPage() {
       const { data: urlData } = supabase.storage.from('inbody-scans').getPublicUrl(path)
       const inbody_url = urlData.publicUrl
 
-      // Save to profile immediately
-      await supabase.from('profiles').update({ inbody_url }).eq('user_id', user.id)
+      // Save to profile — upsert so it works even if profile isn't created yet
+      await supabase.from('profiles').upsert({ user_id: user.id, inbody_url }, { onConflict: 'user_id' })
 
       addMessage({ role: 'user', content: isRTL ? '✓ تم رفع تقرير InBody' : '✓ InBody scan uploaded' })
       advance({ inbody_url })
