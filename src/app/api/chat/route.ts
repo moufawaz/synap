@@ -87,8 +87,8 @@ export async function POST(req: Request) {
     const [profileRes, userLangRes, workoutRes, dietRes, historyRes, subRes, measureRes, workoutLogRes, mealLogRes, pendingProposalRes, planChangesRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
-      supabase.from('workout_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
-      supabase.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('workout_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('chat_messages').select('role, content').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
       getUserSubscription(user.id),
       // Latest 5 measurements — enough to compute a meaningful trend

@@ -36,8 +36,8 @@ export default function PlanPage() {
     if (!user) return
 
     const [dietRes, workoutRes, profileRes, tierRes] = await Promise.all([
-      supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
-      supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),
     ])

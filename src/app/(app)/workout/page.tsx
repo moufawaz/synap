@@ -38,7 +38,7 @@ export default function WorkoutPage() {
     if (!user) return
 
     const [planRes, profileRes, logsRes] = await Promise.all([
-      supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       supabase.from('workout_log').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(10),
     ])

@@ -103,7 +103,7 @@ export default function WorkoutTodayPage() {
     if (!user) { setLoading(false); return }
 
     const [planRes, profileRes, logRes] = await Promise.all([
-      supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('workout_plans').select('plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       fetch('/api/log-workout').then(r => r.json()).catch(() => ({ logs: [] })),
     ])
