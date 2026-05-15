@@ -734,6 +734,35 @@ Activity level: ${profile.activity_level || 'Not specified'}
     ? workoutLogs.map(l => `${l.date}${l.day_name ? ` (${l.day_name})` : ''}: ${l.completion_pct ?? '?'}% complete${l.duration_min ? `, ${l.duration_min} min` : ''}`).join('\n')
     : 'No recent workout logs.'
 
+  // ── Workout compliance analysis ──────────────────────────────────────────
+  let workoutComplianceBlock = 'Not enough workout log data to assess compliance.'
+  if (workoutLogs.length > 0) {
+    const logsWithPct = workoutLogs.filter(l => l.completion_pct != null)
+    const avgCompletion = logsWithPct.length > 0
+      ? Math.round(logsWithPct.reduce((sum, l) => sum + (l.completion_pct || 0), 0) / logsWithPct.length)
+      : null
+    const fullySessions = workoutLogs.filter(l => (l.completion_pct || 0) >= 80).length
+    const skippedDays = workoutLogs.filter(l => (l.completion_pct || 0) < 40 && l.day_name).map(l => l.day_name)
+    // Weekly frequency estimate (group dates into ~7-day windows)
+    const uniqueDates = [...new Set(workoutLogs.map(l => l.date))].sort()
+    let weeksSpanned = 1
+    if (uniqueDates.length >= 2) {
+      const span = (new Date(uniqueDates[uniqueDates.length - 1]).getTime() - new Date(uniqueDates[0]).getTime()) / (1000 * 60 * 60 * 24)
+      weeksSpanned = Math.max(1, Math.round(span / 7))
+    }
+    const avgSessionsPerWeek = (workoutLogs.length / weeksSpanned).toFixed(1)
+    const plannedDays = profile?.training_days || profile?.training_days_per_week || '?'
+    const complianceLabel = avgCompletion == null ? 'unknown'
+      : avgCompletion >= 90 ? 'EXCELLENT'
+      : avgCompletion >= 70 ? 'GOOD'
+      : avgCompletion >= 50 ? 'NEEDS IMPROVEMENT'
+      : 'POOR'
+    workoutComplianceBlock = `Last ${workoutLogs.length} session(s) logged:
+  Avg completion: ${avgCompletion != null ? `${avgCompletion}% (${complianceLabel})` : 'N/A'}
+  Fully completed (≥80%): ${fullySessions}/${workoutLogs.length}
+  Frequency: ~${avgSessionsPerWeek} sessions/week vs ${plannedDays} planned${skippedDays.length > 0 ? `\n  Most abandoned: ${[...new Set(skippedDays)].join(', ')}` : ''}`
+  }
+
   const mealLogBlock = mealLogs.length > 0
     ? mealLogs.map(l => `${l.date} ${l.meal_time || ''}: ${l.description || 'logged'}${l.calories_estimated ? ` (~${l.calories_estimated} kcal` : ''}${l.protein_g ? `, ${l.protein_g}g protein` : ''}${l.calories_estimated ? ')' : ''}`).join('\n')
     : 'No recent meal logs.'
@@ -832,6 +861,9 @@ ${complianceBlock}
 === RECENT PLAN CHANGES (via chat) ===
 ${planChangesBlock}
 
+=== WORKOUT COMPLIANCE ANALYSIS ===
+${workoutComplianceBlock}
+
 === RECENT WORKOUT LOGS (last 7) ===
 ${workoutLogBlock}
 
@@ -861,6 +893,9 @@ ${workoutBlock}
 14. Goal timeline rule: If CLIENT TIER is ELITE, you may give a detailed month-by-month projection toward their goal based on current rate of change. For STARTER or PRO clients, give general progress encouragement only — no specific timeline projections.
 15. Diet change tracking rule: When a diet change was made recently (see RECENT PLAN CHANGES), monitor whether it is working. Specifically: if the WEIGHT TREND ANALYSIS shows the client is slower than expected AFTER the change, flag it proactively — e.g. "Your calories were adjusted 2 weeks ago but you're still losing slower than target — let's check your actual calorie intake." If the change appears to be working, affirm it with data.
 16. Calorie compliance rule: If CALORIE & PROTEIN COMPLIANCE shows the client is consistently UNDER or OVER their targets, proactively mention it with a concrete suggestion. Under by > 200 kcal → risk of muscle loss, suggest a specific food addition. Over by > 200 kcal → identify the likely source from meal logs, suggest a specific adjustment. Protein under 70% of target → prioritise fixing this above all else.
-17. Change quality rule: When the client requests a diet change, evaluate whether it is beneficial for their goal BEFORE proposing it. If a change would clearly hurt their progress (e.g., removing their main protein source, cutting to < 1200 kcal, eliminating carbs pre-workout), explain why it is suboptimal and propose a better alternative that still respects their preference. Always coach, never just comply blindly.`
+17. Diet change quality rule: When the client requests a diet change, evaluate whether it is beneficial for their goal BEFORE proposing it. If a change would clearly hurt their progress (e.g., removing their main protein source, cutting to < 1200 kcal, eliminating carbs pre-workout), explain why it is suboptimal and propose a better alternative that still respects their preference. Always coach, never just comply blindly.
+18. Workout compliance rule: Use WORKOUT COMPLIANCE ANALYSIS proactively. If avg completion < 70% → ask what is causing sessions to be cut short before making any program changes (the problem may be time, fatigue, or motivation, not the exercises). If frequency is consistently below planned days → acknowledge it, dig into why, and offer to reschedule or simplify the program to match their real availability. Never silently accept low compliance.
+19. Workout change quality rule: When the client requests a workout change, evaluate it against their goal and recovery capacity. Red flags to catch: removing all compound movements, reducing to < 2 days/week without a reason, adding volume when compliance is already poor, or training a muscle group that is injured. In these cases, explain the risk and propose a smarter alternative. If they want to swap an exercise, always suggest a movement that targets the same muscle with the same equipment they have.
+20. Strength progress rule: If RECENT WORKOUT LOGS show duration consistently dropping (e.g., logging 30 min when 60 min is planned), or if the same exercises appear repeatedly without progression notes, flag it. A coach tracks strength progress — proactively ask if the client has been increasing weight/reps on their main lifts. If strength is stalling, suggest a deload or form focus week before increasing load.`
 }
 

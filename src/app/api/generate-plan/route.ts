@@ -310,6 +310,99 @@ function repairTruncatedJSON(s: string): string | null {
 }
 
 /**
+ * Evidence-based workout parameters — volume, intensity, split, and progression
+ * tailored to the client's experience, goal, recovery capacity, and available time.
+ */
+function calculateWorkoutParams(p: any) {
+  const days      = parseInt(p.training_days) || 3
+  const duration  = parseInt(p.session_duration) || 60
+  const rawExp    = (p.training_experience || '').toLowerCase()
+  const goal      = p.goal || 'be_healthier'
+  const stress    = (p.stress_level || 'moderate').toLowerCase()
+  const sleep     = (p.sleep_quality || 'average').toLowerCase()
+
+  // ── Experience tier ───────────────────────────────────────────────
+  const expTier = rawExp.includes('adv') ? 'advanced'
+    : rawExp.includes('inter') || rawExp.includes('med') ? 'intermediate'
+    : 'beginner'
+
+  // ── Weekly sets per muscle group ──────────────────────────────────
+  const setsPerMuscle = expTier === 'advanced'   ? { min: 16, max: 22 }
+    : expTier === 'intermediate'                  ? { min: 12, max: 16 }
+    : /* beginner */                                { min: 10, max: 12 }
+
+  // ── Rep ranges by goal ────────────────────────────────────────────
+  type RepZone = { compounds: string; accessories: string }
+  const repMap: Record<string, RepZone> = {
+    hypertrophy: { compounds: '6–12', accessories: '10–15' },
+    fat_loss:    { compounds: '10–15', accessories: '12–20' },
+    strength:    { compounds: '3–6', accessories: '6–10' },
+    health:      { compounds: '10–15', accessories: '12–20' },
+  }
+  const repKey = goal === 'build_muscle' ? 'hypertrophy'
+    : goal === 'lose_fat' ? 'fat_loss'
+    : goal === 'recomposition' ? 'hypertrophy'
+    : 'health'
+  const reps = repMap[repKey]
+
+  // ── Rest periods ──────────────────────────────────────────────────
+  const restSec = {
+    compounds:   goal === 'lose_fat' ? 60 : goal === 'build_muscle' ? 120 : 90,
+    accessories: goal === 'lose_fat' ? 45 : goal === 'build_muscle' ? 90  : 60,
+  }
+
+  // ── RPE target (adjusted for recovery capacity) ───────────────────
+  const baseRPE       = expTier === 'beginner' ? 7 : expTier === 'intermediate' ? 8 : 8.5
+  const stressPenalty = stress.includes('very') || stress.includes('high') ? -1 : stress === 'high' ? -0.5 : 0
+  const sleepPenalty  = sleep.includes('poor') ? -0.5 : sleep.includes('very') ? -1 : 0
+  const targetRPE     = Math.max(6, Math.round((baseRPE + stressPenalty + sleepPenalty) * 2) / 2)
+
+  // ── Exercises per session ─────────────────────────────────────────
+  const exercisesPerSession = duration <= 45 ? 5 : duration <= 60 ? 7 : duration <= 75 ? 8 : 10
+
+  // ── Split recommendation ──────────────────────────────────────────
+  let splitType: string
+  if      (days <= 2)  splitType = 'full_body'
+  else if (days === 3) splitType = goal === 'build_muscle' ? 'push_pull_legs' : 'full_body_x3'
+  else if (days === 4) splitType = 'upper_lower'
+  else if (days === 5) splitType = goal === 'build_muscle' ? 'push_pull_legs_x2_upper' : 'push_pull_legs_cardio'
+  else                 splitType = 'push_pull_legs_x2'
+
+  // ── Progressive overload model ────────────────────────────────────
+  const progressionModel = expTier === 'beginner'
+    ? 'Linear: add 2.5 kg (upper body) or 5 kg (lower body) every session once all prescribed reps are completed with good form'
+    : expTier === 'intermediate'
+    ? 'Double progression: hit the top of the rep range for every set → increase weight by 2.5 kg next session. If you miss reps, stay at the same weight'
+    : 'Wave loading: 3-week progressive overload block (volume+intensity) → 1 deload week at 50% volume. Increase loading by ~2.5% per wave on main compound lifts'
+
+  // ── Deload weeks ──────────────────────────────────────────────────
+  const deloadWeeks = expTier === 'beginner' ? [12]
+    : expTier === 'intermediate'             ? [6, 12]
+    : /* advanced */                           [4, 8, 12]
+
+  // ── Intensity technique notes (advanced only) ─────────────────────
+  const intensityTechniques = expTier === 'advanced'
+    ? 'Drop sets, rest-pause, and mechanical drop sets may be used on the last set of isolation exercises only. Do NOT apply to compound lifts.'
+    : expTier === 'intermediate'
+    ? 'Optional: add 1 back-off set (60% working weight × 15 reps) after main compounds for extra volume'
+    : 'Focus on form and consistency — no advanced techniques needed at this stage'
+
+  return {
+    expTier,
+    setsPerMuscle,
+    reps,
+    restSec,
+    targetRPE,
+    exercisesPerSession,
+    splitType,
+    progressionModel,
+    deloadWeeks,
+    intensityTechniques,
+    volumeNote: `${setsPerMuscle.min}–${setsPerMuscle.max} working sets per muscle group per week`,
+  }
+}
+
+/**
  * Evidence-based macro targets using Lean Body Mass when body composition data is available.
  * LBM-based protein is more accurate — a 90kg person at 30% BF needs far less protein
  * than a 90kg person at 10% BF, despite the same total weight.
@@ -389,6 +482,7 @@ function calculateMacros(p: any, latestMeasurement?: any) {
 function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[]): string {
   const language = normalizeAiLanguage(p.language)
   const m = calculateMacros(p, latestMeasurement)
+  const w = calculateWorkoutParams(p)
   const ar = language === 'ar'
 
   const goalLabels: Record<string, string> = {
@@ -523,36 +617,114 @@ ${p.goal === 'recomposition' ? `   - Calorie cycling: slightly higher on trainin
    - Protein at every meal is non-negotiable for simultaneous fat loss + muscle retention
    - Carb timing is critical — carbs mostly around training` : ''}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WORKOUT PLAN BUILDING RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
+  Experience tier:        ${w.expTier}
+  Recommended split:      ${w.splitType}
+  Volume target:          ${w.volumeNote}
+  Rep range — compounds:  ${w.reps.compounds} reps
+  Rep range — accessories: ${w.reps.accessories} reps
+  Rest — compounds:       ${w.restSec.compounds}s
+  Rest — accessories:     ${w.restSec.accessories}s
+  Target RPE:             ${w.targetRPE}/10 (adjusted for stress: ${p.stress_level || 'moderate'}, sleep: ${p.sleep_quality || 'average'})
+  Exercises per session:  ~${w.exercisesPerSession} (for ${p.session_duration || 60} min)
+  Deload weeks:           Weeks ${w.deloadWeeks.join(', ')}
+
+1. SPLIT & STRUCTURE:
+   - Use the ${w.splitType} split — it is the evidence-based optimal choice for ${p.training_days} days/week at this experience level
+   - Each day must start with 1–2 compound movements (squat, hinge, press, or row patterns)
+   - Accessory work follows compounds; isolation exercises come last
+   - Session order: warm-up → compounds → accessories → isolation → cool-down
+   - Each session must fit within ${p.session_duration || 60} min total
+
+2. EXERCISE SELECTION — NON-NEGOTIABLE:
+   - Equipment available: ${Array.isArray(p.equipment) ? p.equipment.join(', ') : p.equipment || (p.gym_access ? 'Full gym' : 'Bodyweight only')} — ONLY use what is available
+   - Injuries/limitations: ${p.injuries || 'None'} — design AROUND these, never THROUGH them. Provide safe alternatives
+   - Exercises NEVER to include: ${p.exercises_hated || 'None'}
+   - All exercise names must be specific and searchable (e.g. "Barbell Back Squat" not just "Squats")
+   - Balance push/pull volume — equal sets of horizontal push + horizontal pull per week
+   - Balance left/right — if unilateral exercises are used, both sides must be trained equally
+
+3. LOAD & INTENSITY:
+   - weight_guidance must be specific and usable:
+     - If strength_levels are provided (${p.strength_levels || 'not provided'}): use percentages of stated maxes or provide a relative load
+     - If no strength data: give RPE-based guidance (e.g., "Start at RPE ${w.targetRPE} — a weight where you have ${10 - w.targetRPE} reps left in the tank")
+     - For beginners: always give a safe starter weight range (e.g., "10–15 kg")
+   - form_tip must be the single most important cue for THIS exercise, not a generic safety warning
+
+4. PROGRESSIVE OVERLOAD — EXPLICIT WEEK-BY-WEEK MODEL:
+   ${w.progressionModel}
+   - Include deload protocol for weeks ${w.deloadWeeks.join(', ')}: reduce to 50% of normal volume, keep intensity same, prioritise recovery
+   - The progressive_overload field in JSON must spell out EXACTLY how to progress (not just "add weight")
+
+5. INTENSITY TECHNIQUES:
+   ${w.intensityTechniques}
+
+6. RECOVERY & SESSION DESIGN:
+   - Never schedule 3+ consecutive training days without a rest day
+   - If training_time is morning (${p.training_time || 'morning'}): include a proper warm-up (activation exercises)
+   - Sleep quality is ${p.sleep_quality || 'average'} — ${p.sleep_quality === 'poor' ? 'keep volume on the lower end of range; skip high-intensity finishers' : 'normal volume is appropriate'}
+   - Stress level is ${p.stress_level || 'moderate'} — ${(p.stress_level === 'high' || p.stress_level === 'very_high') ? 'reduce CNS-intensive exercises; prioritise controlled, moderate-intensity work' : 'standard intensity applies'}
+
+7. GOAL-SPECIFIC WORKOUT FOCUS:
+${p.goal === 'lose_fat' ? `   - Prioritise compound movements for metabolic effect — no isolation-only days
+   - Include at least 1 metabolic finisher per session (e.g., 10 min circuit at end) if duration allows
+   - Higher rep ranges build more lactate and burn more calories — lean into the upper rep range
+   - Cardio is separate from resistance training unless HIIT is the training_style` : ''}
+${p.goal === 'build_muscle' ? `   - Hypertrophy rep ranges (6–12) with strict form — ego lifting defeats the purpose
+   - Mind-muscle connection cues in every form_tip
+   - Compound lifts first, heavy and controlled; accessories with controlled eccentric
+   - Adequate rest between sets is non-negotiable for quality work — do NOT compress rest to fit more exercises` : ''}
+${p.goal === 'recomposition' ? `   - Resistance training is the priority — cardio is secondary and must not compromise strength sessions
+   - Moderate rep ranges (8–15) with moderate load — enough stimulus for muscle retention
+   - Full-body or upper-lower splits maximise frequency; avoid single-muscle-group days
+   - Track strength numbers — maintaining or increasing strength while in deficit = muscle being preserved` : ''}
+${p.goal === 'improve_fitness' || p.goal === 'be_healthier' ? `   - Balance resistance training, mobility, and cardiovascular health
+   - Include at least one full-body circuit or conditioning session per week
+   - Emphasise movement quality over load — especially for beginners
+   - Include active recovery or flexibility work on lighter days` : ''}
+
 IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text.
 JSON key names must stay exactly as shown. For workout day_name, ALWAYS use English weekdays (Sunday–Saturday) even for Arabic users — only translate user-facing display strings.
 
 {
   "summary": "3-sentence personalised overview: what the approach is, why it fits this person, what result to expect in 12 weeks",
   "workout_plan": {
-    "name": "Plan name",
+    "name": "Plan name reflecting goal and split",
     "schedule": "${p.training_days} days/week",
-    "split_type": "push_pull_legs / upper_lower / full_body / etc",
+    "split_type": "${w.splitType}",
+    "experience_tier": "${w.expTier}",
     "weeks": 12,
-    "notes": "Key training principles personalised for this person",
-    "progressive_overload": "How to progress each week",
-    "rest_days": ["list", "of", "rest", "days"],
+    "notes": "2–3 sentences on why this split and approach fits this specific person's goal, experience, and schedule",
+    "progressive_overload": "${w.progressionModel}",
+    "deload_weeks": [${w.deloadWeeks.join(', ')}],
+    "deload_protocol": "On deload weeks: reduce sets by 50%, keep same weight, focus on form and recovery",
+    "rest_days": ["list of rest day names"],
     "days": [
       {
         "day_name": "Monday",
         "muscle_focus": "Push / Upper / Full Body / etc",
+        "session_goal": "One sentence: what this day is optimising for",
         "warmup_min": 10,
+        "warmup_exercises": ["Hip circles 2x10", "Band pull-aparts 2x15", "etc"],
         "duration_min": ${p.session_duration || 60},
         "exercises": [
           {
-            "name": "Exercise Name",
+            "name": "Specific exercise name (e.g. Barbell Back Squat)",
+            "category": "compound / accessory / isolation / cardio",
             "sets": 4,
-            "reps": "8-12",
-            "rest_sec": 90,
-            "weight_guidance": "Specific starting weight or RPE guidance based on strength_levels",
-            "form_tip": "Key form cue in one sentence",
-            "muscle_group": "Primary muscle"
+            "reps": "${w.reps.compounds}",
+            "rest_sec": ${w.restSec.compounds},
+            "weight_guidance": "RPE ${w.targetRPE} or specific kg range based on strength_levels — be concrete",
+            "form_tip": "The single most important cue for this exercise",
+            "muscle_group": "Primary muscle targeted",
+            "progression_note": "How to progress THIS specific exercise (e.g. 'Add 2.5kg when all ${w.reps.compounds} reps are clean')"
           }
-        ]
+        ],
+        "cooldown_min": 5,
+        "session_notes": "Recovery or technique focus for this day"
       }
     ]
   },
