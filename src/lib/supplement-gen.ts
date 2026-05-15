@@ -67,6 +67,15 @@ export async function generateSupplementRecsIfElite(
   const losesFat = profile.goal === 'lose_fat'
   const buildsMuscle = profile.goal === 'build_muscle' || profile.goal === 'recomposition'
 
+  // InBody-derived flags
+  const visceralFat     = profile.visceral_fat != null ? Number(profile.visceral_fat) : null
+  const inbodyScore     = profile.inbody_score != null ? Number(profile.inbody_score) : null
+  const bodyFatPct      = profile.body_fat_pct != null ? Number(profile.body_fat_pct) : null
+  const hasHighVisceral = visceralFat != null && visceralFat > 10
+  const hasMedVisceral  = visceralFat != null && visceralFat > 7 && visceralFat <= 10
+  const hasLowInbody    = inbodyScore != null && inbodyScore < 70
+  const hasHighBF       = bodyFatPct != null && (isFemale ? bodyFatPct > 30 : bodyFatPct > 25)
+
   const vitaminFlags = [
     isVegan && '🔴 VEGAN: B12 deficiency risk — must include Methylcobalamin B12. Include algae-based Omega-3 DHA/EPA. Zinc and Iron can be low on plant-based diets — assess.',
     isVegetarian && '🟡 VEGETARIAN: Moderate B12 risk if no eggs/dairy — include B12. Consider Omega-3 algae or fish oil.',
@@ -76,6 +85,10 @@ export async function generateSupplementRecsIfElite(
     isIntenseTraining && `🟡 INTENSE TRAINING (${trainingDays} days/week): Electrolytes (sodium, potassium, magnesium) important. B-Complex for energy metabolism. Tart Cherry or Beetroot for recovery.`,
     losesFat && '🟡 FAT LOSS: Ensure adequate micronutrient density — multi if diet is restricted. Chromium can help blood sugar regulation.',
     buildsMuscle && '🟡 MUSCLE BUILDING: Creatine Monohydrate is essential evidence-based — always include if not already taking.',
+    hasHighVisceral && `🔴 HIGH VISCERAL FAT (InBody level ${visceralFat}): PRIORITY — Omega-3 EPA/DHA (2–3g/day) for cardiovascular protection. Berberine 500mg 2x/day or CLA may help visceral fat reduction. Include CoQ10 for heart health. Reduce saturated fat intake.`,
+    hasMedVisceral && `🟡 MODERATE VISCERAL FAT (InBody level ${visceralFat}): Include Omega-3 EPA/DHA. Monitor metabolic markers. Prioritise aerobic + resistance training combination.`,
+    hasHighBF && !hasHighVisceral && `🟡 ELEVATED BODY FAT (${bodyFatPct}%): CLA or Green Tea Extract (EGCG) may support fat oxidation. Chromium for blood sugar regulation.`,
+    hasLowInbody && `🟡 LOW INBODY SCORE (${inbodyScore}/100): Focus on foundational supplements — Creatine, Protein timing, Vitamin D3, Magnesium — to improve overall body composition score.`,
     '🔵 FOUNDATION: Vitamin D3 (especially for indoor training or low sun exposure), Magnesium (most people are deficient), Omega-3 (if low oily fish intake).',
   ].filter(Boolean).join('\n')
 
@@ -88,7 +101,8 @@ Name: ${profile.name} | Age: ${profile.age} | Gender: ${profile.gender}
 Goal: ${profile.goal}${profile.goal_target ? ` → ${profile.goal_target}` : ''}
 Weight: ${profile.weight_kg}kg | Height: ${profile.height_cm}cm
 Injuries: ${profile.injuries || 'None'} | Medical: ${profile.medical_conditions || 'None'}
-Sleep quality: ${profile.sleep_quality || 'average'} | Stress: ${profile.stress_level || 'moderate'}
+Sleep quality: ${profile.sleep_quality || 'average'} | Stress: ${profile.stress_level || 'moderate'}${visceralFat != null || inbodyScore != null || bodyFatPct != null ? `
+InBody scan: BF% ${bodyFatPct ?? '?'}% | Visceral fat level ${visceralFat ?? '?'}${hasHighVisceral ? ' (HIGH RISK)' : ''} | InBody score ${inbodyScore ?? '?'}/100${profile.muscle_mass_kg ? ` | Muscle mass ${profile.muscle_mass_kg}kg` : ''}${profile.bmr_kcal ? ` | Measured BMR ${profile.bmr_kcal} kcal` : ''}` : ''}
 
 NUTRITION & TRAINING CONTEXT:
 ${dietContext}

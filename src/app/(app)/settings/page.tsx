@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
-import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown, Utensils, Heart } from 'lucide-react'
+import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown, Utensils, Heart, Upload, Activity, RefreshCw, CheckCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/lib/useLanguage'
@@ -26,6 +26,9 @@ export default function SettingsPage() {
   const [cancelResult, setCancelResult] = useState<string | null>(null)
   const [localizingArabic, setLocalizingArabic] = useState(false)
   const [localizeResult, setLocalizeResult] = useState<string | null>(null)
+  const [inbodyAnalyzing, setInbodyAnalyzing] = useState(false)
+  const [inbodyError, setInbodyError] = useState<string | null>(null)
+  const [inbodySuccess, setInbodySuccess] = useState<string | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -113,6 +116,46 @@ export default function SettingsPage() {
       setLocalizeResult(err?.message || (lang === 'ar' ? 'تعذر تحديث المحتوى.' : 'Could not update saved content.'))
     } finally {
       setLocalizingArabic(false)
+    }
+  }
+
+  async function handleInbodyUpload(file: File) {
+    if (!user || !file) return
+    setInbodyAnalyzing(true)
+    setInbodyError(null)
+    setInbodySuccess(null)
+    try {
+      const supabase = createBrowserClient()
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const path = `${user.id}/${Date.now()}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('inbody-scans').upload(path, file, { upsert: true })
+      if (uploadErr) throw new Error(uploadErr.message)
+      const { data: { publicUrl } } = supabase.storage.from('inbody-scans').getPublicUrl(path)
+      const res = await fetch('/api/analyze-inbody', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inbody_url: publicUrl }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Analysis failed')
+      const d = data.data
+      const inbodyUpdate: Record<string, any> = {}
+      if (d.body_fat_pct   != null) inbodyUpdate.body_fat_pct   = d.body_fat_pct
+      if (d.muscle_mass_kg != null) inbodyUpdate.muscle_mass_kg = d.muscle_mass_kg
+      if (d.bmr_kcal       != null) inbodyUpdate.bmr_kcal       = d.bmr_kcal
+      if (d.visceral_fat   != null) inbodyUpdate.visceral_fat   = d.visceral_fat
+      if (d.inbody_score   != null) inbodyUpdate.inbody_score   = d.inbody_score
+      // Persist inbody_url immediately — don't wait for the user to hit Save
+      try {
+        await supabase.from('profiles').update({ ...inbodyUpdate, inbody_url: publicUrl }).eq('user_id', user.id)
+      } catch { /* non-fatal — analyzed data was already saved by the API */ }
+      // Sync local state so the display updates instantly
+      setProfile((prev: any) => ({ ...prev, ...inbodyUpdate, inbody_url: publicUrl }))
+      setInbodySuccess(d.coaching_summary || (lang === 'ar' ? 'تم تحليل المسح بنجاح' : 'Scan analysed successfully'))
+    } catch (err: any) {
+      setInbodyError(err?.message || (lang === 'ar' ? 'فشل تحليل المسح' : 'Scan analysis failed'))
+    } finally {
+      setInbodyAnalyzing(false)
     }
   }
 
@@ -534,6 +577,74 @@ export default function SettingsPage() {
                   : 'Ion is not a substitute for medical advice. Always consult your doctor before starting a new programme if you have a medical condition.'}
               </p>
             </div>
+          </div>
+
+          {/* InBody Scan */}
+          <div className="glass-card p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Activity size={13} style={{ color: '#BB5CF6' }} />
+              <p className="font-heading font-black text-xs tracking-widest uppercase" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+                {lang === 'ar' ? 'مسح تكوين الجسم (InBody)' : 'BODY COMPOSITION SCAN (INBODY)'}
+              </p>
+            </div>
+            <p className="font-heading text-xs mb-4" style={{ color: '#64748B' }}>
+              {lang === 'ar'
+                ? 'ارفع صورة أو PDF من جهاز InBody. Ion يستخدم هذه البيانات لحساب البروتين الدقيق لك وتخصيص كل الخطط.'
+                : 'Upload your InBody scan (image or PDF). Ion uses this to calculate your exact protein needs, macros, and supplement stack.'}
+            </p>
+
+            {/* Current InBody values grid */}
+            {(profile.body_fat_pct || profile.muscle_mass_kg || profile.visceral_fat != null || profile.inbody_score != null) && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                {[
+                  { label: lang === 'ar' ? 'الدهون %' : 'Body Fat %', key: 'body_fat_pct', unit: '%', warn: profile.body_fat_pct > (profile.gender === 'female' ? 32 : 25) },
+                  { label: lang === 'ar' ? 'كتلة العضلات' : 'Muscle Mass', key: 'muscle_mass_kg', unit: 'kg', warn: false },
+                  { label: lang === 'ar' ? 'الدهون الحشوية' : 'Visceral Fat', key: 'visceral_fat', unit: '', warn: profile.visceral_fat > 10 },
+                  { label: lang === 'ar' ? 'درجة InBody' : 'InBody Score', key: 'inbody_score', unit: '/100', warn: profile.inbody_score < 60 },
+                  { label: lang === 'ar' ? 'معدل الأيض (BMR)' : 'Measured BMR', key: 'bmr_kcal', unit: ' kcal', warn: false },
+                ].map(({ label, key, unit, warn }) => profile[key] != null ? (
+                  <div key={key} className="rounded-xl p-3" style={{ background: warn ? 'rgba(239,68,68,0.07)' : 'rgba(255,255,255,0.03)', border: `1px solid ${warn ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.06)'}` }}>
+                    <p className="font-heading text-[10px] tracking-wider mb-1" style={{ color: warn ? '#F87171' : '#475569' }}>{label}</p>
+                    <input
+                      type="number"
+                      value={profile[key] || ''}
+                      onChange={e => updateProfile(key, parseFloat(e.target.value) || null)}
+                      className="w-full font-heading font-black text-lg outline-none bg-transparent"
+                      style={{ color: warn ? '#FCA5A5' : '#E2E8F0' }}
+                    />
+                    <p className="font-heading text-[10px]" style={{ color: '#334155' }}>{unit}</p>
+                  </div>
+                ) : null)}
+              </div>
+            )}
+
+            {/* Upload button */}
+            <label className={`w-full py-3 rounded-xl font-heading font-semibold text-xs tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all ${inbodyAnalyzing ? 'opacity-60 pointer-events-none' : ''}`}
+              style={{ background: 'rgba(187,92,246,0.08)', border: '1px solid rgba(187,92,246,0.2)', color: '#BB5CF6', letterSpacing: '0.08em' }}>
+              {inbodyAnalyzing
+                ? <><RefreshCw size={13} className="animate-spin" />{lang === 'ar' ? 'جار التحليل...' : 'Analysing scan...'}</>
+                : <><Upload size={13} />{profile.inbody_url ? (lang === 'ar' ? 'رفع مسح جديد' : 'Upload new scan') : (lang === 'ar' ? 'رفع مسح InBody' : 'Upload InBody scan')}</>}
+              <input type="file" accept="image/*,.pdf" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleInbodyUpload(f) }} />
+            </label>
+
+            {inbodySuccess && (
+              <div className="mt-3 p-3 rounded-xl flex items-start gap-2" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                <CheckCircle size={13} style={{ color: '#10B981', marginTop: 1, flexShrink: 0 }} />
+                <p className="font-heading text-xs leading-relaxed" style={{ color: '#6EE7B7' }}>{inbodySuccess}</p>
+              </div>
+            )}
+            {inbodyError && (
+              <div className="mt-3 p-3 rounded-xl flex items-start gap-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <AlertTriangle size={13} style={{ color: '#EF4444', marginTop: 1, flexShrink: 0 }} />
+                <p className="font-heading text-xs leading-relaxed" style={{ color: '#FCA5A5' }}>{inbodyError}</p>
+              </div>
+            )}
+            {!profile.body_fat_pct && !profile.muscle_mass_kg && !inbodyAnalyzing && !inbodyError && (
+              <p className="font-heading text-xs mt-3 text-center" style={{ color: '#334155' }}>
+                {lang === 'ar' ? 'لم يتم رفع مسح بعد — Ion يستخدم تقديرات افتراضية حالياً' : 'No scan on file — Ion is using population estimates. Upload for precision.'}
+              </p>
+            )}
           </div>
         </div>
       )}
