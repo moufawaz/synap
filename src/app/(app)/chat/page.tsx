@@ -635,10 +635,17 @@ function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender:
             </a>
           </div>
         )}
+        {type === 'meal_card' && (
+          <div className="flex gap-2 mt-3">
+            <a href="/nutrition" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981', border: '1px solid rgba(16,185,129,0.2)' }}>
+              {isRTL ? 'اذهب للتغذية' : 'Go to Nutrition'}
+            </a>
+          </div>
+        )}
         {type === 'workout_card' && (
           <div className="flex gap-2 mt-3">
             <a href="/workout/today" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(187,92,246,0.1)', color: '#BB5CF6', border: '1px solid rgba(187,92,246,0.2)' }}>
-              Go to Workout
+              {isRTL ? 'اذهب للتمرين' : 'Go to Workout'}
             </a>
           </div>
         )}
