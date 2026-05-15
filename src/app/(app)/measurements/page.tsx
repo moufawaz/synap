@@ -5,7 +5,7 @@ import { createBrowserClient } from '@/lib/supabase'
 import {
   Plus, Ruler, ChevronDown, ChevronUp, Camera, ArrowLeftRight,
   TrendingUp, TrendingDown, Upload, FileText, CheckCircle,
-  AlertCircle, RefreshCw, Loader2,
+  AlertCircle, RefreshCw, Loader2, Info,
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -25,6 +25,22 @@ const FIELDS = [
   { key: 'calf_left_cm', label: 'Left Calf', unit: 'cm', icon: '🦵' },
   { key: 'calf_right_cm', label: 'Right Calf', unit: 'cm', icon: '🦵' },
 ]
+
+const MEASUREMENT_GUIDES: Record<string, string> = {
+  weight_kg:       'Weigh yourself in the morning, after using the bathroom, before eating or drinking. Stand on a flat surface.',
+  body_fat_pct:    'Leave blank if unsure. Best measured with an InBody scan or body fat calipers. Rough estimate is fine.',
+  neck_cm:         'Just below your Adam\'s apple. Keep the tape horizontal and snug — don\'t compress the skin.',
+  shoulders_cm:    'Stand straight, arms relaxed. Measure around the widest point of your shoulders, over the deltoids.',
+  chest_cm:        'Around the fullest part of your chest at nipple height. Arms relaxed. Breathe out normally.',
+  waist_cm:        'At the narrowest point — usually 1–2 inches above your belly button. Don\'t suck in. Breathe normally.',
+  hips_cm:         'Feet together. Around the widest part of your hips and buttocks. Keep the tape level all the way around.',
+  bicep_left_cm:   'Flex your left arm at 90°. Measure at the peak of the bicep.',
+  bicep_right_cm:  'Flex your right arm at 90°. Measure at the peak of the bicep.',
+  thigh_left_cm:   'Feet slightly apart. Upper left thigh, about 6 inches (15 cm) below the hip crease.',
+  thigh_right_cm:  'Feet slightly apart. Upper right thigh, about 6 inches (15 cm) below the hip crease.',
+  calf_left_cm:    'Stand on both feet. Around the widest part of the left calf muscle.',
+  calf_right_cm:   'Stand on both feet. Around the widest part of the right calf muscle.',
+}
 
 const SYMMETRY_PAIRS: [string, string, string][] = [
   ['bicep_left_cm', 'bicep_right_cm', 'Biceps'],
@@ -71,6 +87,7 @@ export default function MeasurementsPage() {
   const [analyzingInbody, setAnalyzingInbody] = useState(false)
   const [inbodyAnalysis, setInbodyAnalysis] = useState<InBodyAnalysis | null>(null)
   const [inbodyError, setInbodyError] = useState<string | null>(null)
+  const [activeTip, setActiveTip] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const inbodyInputRef = useRef<HTMLInputElement>(null)
 
@@ -295,13 +312,38 @@ export default function MeasurementsPage() {
       {showForm && (
         <div className="glass-card p-5 mb-6" style={{ border: '1px solid rgba(187,92,246,0.25)' }}>
           <p className="font-heading font-bold text-sm text-white mb-4 tracking-wider" style={{ letterSpacing: '0.08em' }}>TODAY'S MEASUREMENTS</p>
+
+          {/* Active guidance tip */}
+          {activeTip && MEASUREMENT_GUIDES[activeTip] && (
+            <div className="flex gap-2.5 rounded-xl px-4 py-3 mb-4" style={{ background: 'rgba(187,92,246,0.07)', border: '1px solid rgba(187,92,246,0.18)' }}>
+              <Info size={13} style={{ color: '#BB5CF6', flexShrink: 0, marginTop: 1 }} />
+              <p className="font-heading text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
+                <span className="font-bold" style={{ color: '#D88BFF' }}>
+                  {FIELDS.find(f => f.key === activeTip)?.label}: &nbsp;
+                </span>
+                {MEASUREMENT_GUIDES[activeTip]}
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {FIELDS.map(field => (
               <div key={field.key}>
-                <label className="font-heading text-[10px] tracking-wider block mb-1" style={{ color: '#475569' }}>
-                  {field.icon} {field.label} ({field.unit})
-                  {field.key === 'weight_kg' && <span style={{ color: '#BB5CF6' }}> *</span>}
-                </label>
+                <div className="flex items-center gap-1 mb-1">
+                  <label className="font-heading text-[10px] tracking-wider" style={{ color: '#475569' }}>
+                    {field.icon} {field.label} ({field.unit})
+                    {field.key === 'weight_kg' && <span style={{ color: '#BB5CF6' }}> *</span>}
+                  </label>
+                  {MEASUREMENT_GUIDES[field.key] && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTip(activeTip === field.key ? null : field.key)}
+                      style={{ opacity: activeTip === field.key ? 1 : 0.4, flexShrink: 0 }}
+                    >
+                      <Info size={10} style={{ color: activeTip === field.key ? '#BB5CF6' : '#64748B' }} />
+                    </button>
+                  )}
+                </div>
                 <input
                   type="number" step="0.1"
                   value={form[field.key] || ''}
@@ -309,7 +351,7 @@ export default function MeasurementsPage() {
                   placeholder="-"
                   className="w-full rounded-lg px-3 py-2 font-heading text-sm outline-none transition-all"
                   style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.07)', color: '#F0F0FF' }}
-                  onFocus={e => { e.target.style.borderColor = 'rgba(187,92,246,0.5)' }}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(187,92,246,0.5)'; setActiveTip(field.key) }}
                   onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.07)' }}
                 />
               </div>

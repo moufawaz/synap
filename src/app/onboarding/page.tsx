@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import IonAvatar from '@/components/ui/IonAvatar'
 import SynapLogo from '@/components/ui/SynapLogo'
 import MeasurementCard from '@/components/onboarding/MeasurementCard'
+import StrengthCard from '@/components/onboarding/StrengthCard'
 import PlanGenerating from '@/components/onboarding/PlanGenerating'
 import { createBrowserClient } from '@/lib/supabase'
 import {
@@ -309,6 +310,19 @@ export default function OnboardingPage() {
     advance({ measurements })
   }
 
+  // ── Handle strength card ─────────────────────────────────
+  function handleStrength(data: Record<string, string>) {
+    if (data.skipped === 'true') {
+      addMessage({ role: 'user', content: isRTL ? 'سأضيفه لاحقاً' : "I'll fill this in later" })
+      advance({ strength_levels: 'skipped' })
+    } else {
+      const filled = Object.entries(data).filter(([, v]) => v.trim())
+      const summary = filled.map(([k, v]) => `${k.replace('_kg', '').replace('_', ' ')}: ${v}${k.endsWith('_kg') ? ' kg' : ''}`).join(', ')
+      addMessage({ role: 'user', content: isRTL ? `✓ تم تسجيل مستوى القوة` : `✓ Strength logged: ${summary}` })
+      advance({ strength_levels: JSON.stringify(data) })
+    }
+  }
+
   // ── Handle InBody file select ────────────────────────────
   function handleInbodySelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -539,6 +553,16 @@ export default function OnboardingPage() {
           </div>
         )}
 
+        {/* Strength card (inline) */}
+        {!isTyping && currentStep?.responseType === 'strength_card' && (
+          <div className="flex items-start gap-3">
+            <IonAvatar gender={ionGender} size="sm" />
+            <div className="flex-1 max-w-sm">
+              <StrengthCard onSubmit={handleStrength} lang={lang} />
+            </div>
+          </div>
+        )}
+
         {/* InBody upload card (inline) */}
         {!isTyping && currentStep?.responseType === 'photo_upload' && currentStep?.id === 'inbody_upload' && (
           <div className="flex items-start gap-3">
@@ -612,7 +636,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* ── Input Area ── */}
-      {!isTyping && currentStep && currentStep.responseType !== 'done' && currentStep.responseType !== 'measurement_card' && currentStep.responseType !== 'photo_upload' && (
+      {!isTyping && currentStep && currentStep.responseType !== 'done' && currentStep.responseType !== 'measurement_card' && currentStep.responseType !== 'strength_card' && currentStep.responseType !== 'photo_upload' && (
         <div className="flex-shrink-0 px-4 pb-4 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: '#080808' }}>
 
           {/* Quick replies */}

@@ -567,7 +567,7 @@ export default function PricingPage() {
             />
             <FAQ
               q={isRTL ? 'ما الذي تضيفه Elite عن Pro؟' : "What does Elite have that Pro doesn't?"}
-              a={isRTL ? 'Elite تضيف توقع موعد الوصول للهدف، تقرير تكوين الجسم الأسبوعي، وتوصيات مكملات مخصصة حسب غذائك وتمرينك مع أماكن شراء مناسبة في السعودية.' : "Elite adds three powerful features: Goal Timeline Prediction (Ion tells you exactly when you'll hit your goal), Weekly Body Composition Reports (every Friday, full analysis delivered to your inbox), and Supplement Recommendations (personalised to your diet gaps and training, with local Saudi suppliers)."}
+              a={isRTL ? 'Elite تضيف توقع موعد الوصول للهدف، تقرير تكوين الجسم الأسبوعي، وتوصيات مكملات مخصصة حسب غذائك وتمرينك مع أماكن شراء مناسبة قريبة منك.' : "Elite adds three powerful features: Goal Timeline Prediction (Ion tells you exactly when you'll hit your goal), Weekly Body Composition Reports (every Friday, full analysis delivered to your inbox), and Supplement Recommendations (personalised to your diet gaps and training, with local suppliers near you)."}
             />
             <FAQ
               q={isRTL ? 'هل يمكنني تغيير الخطة؟' : 'Can I switch between plans?'}

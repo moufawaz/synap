@@ -7,6 +7,7 @@ export type ResponseType =
   | 'quickreply'
   | 'number'
   | 'measurement_card'
+  | 'strength_card'
   | 'photo_upload'
   | 'multiselect'
   | 'time'
@@ -66,6 +67,7 @@ export interface OnboardingData {
   training_style: string
   exercises_hated: string
   equipment: string
+  strength_levels: string   // JSON-serialised Record<string,string> from StrengthCard
   // Phase 6 — Nutrition
   foods_loved: string
   foods_hated: string
@@ -419,6 +421,16 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     responseType: 'text',
     field: 'exercises_hated',
     optional: true,
+  },
+  {
+    id: 'strength_card',
+    phase: 5,
+    ionMessage: (ctx) => `One more thing before I design your programme, ${ctx.name || 'you'} — tell me how strong you currently are.\n\nThis is the most important data point for building a programme that actually challenges you at the right level. Fill in what you know — skip what you don't.\n\nWorking weight for ~5 reps is perfect. No need to find your 1RM.`,
+    ionMessageAr: (ctx) => `شيء أخير قبل أن أصمم برنامجك، ${ctx.name || 'أنت'} — أخبرني بمستوى قوتك الحالي.\n\nهذه أهم بيانات لبناء برنامج يتحداك بالمستوى الصحيح. أدخل ما تعرفه — تخطّ ما لا تعرفه.\n\nوزن المجموعة العملية لـ~5 تكرارات مثالي. لا داعي لإيجاد أقصى وزن مرة واحدة.`,
+    responseType: 'strength_card',
+    field: 'strength_levels',
+    optional: true,
+    condition: (ctx) => ctx.gym_access === 'gym' || ctx.currently_training === 'already',
   },
 
   // ── PHASE 6: Nutrition ───────────────────────────────

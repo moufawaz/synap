@@ -27,7 +27,7 @@ const EN = {
     { icon: Target, title: 'Goal Timeline Prediction', body: "Ion calculates your current pace and tells you exactly when you'll hit your goal — and what needs to change to get there faster.", badge: 'Elite ⭐' },
     { icon: FileText, title: 'Weekly Body Composition Report', body: 'Every Friday Ion generates a full report — what changed, what\'s working, what needs attention. Delivered to your inbox.', badge: 'Elite ⭐' },
     { icon: RefreshCw, title: 'Weekly Macro Auto-Adjustments', body: 'Every Monday Ion reviews your last 7 days — weight trend, workout completion, calorie adherence — and fine-tunes your macros by ±50–150 kcal automatically.', badge: 'Elite ⭐' },
-    { icon: Pill, title: 'Supplement Recommendations', body: 'Based on your diet gaps and training — Ion recommends exactly what supplements help, right dose, right timing, where to buy in Saudi Arabia.', badge: 'Elite ⭐' },
+    { icon: Pill, title: 'Supplement Recommendations', body: 'Based on your diet gaps and training — Ion recommends exactly what supplements help, right dose, right timing, and where to buy near you.', badge: 'Elite ⭐' },
     { icon: Globe, title: 'Bilingual Arabic + English', body: 'Full Arabic and English support. Ion speaks your language. RTL interface. Saudi food database. Local context built in.', badge: null },
     { icon: Watch, title: 'Wearable Integration', body: 'Connect Apple Watch or Fitbit. Ion sees your actual steps, heart rate, and sleep — and adjusts your plan accordingly.', badge: 'Coming Soon' },
     { icon: Users, title: 'Community Feed', body: 'See real SYNAP users hitting real goals. The accountability that keeps you consistent.', badge: 'Coming Soon' },
