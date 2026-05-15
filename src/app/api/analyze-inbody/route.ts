@@ -186,16 +186,47 @@ If this is NOT an InBody report, or the image/PDF is too blurry or unclear to re
       return NextResponse.json({ error: analysisData.error }, { status: 422 })
     }
 
-    // Attempt to persist body_fat_pct back to profile for Ion's system prompt
-    // Only update columns that definitely exist in the profiles schema
-    if (analysisData.body_fat_pct != null) {
+    // ── Persist ALL InBody fields to profile ─────────────────────────
+    const profileUpdate: Record<string, any> = {}
+    if (analysisData.body_fat_pct   != null) profileUpdate.body_fat_pct   = analysisData.body_fat_pct
+    if (analysisData.muscle_mass_kg != null) profileUpdate.muscle_mass_kg = analysisData.muscle_mass_kg
+    if (analysisData.bmr_kcal       != null) profileUpdate.bmr_kcal       = analysisData.bmr_kcal
+    if (analysisData.visceral_fat   != null) profileUpdate.visceral_fat   = analysisData.visceral_fat
+    if (analysisData.inbody_score   != null) profileUpdate.inbody_score   = analysisData.inbody_score
+
+    if (Object.keys(profileUpdate).length > 0) {
       const { error: profileErr } = await supabase
         .from('profiles')
-        .update({ body_fat_pct: analysisData.body_fat_pct })
+        .update(profileUpdate)
         .eq('user_id', user.id)
-      // Non-fatal: column might not exist in all environments
       if (profileErr) {
-        console.warn('[analyze-inbody] Profile update skipped (non-fatal):', profileErr.message)
+        console.warn('[analyze-inbody] Profile update warning (non-fatal):', profileErr.message)
+      } else {
+        console.info('[analyze-inbody] Profile updated with InBody fields:', Object.keys(profileUpdate).join(', '))
+      }
+    }
+
+    // ── Also update body_fat_pct on the most recent measurement row ──
+    // This ensures calculateMacros() in plan-builder picks it up for LBM calculation
+    if (analysisData.body_fat_pct != null) {
+      const { data: latestMeasurement } = await supabase
+        .from('measurements')
+        .select('id')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (latestMeasurement?.id) {
+        const { error: measErr } = await supabase
+          .from('measurements')
+          .update({ body_fat_pct: analysisData.body_fat_pct })
+          .eq('id', latestMeasurement.id)
+        if (measErr) {
+          console.warn('[analyze-inbody] Measurement BF% update warning (non-fatal):', measErr.message)
+        } else {
+          console.info('[analyze-inbody] Latest measurement updated with body_fat_pct:', analysisData.body_fat_pct)
+        }
       }
     }
 

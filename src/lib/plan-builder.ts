@@ -134,11 +134,13 @@ export function calculateMacros(p: any, latestMeasurement?: any): MacroTargets {
   const speed    = p.goal_speed || 'moderate'
 
   // ── Body composition ─────────────────────────────────────────────
+  // Priority: 1) latest measurement BF%  2) profile InBody scan BF%  3) population default
   const measuredBf  = latestMeasurement?.body_fat_pct ? parseFloat(latestMeasurement.body_fat_pct) : null
+  const inbodyBf    = (!measuredBf && p.body_fat_pct) ? parseFloat(p.body_fat_pct) : null
   const defaultBf   = female ? 28 : 20
-  const bodyFatPct  = measuredBf ?? defaultBf
+  const bodyFatPct  = measuredBf ?? inbodyBf ?? defaultBf
   const leanMass    = weight * (1 - bodyFatPct / 100)
-  const usingRealBf = !!measuredBf
+  const usingRealBf = !!(measuredBf ?? inbodyBf)
 
   // ── TDEE (Mifflin-St Jeor + training burn) ────────────────────────
   const bmr = female
