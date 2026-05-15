@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     }
 
     // Load user profile + plans + context in parallel
-    const [profileRes, userLangRes, workoutRes, dietRes, historyRes, subRes, measureRes, workoutLogRes, mealLogRes] = await Promise.all([
+    const [profileRes, userLangRes, workoutRes, dietRes, historyRes, subRes, measureRes, workoutLogRes, mealLogRes, pendingProposalRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('workout_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
@@ -100,6 +100,8 @@ export async function POST(req: Request) {
       // Last 7 meal logs
       supabase.from('meals_log').select('date,meal_time,description,calories_estimated,protein_g,carbs_g,fats_g')
         .eq('user_id', user.id).order('date', { ascending: false }).limit(7),
+      // Latest pending plan proposals (for two-step confirm flow)
+      supabase.from('chat_messages').select('id, metadata, created_at').eq('user_id', user.id).eq('message_type', 'plan_proposal').order('created_at', { ascending: false }).limit(3),
     ])
 
     const profile     = profileRes.data ? { ...profileRes.data, language: userLangRes.data?.language ?? profileRes.data.language } : null
@@ -109,6 +111,7 @@ export async function POST(req: Request) {
     const measurements = measureRes.data || []
     const workoutLogs  = workoutLogRes.data || []
     const mealLogs     = mealLogRes.data || []
+    const pendingProposals = pendingProposalRes.data || []
 
     // Reverse to get chronological order
     const history = (historyRes.data || []).reverse()
@@ -129,25 +132,41 @@ export async function POST(req: Request) {
       message,
       workoutPlanRow: workoutRes.data,
       dietPlanRow: dietRes.data,
+      pendingProposals,
     })
 
-    if (planEdit.applied || planEdit.shouldStop) {
-      const reply = planEdit.applied
-        ? buildPlanEditReply(profile, planEdit)
-        : buildPlanEditFailureReply(profile, planEdit.reason)
-      const messageType = planEdit.applied
-        ? (planEdit.type === 'workout' ? 'workout_card' : 'meal_card')
-        : 'alert'
+    if (planEdit.shouldStop) {
+      let reply: string
+      let messageType: string
+      let metadata: Record<string, any> = {}
+
+      if (planEdit.applied) {
+        // Applied a confirmed change — show done card
+        reply = buildPlanEditReply(profile, planEdit)
+        messageType = planEdit.type === 'workout' ? 'workout_card' : 'meal_card'
+        metadata = { plan_edit: planEdit, total_estimated_cost_usd: planEdit.usage.estimated_cost_usd }
+      } else if (planEdit.proposed) {
+        // Proposal generated — show proposal card, store pending JSON in metadata
+        reply = planEdit.proposalText
+        messageType = 'plan_proposal'
+        metadata = {
+          pending_plan_json: planEdit.pendingPlanJson,
+          pending_plan_type: planEdit.pendingPlanType,
+          total_estimated_cost_usd: planEdit.usage.estimated_cost_usd,
+        }
+      } else {
+        // Error/failure
+        reply = buildPlanEditFailureReply(profile, planEdit.reason)
+        messageType = 'alert'
+        metadata = { plan_edit_error: planEdit.reason, total_estimated_cost_usd: 0 }
+      }
 
       await supabase.from('chat_messages').insert({
         user_id: user.id,
         role: 'assistant',
         content: reply,
         message_type: messageType,
-        metadata: {
-          ...(planEdit.applied ? { plan_edit: planEdit } : { plan_edit_error: planEdit.reason }),
-          total_estimated_cost_usd: planEdit.applied ? planEdit.usage.estimated_cost_usd : 0,
-        },
+        metadata,
       })
 
       if (!isLaunchMode()) {
@@ -250,12 +269,20 @@ export async function POST(req: Request) {
   }
 }
 
+type UsageMeta = { model: string; input_tokens: number; output_tokens: number; estimated_cost_usd: number }
+
 type PlanEditResult =
-  | { applied: false; shouldStop: false; reason: string }
-  | { applied: false; shouldStop: true; reason: string }
-  | { applied: true; shouldStop: true; type: 'workout' | 'diet'; summary: string; usage: { model: string; input_tokens: number; output_tokens: number; estimated_cost_usd: number } }
+  | { applied: false; proposed: false; shouldStop: false; reason: string }
+  | { applied: false; proposed: false; shouldStop: true;  reason: string }
+  | { applied: false; proposed: true;  shouldStop: true;  proposalText: string; pendingPlanJson: any; pendingPlanType: 'workout' | 'diet'; usage: UsageMeta }
+  | { applied: true;  proposed: false; shouldStop: true;  type: 'workout' | 'diet'; summary: string; usage: UsageMeta }
 
 type PlanEditIntent = 'workout' | 'diet' | 'rest_today'
+
+// ── Detect if user is confirming a previous proposal ─────────────
+function detectConfirmation(message: string): boolean {
+  return /\b(yes|yeah|sure|ok|okay|do it|apply|apply it|go ahead|confirm|confirmed|that's fine|that's good|perfect|sounds good|looks good|sounds great|do that|make it|change it|update it|save it|use it|let's do it|let's go)\b|^(yes|yeah|sure|ok|okay|yep|yup|نعم|أجل|موافق|طبق|حسناً|تمام|اعمله|صح|جيد|بالتأكيد|افعل|نعم افعله|طبق التغيير)/i.test(message.trim())
+}
 
 async function maybeApplyPlanEdit({
   client,
@@ -265,6 +292,7 @@ async function maybeApplyPlanEdit({
   message,
   workoutPlanRow,
   dietPlanRow,
+  pendingProposals,
 }: {
   client: Anthropic
   supabase: Awaited<ReturnType<typeof createServerClient>>
@@ -273,42 +301,75 @@ async function maybeApplyPlanEdit({
   message: string
   workoutPlanRow: any
   dietPlanRow: any
+  pendingProposals: any[]
 }): Promise<PlanEditResult> {
+
+  // ── STEP 1: Check if user is confirming a previous proposal ───
+  if (detectConfirmation(message) && pendingProposals.length > 0) {
+    // Find the most recent proposal that is < 10 min old (avoid stale confirmations)
+    const recent = pendingProposals.find(p => {
+      const age = Date.now() - new Date(p.created_at).getTime()
+      return age < 10 * 60 * 1000 && p.metadata?.pending_plan_json
+    })
+
+    if (recent) {
+      const { pending_plan_json, pending_plan_type } = recent.metadata
+      const planType: 'workout' | 'diet' = pending_plan_type || 'workout'
+
+      try {
+        let finalPlan = pending_plan_json
+        if (planType === 'workout') {
+          finalPlan = normalizeWorkoutPlanDays(finalPlan)
+          await enrichWorkoutVideos(finalPlan)
+          const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
+          if (error) throw error
+        } else {
+          const { error } = await supabase.from('diet_plans').update({ plan_json: finalPlan }).eq('id', dietPlanRow.id).eq('user_id', userId)
+          if (error) throw error
+        }
+        return {
+          applied: true, proposed: false, shouldStop: true, type: planType,
+          summary: 'Change applied as proposed.',
+          usage: { model: 'cached', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
+        }
+      } catch (err) {
+        console.error('Apply pending proposal failed:', err)
+        return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
+      }
+    }
+  }
+
+  // ── STEP 2: Detect new edit intent ────────────────────────────
   const intent = detectPlanEditIntent(message)
-  if (!intent) return { applied: false, shouldStop: false, reason: 'no_plan_edit_intent' }
+  if (!intent) return { applied: false, proposed: false, shouldStop: false, reason: 'no_plan_edit_intent' }
   if ((intent === 'workout' || intent === 'rest_today') && !workoutPlanRow?.plan_json) {
-    return { applied: false, shouldStop: true, reason: 'no_active_workout_plan' }
+    return { applied: false, proposed: false, shouldStop: true, reason: 'no_active_workout_plan' }
   }
   if (intent === 'diet' && !dietPlanRow?.plan_json) {
-    return { applied: false, shouldStop: true, reason: 'no_active_diet_plan' }
+    return { applied: false, proposed: false, shouldStop: true, reason: 'no_active_diet_plan' }
   }
 
-  try {
-    if (intent === 'rest_today') {
+  // Rest-day is immediate — no proposal needed
+  if (intent === 'rest_today') {
+    try {
       const result = applyRestDayToday(workoutPlanRow.plan_json, message)
-      const { error } = await supabase
-        .from('workout_plans')
-        .update({ plan_json: result.plan })
-        .eq('id', workoutPlanRow.id)
-        .eq('user_id', userId)
+      const { error } = await supabase.from('workout_plans').update({ plan_json: result.plan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
       if (error) throw error
-
       return {
-        applied: true,
-        shouldStop: true,
-        type: 'workout',
+        applied: true, proposed: false, shouldStop: true, type: 'workout',
         summary: result.summary,
         usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
       }
+    } catch (err) {
+      console.error('Rest day failed:', err)
+      return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
     }
+  }
 
+  // ── STEP 3: Generate proposal (DO NOT save to DB yet) ─────────
+  try {
     const currentPlan = intent === 'workout' ? workoutPlanRow.plan_json : dietPlanRow.plan_json
-    const prompt = buildPlanEditPrompt({
-      type: intent,
-      profile,
-      userRequest: message,
-      currentPlan,
-    })
+    const prompt = buildPlanEditPrompt({ type: intent, profile, userRequest: message, currentPlan })
 
     const editResponse = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -318,40 +379,19 @@ async function maybeApplyPlanEdit({
 
     const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
     const edit = parseJsonObject(raw)
-    if (!edit?.updated_plan || typeof edit.summary !== 'string') {
-      return { applied: false, shouldStop: true, reason: 'invalid_plan_edit_response' }
+    if (!edit?.updated_plan || typeof edit.proposal_text !== 'string') {
+      return { applied: false, proposed: false, shouldStop: true, reason: 'invalid_plan_edit_response' }
     }
 
-    if (intent === 'workout') {
-      edit.updated_plan = normalizeWorkoutPlanDays(edit.updated_plan)
-      await enrichWorkoutVideos(edit.updated_plan)
-      const { error } = await supabase
-        .from('workout_plans')
-        .update({ plan_json: edit.updated_plan })
-        .eq('id', workoutPlanRow.id)
-        .eq('user_id', userId)
-      if (error) throw error
-    } else {
-      const { error } = await supabase
-        .from('diet_plans')
-        .update({ plan_json: edit.updated_plan })
-        .eq('id', dietPlanRow.id)
-        .eq('user_id', userId)
-      if (error) throw error
-    }
-
-    await recordAiUsage({
-      userId,
-      feature: `plan_edit_${intent}`,
-      model: editResponse.model,
-      usage: editResponse.usage,
-    })
+    await recordAiUsage({ userId, feature: `plan_proposal_${intent}`, model: editResponse.model, usage: editResponse.usage })
 
     return {
-      applied: true,
+      applied: false,
+      proposed: true,
       shouldStop: true,
-      type: intent,
-      summary: edit.summary.slice(0, 500),
+      proposalText: edit.proposal_text.slice(0, 800),
+      pendingPlanJson: edit.updated_plan,
+      pendingPlanType: intent,
       usage: {
         model: editResponse.model,
         input_tokens: editResponse.usage.input_tokens,
@@ -360,8 +400,8 @@ async function maybeApplyPlanEdit({
       },
     }
   } catch (err) {
-    console.error('Plan edit failed:', err)
-    return { applied: false, shouldStop: true, reason: 'plan_edit_failed' }
+    console.error('Plan proposal failed:', err)
+    return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
   }
 }
 
@@ -509,44 +549,74 @@ function buildPlanEditPrompt({
   currentPlan: any
 }) {
   const language = normalizeAiLanguage(profile?.language)
+  const ar = language === 'ar'
+
+  const foodsLoved   = profile?.foods_loved   || 'Not specified'
+  const foodsHated   = profile?.foods_hated   || 'None'
+  const exHated      = profile?.exercises_hated || 'None'
+  const allergies    = profile?.allergies || profile?.food_allergies || 'None'
+  const dietary      = Array.isArray(profile?.dietary_preference) ? profile.dietary_preference.join(', ') : profile?.dietary_preference || 'None'
+  const injuries     = profile?.injuries || 'None'
+  const equipment    = Array.isArray(profile?.equipment) ? profile.equipment.join(', ') : 'Not specified'
+  const gymAccess    = profile?.gym_access ? 'Yes' : 'No'
+  const cookingAbility = profile?.cooking_ability || 'Not specified'
+  const budget       = profile?.food_budget || 'Not specified'
+  const strengthLevels = profile?.strength_levels || 'Not specified'
+
   const profileText = profile ? `Name: ${profile.name} | Age: ${profile.age} | Gender: ${profile.gender}
 Goal: ${profile.goal}${profile.goal_target ? ` (target: ${profile.goal_target})` : ''}
-Weight: ${profile.weight_kg}kg | Height: ${profile.height_cm}cm
-Language: ${profile.language || 'en'}
-Training days: ${profile.training_days_per_week ?? profile.training_days ?? 'Not specified'}/week | Gym access: ${profile.gym_access ? 'Yes' : 'No'} | Equipment: ${Array.isArray(profile.equipment) ? profile.equipment.join(', ') : 'Not specified'}
-Injuries: ${profile.injuries || 'None'} | Medical: ${profile.medical_conditions || 'None'}
-Dietary: ${Array.isArray(profile.dietary_preference) ? profile.dietary_preference.join(', ') : profile.dietary_preference || 'None'}
-Allergies: ${profile.food_allergies || profile.allergies || 'None'}
-Foods loved/hated: ${profile.food_preferences || 'Not specified'}
-Exercises hated: ${profile.exercises_hated || 'None'}` : 'No profile loaded'
+Weight: ${profile.weight_kg}kg | Height: ${profile.height_cm}cm | Language: ${profile.language || 'en'}
+Training days: ${profile.training_days_per_week ?? profile.training_days ?? 'Not specified'}/week | Gym access: ${gymAccess} | Equipment: ${equipment}
+Injuries/medical: ${injuries} | ${profile?.medical_conditions || 'No medical conditions'}
+Dietary restrictions: ${dietary} | Allergies: ${allergies}
+Foods LOVED (must use these): ${foodsLoved}
+Foods HATED (never use these): ${foodsHated}
+Exercises HATED (never program these): ${exHated}
+Cooking ability: ${cookingAbility} | Food budget: ${budget}
+Strength levels (current working weights): ${strengthLevels}` : 'No profile loaded'
 
-  return `You are Ion, a careful personal trainer and nutrition coach. The user is asking to change their active ${type === 'workout' ? 'workout' : 'nutrition'} plan.
+  return `You are Ion, an elite personal trainer and nutrition coach. The user wants to change their active ${type === 'workout' ? 'workout' : 'nutrition'} plan.
 
 USER PROFILE:
 ${profileText}
 
 USER REQUEST:
-${userRequest}
+"${userRequest}"
 
 CURRENT ACTIVE PLAN JSON:
 ${JSON.stringify(currentPlan, null, 2)}
 
-TASK:
-${aiLanguageInstruction(language, 'the summary and all user-facing string values inside updated_plan')}
-- Return the full updated plan JSON, preserving the same overall shape and all useful existing fields.
-- Make only the requested change plus directly necessary balancing changes.
-- If this is a workout plan, keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group when present.
-- If this is a workout plan, day_name values must remain exact English weekdays: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday. Translate visible coaching/exercise strings, but not day_name values.
-- If replacing an exercise, choose a safe equivalent for the same muscle group and the user's equipment/injuries.
-- If this is a diet plan, keep daily calories/macros coherent and meal totals roughly aligned.
-- If this is a diet plan, every meal must include a practical recipe object with title, prep_time_min, cook_time_min, ingredients, steps, and tips.
-- If the profile language is Arabic, the saved updated_plan must read naturally in Arabic on the plan, workout, and nutrition pages. The JSON keys must stay unchanged.
-- The saved updated_plan must be immediately usable by the app pages. Preserve top-level "meals" for diet plans and top-level "days" for workout plans when those fields exist.
-- Do not include markdown or explanations outside JSON.
+YOUR TASK:
+You must PROPOSE a personalised change — not apply it blindly. Think like a coach: interpret what the user actually needs, then build a specific updated plan using ONLY their personal preferences, foods, and constraints above.
+
+PERSONALIZATION RULES (non-negotiable):
+${type === 'diet' ? `- MUST include foods from "Foods LOVED" list in meal suggestions
+- MUST NOT include ANY food from "Foods HATED" list
+- MUST NOT include ANY food from "Allergies" list
+- MUST respect dietary restrictions: ${dietary}
+- Meals must match their cooking ability (${cookingAbility}) and food budget (${budget})` :
+`- MUST NOT program any exercise from "Exercises HATED" list
+- MUST use their available equipment: ${equipment}
+- MUST respect injuries: ${injuries}
+- If strength levels are provided, use them to calibrate weight_guidance and progression
+- Choose substitute exercises the user will enjoy and can actually do`}
+
+OUTPUT RULES:
+${aiLanguageInstruction(language, 'the proposal_text and all user-facing strings inside updated_plan')}
+- Return the full updated plan JSON preserving the same overall shape and all existing useful fields.
+- Make only the requested change plus directly necessary balancing adjustments.
+${type === 'workout' ? `- Keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group.
+- day_name values must stay exact English weekdays (Sunday … Saturday). Translate coaching text but not day_name.` :
+`- Keep daily calories/macros coherent. Every meal must include: title, prep_time_min, cook_time_min, ingredients, steps, tips.`}
+- If language is Arabic, all user-facing strings must be in Arabic. JSON keys must stay unchanged.
+- Preserve top-level "meals" for diet plans and "days" for workout plans.
+- Do NOT include markdown or any text outside the JSON wrapper.
+
+proposal_text must be 2–3 sentences in ${ar ? 'Arabic' : 'English'}: explain exactly WHAT you changed, WHY it suits this specific user (reference their foods/exercises/goals), and invite them to confirm. Be specific — mention the actual food or exercise names.
 
 Return ONLY valid JSON in this exact wrapper:
 {
-  "summary": "1 sentence explaining what changed",
+  "proposal_text": "2–3 sentence personalised proposal for the user to review",
   "updated_plan": { ...full updated plan... }
 }`
 }
@@ -561,7 +631,7 @@ function parseJsonObject(raw: string): any | null {
   }
 }
 
-type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan'
+type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan' | 'plan_proposal'
 
 function normalizeAssistantReply(raw: string): { content: string; messageType: MessageType } {
   const cleaned = stripCodeFences(raw)
@@ -590,7 +660,7 @@ function stripCodeFences(raw: string) {
 }
 
 function isMessageType(value: string): value is MessageType {
-  return ['text', 'suggestion', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan'].includes(value)
+  return ['text', 'suggestion', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan', 'plan_proposal'].includes(value)
 }
 
 async function enrichWorkoutVideos(plan: any) {
@@ -698,7 +768,7 @@ ${workoutBlock}
 3. Use the client's name naturally. Reference their specific plan exercises, meal names, and logged numbers — not made-up examples.
 4. Keep responses short and punchy (2–4 sentences) unless a detailed breakdown is genuinely needed.
 5. Proactively call out patterns you see in the data: weight plateaus (< 0.5 kg change over 3+ measurements), 3+ consecutive missed sessions, protein intake below 70% of daily target, or left/right body symmetry gaps > 1.5 cm. Don't wait to be asked.
-6. When the client asks to modify their plan, detect the intent and apply the change directly — do not ask them to go to the plan page.
+6. When the client asks to modify their plan, FIRST propose the specific personalised change you intend to make (2–3 sentences: what, why it fits them, invite confirmation). NEVER apply a plan edit without the client confirming first. After they say yes/okay/go ahead, apply immediately. For simple rest-day swaps you may apply directly without a proposal.
 7. For medical or injury questions, recommend a doctor first, then still give practical guidance within safe limits.
 8. If the client is struggling or feeling demotivated, be honest and encouraging — no hollow praise. Name what's actually going well.
 9. Language rule: If the saved client language is Arabic, ALWAYS reply in Arabic even if the user types English or Arabizi. If English, reply in English unless the user explicitly asks to switch.

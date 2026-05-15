@@ -9,7 +9,7 @@ const PLAN_MODIFY_WINDOW_DAYS = 30
 
 export const dynamic = 'force-dynamic'
 
-type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan'
+type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan' | 'plan_proposal'
 type Role = 'user' | 'ion' | 'assistant'
 
 interface Message {
@@ -576,6 +576,7 @@ function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender:
     milestone: { bg: 'rgba(245,158,11,0.05)', border: 'rgba(245,158,11,0.25)', icon: <CheckCircle size={13} style={{ color: '#F59E0B' }} />, label: 'Milestone' },
     alert: { bg: 'rgba(239,68,68,0.05)', border: 'rgba(239,68,68,0.2)', icon: <AlertCircle size={13} style={{ color: '#EF4444' }} />, label: 'Alert' },
     new_plan: { bg: 'rgba(187,92,246,0.08)', border: 'rgba(187,92,246,0.3)', icon: <TrendingUp size={13} style={{ color: '#D88BFF' }} />, label: 'New Plan' },
+    plan_proposal: { bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.28)', icon: <Zap size={13} style={{ color: '#F59E0B' }} />, label: 'Proposed Change' },
     text: { bg: '#0E0E0E', border: 'rgba(255,255,255,0.05)', icon: null, label: null },
   }
 
@@ -639,6 +640,24 @@ function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender:
             <a href="/workout/today" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(187,92,246,0.1)', color: '#BB5CF6', border: '1px solid rgba(187,92,246,0.2)' }}>
               Go to Workout
             </a>
+          </div>
+        )}
+        {type === 'plan_proposal' && (
+          <div className="flex gap-2 mt-3 flex-wrap">
+            <button
+              onClick={() => onPrompt(isRTL ? 'نعم، طبق التغيير' : 'Yes, apply this change')}
+              className="px-3 py-1.5 rounded-lg font-heading text-xs font-bold transition-all"
+              style={{ background: 'rgba(245,158,11,0.18)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.35)' }}
+            >
+              {isRTL ? '✓ طبق التغيير' : '✓ Apply Change'}
+            </button>
+            <button
+              onClick={() => onPrompt(isRTL ? 'لا، اقترح شيئاً آخر' : 'No, suggest something else')}
+              className="px-3 py-1.5 rounded-lg font-heading text-xs font-semibold transition-all"
+              style={{ background: 'rgba(255,255,255,0.04)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.1)' }}
+            >
+              {isRTL ? 'اقترح شيئاً آخر' : 'Suggest something else'}
+            </button>
           </div>
         )}
       </div>
