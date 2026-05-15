@@ -490,6 +490,9 @@ const CATEGORY_ICONS: Record<string, string> = {
   Recovery:    '🔄',
   Health:      '🛡️',
   Cognition:   '🧠',
+  Vitamin:     '🌟',
+  Mineral:     '💎',
+  Adaptogen:   '🌿',
 }
 
 function SupplementCard({ tier, recommendation, loading, expanded, onToggle }: {
@@ -550,19 +553,9 @@ function SupplementCard({ tier, recommendation, loading, expanded, onToggle }: {
     )
   }
 
-  // No data yet — plan hasn't been renewed since feature launch
+  // No data yet — generate on demand
   if (!hasData) {
-    return (
-      <div className="mb-5 p-5 rounded-2xl flex items-center gap-4" style={{ background: '#0E0E0E', border: '1px solid rgba(187,92,246,0.15)' }}>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(187,92,246,0.12)' }}>
-          <FlaskConical size={18} style={{ color: '#BB5CF6' }} />
-        </div>
-        <div>
-          <p className="font-heading font-bold text-sm text-white mb-0.5">Ion Supplement Stack</p>
-          <p className="font-heading text-xs" style={{ color: '#64748B' }}>Supplement recommendations will appear after your next plan renewal cycle.</p>
-        </div>
-      </div>
-    )
+    return <SupplementGenerateNow />
   }
 
   const rec = recommendation.recommendations
@@ -688,6 +681,63 @@ function SupplementRow({ s }: { s: any }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function SupplementGenerateNow() {
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function generate() {
+    setGenerating(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/supplement-recommendations', { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || 'Failed')
+      }
+      // Reload page to pick up new data
+      window.location.reload()
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong')
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div className="mb-5 rounded-2xl overflow-hidden" style={{ background: '#0E0E0E', border: '1px solid rgba(187,92,246,0.15)' }}>
+      <div className="p-5 flex items-center gap-4">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(187,92,246,0.12)' }}>
+          <FlaskConical size={18} style={{ color: '#BB5CF6' }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-heading font-bold text-sm text-white mb-0.5">Ion Supplement Stack</p>
+          <p className="font-heading text-xs" style={{ color: '#64748B' }}>
+            {error
+              ? <span style={{ color: '#EF4444' }}>{error}</span>
+              : 'Ion will analyse your plan and profile to build a personalised supplement + vitamin stack.'}
+          </p>
+        </div>
+        <button
+          onClick={generate}
+          disabled={generating}
+          className="font-heading font-bold text-xs px-3 py-1.5 rounded-lg flex-shrink-0 transition-all hover:opacity-90 flex items-center gap-1.5"
+          style={{ background: generating ? 'rgba(187,92,246,0.08)' : 'rgba(187,92,246,0.2)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.3)' }}
+        >
+          {generating ? (
+            <>
+              <div className="w-3 h-3 rounded-full border border-t-transparent animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
+              Analysing…
+            </>
+          ) : (
+            <>
+              <Sparkles size={11} /> Generate
+            </>
+          )}
+        </button>
+      </div>
     </div>
   )
 }

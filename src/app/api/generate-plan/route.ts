@@ -9,6 +9,7 @@ import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { recordAppEvent } from '@/lib/app-events'
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
+import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
 
 export async function POST(req: Request) {
   // Guard: API key must be set
@@ -181,6 +182,16 @@ export async function POST(req: Request) {
       metadata: { workout_plan_id: workoutPlan?.id, diet_plan_id: dietPlan?.id },
     })
 
+    // Fire supplement + vitamin recommendations (Elite only, non-blocking)
+    generateSupplementRecsIfElite(
+      supabase,
+      client,
+      user.id,
+      { ...profileForPlan, ...profileData },
+      plan.diet_plan,
+      normalizeAiLanguage(profileForPlan.language),
+    ).catch(e => console.error('[generate-plan] supplement gen failed:', e))
+
     // Send welcome email (fire-and-forget; do not block response)
     if (user.email) {
       sendEmail({
@@ -284,8 +295,55 @@ function repairTruncatedJSON(s: string): string | null {
   }
 }
 
+/** Pre-calculate evidence-based macro targets from profile data. */
+function calculateMacros(p: any) {
+  const weight  = parseFloat(p.weight_kg)  || 70
+  const height  = parseFloat(p.height_cm)  || 170
+  const age     = parseInt(p.age)          || 25
+  const female  = p.gender === 'female'
+
+  // Mifflin-St Jeor BMR
+  const bmr = female
+    ? 10 * weight + 6.25 * height - 5 * age - 161
+    : 10 * weight + 6.25 * height - 5 * age + 5
+
+  // Activity multiplier (training days)
+  const days = parseInt(p.training_days) || 3
+  const mult = days <= 2 ? 1.375 : days <= 3 ? 1.55 : days <= 5 ? 1.65 : 1.725
+  const tdee = Math.round(bmr * mult)
+
+  // Calorie adjustment by goal + speed
+  const speed = p.goal_speed || 'moderate'
+  const deficit = speed === 'aggressive' ? 600 : speed === 'slow' ? 250 : 400
+  const surplus = speed === 'aggressive' ? 400 : speed === 'slow' ? 150 : 250
+
+  let calories: number
+  switch (p.goal) {
+    case 'lose_fat':      calories = Math.max(female ? 1300 : 1500, tdee - deficit); break
+    case 'build_muscle':  calories = tdee + surplus; break
+    case 'recomposition': calories = tdee; break
+    default:              calories = Math.max(1500, tdee - 150) // slight deficit for health/fitness
+  }
+
+  // Protein: 1.8–2.0 g/kg for body composition goals; 1.6 g/kg for general health
+  const protGKg = ['lose_fat', 'build_muscle', 'recomposition'].includes(p.goal) ? 1.9 : 1.6
+  const protein = Math.round(weight * protGKg)
+
+  // Fat: ~0.85 g/kg (minimum 40 g)
+  const fat = Math.max(40, Math.round(weight * 0.85))
+
+  // Carbs: remaining calories
+  const carbs = Math.max(50, Math.round((calories - protein * 4 - fat * 9) / 4))
+
+  // Water: 35 ml/kg base + 500 ml per training day (up to +1.5 L)
+  const water = Math.round((weight * 35 + Math.min(days, 3) * 500) / 100) / 10
+
+  return { calories, protein, fat, carbs, water, tdee }
+}
+
 function buildPrompt(p: any): string {
   const language = normalizeAiLanguage(p.language)
+  const macros = calculateMacros(p)
   const goalLabels: Record<string, string> = {
     lose_fat: 'Lose Body Fat',
     build_muscle: 'Build Muscle',
@@ -339,7 +397,23 @@ NUTRITION:
 HEALTH:
 - Injuries: ${p.injuries || 'None'}
 - Medical conditions: ${p.medical_conditions || 'None'}
-- Supplements: ${p.supplements || 'None'}
+- Current supplements: ${p.supplements || 'None'}
+
+⚠️ MACRO TARGETS — USE THESE EXACT VALUES IN THE DIET PLAN (do not recalculate):
+- TDEE estimated: ${macros.tdee} kcal/day
+- daily_calories: ${macros.calories} kcal  (${p.goal === 'lose_fat' ? `${macros.tdee - macros.calories} kcal deficit` : p.goal === 'build_muscle' ? `${macros.calories - macros.tdee} kcal surplus` : 'maintenance'})
+- protein_g: ${macros.protein} g  (${(macros.protein / (parseFloat(p.weight_kg) || 70)).toFixed(1)} g/kg bodyweight — do NOT exceed this)
+- fat_g: ${macros.fat} g  (~0.85 g/kg)
+- carbs_g: ${macros.carbs} g  (remaining calories)
+- water_l: ${macros.water} L
+The meal totals must sum to exactly the daily_calories target (±30 kcal tolerance).
+Never use more than 2.2 g protein per kg bodyweight regardless of goal.
+
+⚠️ MEAL PERSONALISATION RULES:
+- MUST include foods from "Foods loved" in the meal plan
+- MUST NOT include any food from "Foods hated" or "Allergies"
+- Respect all dietary restrictions
+- Meal times must fit the user's wake time (${p.wake_time}), sleep time (${p.sleep_time}), and work schedule (${p.work_schedule})
 
 IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text before or after. Use this exact structure:
 IMPORTANT FOR APP COMPATIBILITY:
@@ -377,11 +451,11 @@ IMPORTANT FOR APP COMPATIBILITY:
     ]
   },
   "diet_plan": {
-    "daily_calories": 2400,
-    "protein_g": 180,
-    "carbs_g": 240,
-    "fat_g": 80,
-    "water_l": 3.0,
+    "daily_calories": ${macros.calories},
+    "protein_g": ${macros.protein},
+    "carbs_g": ${macros.carbs},
+    "fat_g": ${macros.fat},
+    "water_l": ${macros.water},
     "approach": "e.g. Moderate caloric deficit of 400 kcal to promote fat loss",
     "pre_workout": "Suggested pre-workout meal timing and content",
     "post_workout": "Suggested post-workout meal timing and content",
