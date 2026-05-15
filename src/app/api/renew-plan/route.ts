@@ -95,7 +95,7 @@ export async function POST(req: Request) {
 
     // ── Call Claude ────────────────────────────────────────────────────
     const message = await withAnthropicRetry(() => client.messages.create({
-      model: 'claude-opus-4-5',
+      model: process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5',
       max_tokens: 16000,
       system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
@@ -138,8 +138,9 @@ export async function POST(req: Request) {
       user_id: user.id,
       role: 'assistant',
       content: preview.message,
-      message_type: 'renewal_preview',
+      message_type: 'text',
       metadata: {
+        renewal_preview: true,
         pending_plan_json: planJson,
         pending_plan_type: planType,
         previous_plan_id: oldPlanRes.data?.id ?? null,
@@ -193,7 +194,8 @@ async function applyRenewalPreview({
     .select('id, metadata, created_at')
     .eq('id', previewId)
     .eq('user_id', userId)
-    .eq('message_type', 'renewal_preview')
+    .eq('message_type', 'text')
+    .contains('metadata', { renewal_preview: true })
     .maybeSingle()
 
   if (error) throw error
@@ -223,17 +225,22 @@ async function applyRenewalPreview({
     },
   }
 
-  const { error: deactivateError } = await admin.from(table).update({ active: false }).eq('user_id', userId).eq('active', true)
-  if (deactivateError) throw deactivateError
-
+  // Atomic swap: insert inactive first, then deactivate old, then activate new
+  // — avoids a window where the user has zero active plans if insert fails
   const { data: insertedPlan, error: insertError } = await admin.from(table).insert({
     user_id: userId,
     plan_json: planJson,
-    active: true,
+    active: false,
     start_date: startDate,
     end_date: endDate,
   }).select('id, plan_json').single()
   if (insertError) throw insertError
+
+  const { error: deactivateError } = await admin.from(table).update({ active: false }).eq('user_id', userId).eq('active', true)
+  if (deactivateError) throw deactivateError
+
+  const { error: activateError } = await admin.from(table).update({ active: true }).eq('id', insertedPlan.id).eq('user_id', userId)
+  if (activateError) throw activateError
 
   const { data: profile } = await admin.from('profiles').select('*').eq('user_id', userId).maybeSingle()
   const language = normalizeAiLanguage(profile?.language)
@@ -245,17 +252,18 @@ async function applyRenewalPreview({
     user_id: userId,
     role: 'assistant',
     content: ionMessage,
-    message_type: 'new_plan',
+    message_type: 'text',
     metadata: { renewal_applied: true, plan_type: planType, plan_id: insertedPlan?.id },
   })
 
-  await admin.from('chat_messages').update({
+  const { error: markAppliedError } = await admin.from('chat_messages').update({
     metadata: {
       ...previewRow.metadata,
       applied_at: new Date().toISOString(),
       applied_plan_id: insertedPlan?.id,
     },
   }).eq('id', previewId)
+  if (markAppliedError) throw markAppliedError
 
   await Promise.allSettled([
     email ? sendEmail({ to: email, type: 'new_plan', data: { name: profile?.name || 'there', planType, weeks: durationWeeks } }) : Promise.resolve(),
@@ -300,8 +308,16 @@ async function rollbackPlan({
   }
 
   const table = planType === 'diet' ? 'diet_plans' : 'workout_plans'
-  const currentRes = await admin.from(table).select('id').eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  const targetBase = admin.from(table).select('*').eq('user_id', userId).eq('active', false)
+
+  const [currentRes, targetBase, langRes] = await Promise.all([
+    admin.from(table).select('id').eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    Promise.resolve(admin.from(table).select('*').eq('user_id', userId).eq('active', false)),
+    admin.from('profiles').select('language').eq('user_id', userId).maybeSingle(),
+  ])
+
+  const language = normalizeAiLanguage(langRes.data?.language)
+  const ar = language === 'ar'
+
   const targetRes = targetPlanId
     ? await targetBase.eq('id', targetPlanId).maybeSingle()
     : await targetBase.order('created_at', { ascending: false }).limit(1).maybeSingle()
@@ -328,13 +344,19 @@ async function rollbackPlan({
   }).eq('id', targetRes.data.id).eq('user_id', userId)
   if (restoreError) throw restoreError
 
+  const rollbackMsg = ar
+    ? (planType === 'diet'
+        ? 'تم استعادة خطة التغذية السابقة. صفحة التغذية تستخدم تلك الدورة الآن.'
+        : 'تم استعادة خطة التمرين السابقة. صفحة التمرين تستخدم تلك الدورة الآن.')
+    : (planType === 'diet'
+        ? 'I restored your previous nutrition plan. Your nutrition page now uses that cycle again.'
+        : 'I restored your previous workout plan. Your workout pages now use that cycle again.')
+
   await admin.from('chat_messages').insert({
     user_id: userId,
     role: 'assistant',
-    content: planType === 'diet'
-      ? 'I restored your previous nutrition plan. Your nutrition page now uses that cycle again.'
-      : 'I restored your previous workout plan. Your workout pages now use that cycle again.',
-    message_type: 'new_plan',
+    content: rollbackMsg,
+    message_type: 'text',
     metadata: { rollback: true, plan_type: planType, restored_plan_id: targetRes.data.id, replaced_plan_id: currentRes.data?.id ?? null },
   })
 

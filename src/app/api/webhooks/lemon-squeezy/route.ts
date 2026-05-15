@@ -92,11 +92,13 @@ export async function POST(req: Request) {
       }
 
       // Ion welcome message — guard against duplicates on webhook retry
+      // Uses metadata flag instead of a custom message_type to stay within the DB constraint
       const { count: existingWelcome } = await supabase
         .from('chat_messages')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .eq('message_type', 'subscription_welcome')
+        .eq('message_type', 'text')
+        .contains('metadata', { subscription_welcome: true })
 
       if (!existingWelcome) {
         const welcomeMsg = isElite
@@ -109,7 +111,8 @@ export async function POST(req: Request) {
           user_id: userId,
           role: 'assistant',
           content: welcomeMsg,
-          message_type: 'subscription_welcome',
+          message_type: 'text',
+          metadata: { subscription_welcome: true },
         })
       }
       break
