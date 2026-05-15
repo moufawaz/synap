@@ -455,6 +455,7 @@ function detectPlanEditIntent(message: string, recentContext = ''): PlanEditInte
   const currentText = message.toLowerCase()
   const text = currentText
   const contextText = `${currentText}\n${recentContext}`.toLowerCase()
+  const latestContext = latestAssistantContext(recentContext).toLowerCase()
   const hasArabic = /[\u0600-\u06FF]/.test(message)
   const restTodayWords = /\b(rest day|take a rest|rest today|skip today|day off|move today|reschedule today|postpone today|recover today)\b|راحة|استراحة|ارتاح|ريست|أجل|اجل|انقل.*اليوم|راحة اليوم/
   if (restTodayWords.test(text)) return 'rest_today'
@@ -466,9 +467,20 @@ function detectPlanEditIntent(message: string, recentContext = ''): PlanEditInte
   const workoutWords = /\b(exercise|workout|training|lift|bench|squat|deadlift|cardio|sets|reps|gym|machine|dumbbell|barbell|shoulder|knee|back pain|leg|chest|back|biceps|triceps)\b|تمرين|تمارين|تدريب|جيم|سكوات|بنش|ديدلفت|كارديو|مجموعات|تكرارات|كتف|ركبة|ظهر|صدر|رجل|بايسبس|ترايسبس/
   const dietWords = /\b(food|meal|diet|nutrition|calorie|calories|macro|protein|carb|fat|breakfast|lunch|dinner|snack|chicken|rice|egg|milk|fish|beef|vegetarian|vegan|oats|bread)\b|أكل|اكل|وجبة|وجبات|غذاء|تغذية|سعرات|سعرة|بروتين|كارب|كربوهيدرات|دهون|فطور|غداء|عشاء|سناك|دجاج|رز|أرز|بيض|حليب|سمك|لحم|شوفان|خبز/
 
+  const workoutActionWords = /\b(workout plan|exercise plan|training plan|active training|training days?|metabolic finisher|finisher|exercise|workout|training|sets?|reps?|jump squat|push-?up|tricep|rope pushdown|squat|bench|deadlift|cardio)\b/
+  const dietActionWords = /\b(nutrition plan|diet plan|meal plan|meal|food|calorie|macro|breakfast|lunch|dinner|snack)\b/
+
+  if (confirmationOnly && latestContext) {
+    const latestHasWorkout = workoutActionWords.test(latestContext)
+    const latestHasDiet = dietActionWords.test(latestContext)
+    const dietOnlyUnchanged = /\b(nutrition|diet|meal plan)\s+(?:remains|stays|is)\s+(?:exactly\s+)?(?:the\s+)?same/.test(latestContext)
+    if (latestHasWorkout && (!latestHasDiet || dietOnlyUnchanged)) return 'workout'
+    if (latestHasDiet && !latestHasWorkout) return 'diet'
+  }
+
   if (workoutWords.test(text) && !dietWords.test(text)) return 'workout'
   if (dietWords.test(text) && !workoutWords.test(text)) return 'diet'
-  if ((changeWords.test(text) || confirmationOnly) && workoutWords.test(contextText) && !dietWords.test(contextText)) return 'workout'
+  if ((changeWords.test(text) || confirmationOnly) && workoutActionWords.test(contextText) && (!dietWords.test(contextText) || !dietActionWords.test(latestContext))) return 'workout'
   if ((changeWords.test(text) || confirmationOnly) && dietWords.test(contextText)) return 'diet'
   if (/\b(exercise|workout|training|gym)\b|تمرين|تدريب|جيم/.test(text)) return 'workout'
   if (/\b(food|meal|diet|nutrition|calorie|macro)\b|أكل|اكل|وجبة|غذاء|تغذية|سعرات/.test(text)) return 'diet'
@@ -482,6 +494,12 @@ function buildRecentPlanEditContext(history: { role: string; content: string }[]
     .map(item => `${item.role}: ${normalizeAssistantReply(item.content).content}`)
     .join('\n')
     .slice(-3000)
+}
+
+function latestAssistantContext(context: string) {
+  const lines = String(context || '').split('\n')
+  const latest = [...lines].reverse().find(line => /^assistant:/i.test(line))
+  return latest || context
 }
 
 function hasPlanEditContext(context: string) {
