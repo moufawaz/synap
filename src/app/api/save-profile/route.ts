@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { recordAppEvent } from '@/lib/app-events'
 
 export async function POST(req: Request) {
+  let userId: string | undefined
   try {
     const body = await req.json()
     const { data: profileData } = body
@@ -13,6 +14,7 @@ export async function POST(req: Request) {
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    userId = user.id
 
     // Upsert profile
     const profile = {
@@ -51,6 +53,8 @@ export async function POST(req: Request) {
       training_experience: profileData.currently_training === 'already' ? 'intermediate' : 'beginner',
       ion_gender: profileData.ion_gender || 'male',
       goal_speed: profileData.goal_speed || null,
+      exercises_hated: profileData.exercises_hated || null,
+      strength_levels: profileData.strength_levels || null,
       ...(profileData.inbody_url ? { inbody_url: profileData.inbody_url } : {}),
     }
 
@@ -117,6 +121,7 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error('Save profile error:', err)
     await recordAppEvent({
+      userId,
       eventType: 'onboarding_profile_save_failed',
       severity: 'error',
       source: 'api/save-profile',

@@ -8,7 +8,7 @@ import { sendEmail } from '@/lib/resend'
 export async function GET(req: Request) {
   // Verify this is a Vercel cron request (or admin testing)
   const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && process.env.NODE_ENV !== 'development') {
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

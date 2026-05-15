@@ -28,15 +28,20 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body  = await req.json()
-  const { meal_name, ...rest } = body
+  const body = await req.json()
   const admin = createAdminClient()
   const { data, error } = await admin.from('meals_log').insert({
-    user_id:    user.id,
-    date:       new Date().toISOString().split('T')[0],
-    logged_at:  new Date().toISOString(),
-    ...rest,
-    description: meal_name ?? body.description,
+    user_id:             user.id,
+    date:                new Date().toISOString().split('T')[0],
+    logged_at:           new Date().toISOString(),
+    description:         body.meal_name ?? body.description ?? null,
+    meal_time:           body.meal_time ?? null,
+    calories_estimated:  body.calories_estimated ?? null,
+    protein_g:           body.protein_g ?? null,
+    carbs_g:             body.carbs_g ?? null,
+    fats_g:              body.fats_g ?? null,
+    fiber_g:             body.fiber_g ?? null,
+    source:              body.source ?? null,
   }).select().maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -60,16 +65,23 @@ export async function PUT(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { id, meal_name, ...rest } = body
+  const { id } = body
   if (!id) return NextResponse.json({ error: 'Missing log id' }, { status: 400 })
+
+  const update: Record<string, unknown> = {}
+  if (body.meal_name !== undefined || body.description !== undefined)
+    update.description = body.meal_name ?? body.description
+  if (body.meal_time          !== undefined) update.meal_time          = body.meal_time
+  if (body.calories_estimated !== undefined) update.calories_estimated = body.calories_estimated
+  if (body.protein_g          !== undefined) update.protein_g          = body.protein_g
+  if (body.carbs_g            !== undefined) update.carbs_g            = body.carbs_g
+  if (body.fats_g             !== undefined) update.fats_g             = body.fats_g
+  if (body.fiber_g            !== undefined) update.fiber_g            = body.fiber_g
 
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('meals_log')
-    .update({
-      ...rest,
-      description: meal_name ?? body.description,
-    })
+    .update(update)
     .eq('id', id)
     .eq('user_id', user.id)
     .select()

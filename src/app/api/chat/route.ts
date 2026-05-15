@@ -58,7 +58,13 @@ export async function POST(req: Request) {
   const client = new Anthropic({ apiKey })
 
   try {
-    const { message } = await req.json()
+    const body = await req.json()
+    const { message } = body
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 })
+    }
+
     const supabase = await createServerClient()
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -206,7 +212,7 @@ export async function POST(req: Request) {
 
     // Stream the response via SSE
     const stream = client.messages.stream({
-      model: 'claude-sonnet-4-6',
+      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: systemPrompt,
       messages,
@@ -385,7 +391,7 @@ async function maybeApplyPlanEdit({
     const prompt = buildPlanEditPrompt({ type: intent, profile, userRequest, currentPlan })
 
     const editResponse = await withAnthropicRetry(() => client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-6',
       max_tokens: intent === 'workout' ? 10000 : 6000,
       messages: [{ role: 'user', content: prompt }],
     }))
@@ -626,6 +632,10 @@ function buildPlanEditPrompt({
   const budget       = profile?.food_budget || 'Not specified'
   const strengthLevels = profile?.strength_levels || 'Not specified'
 
+  const inbodyText = (profile?.body_fat_pct || profile?.muscle_mass_kg || profile?.visceral_fat != null || profile?.inbody_score != null)
+    ? `Body fat: ${profile?.body_fat_pct ?? '?'}% | Muscle mass: ${profile?.muscle_mass_kg ?? '?'}kg | Visceral fat: ${profile?.visceral_fat ?? '?'}${Number(profile?.visceral_fat) > 10 ? ' (HIGH)' : ''} | InBody score: ${profile?.inbody_score ?? '?'}/100${profile?.bmr_kcal ? ` | Measured BMR: ${profile.bmr_kcal} kcal` : ''}`
+    : null
+
   const profileText = profile ? `Name: ${profile.name} | Age: ${profile.age} | Gender: ${profile.gender}
 Goal: ${profile.goal}${profile.goal_target ? ` (target: ${profile.goal_target})` : ''}
 Weight: ${profile.weight_kg}kg | Height: ${profile.height_cm}cm | Language: ${profile.language || 'en'}
@@ -636,7 +646,7 @@ Foods LOVED (must use these): ${foodsLoved}
 Foods HATED (never use these): ${foodsHated}
 Exercises HATED (never program these): ${exHated}
 Cooking ability: ${cookingAbility} | Food budget: ${budget}
-Strength levels (current working weights): ${strengthLevels}` : 'No profile loaded'
+Strength levels (current working weights): ${strengthLevels}${inbodyText ? `\nInBody scan data: ${inbodyText}` : ''}` : 'No profile loaded'
 
   return `You are Ion, an elite personal trainer and nutrition coach. The user wants to change their active ${type === 'workout' ? 'workout' : 'nutrition'} plan.
 
@@ -778,7 +788,8 @@ Meals/day: ${profile.meals_per_day || 'Not specified'} | Cooking: ${profile.cook
 Supplements: ${Array.isArray(profile.supplements) ? profile.supplements.join(', ') : profile.supplements || 'None'}
 Exercises hated: ${profile.exercises_hated || 'None'}
 Stress: ${profile.stress_level || 'Not specified'} | Sleep quality: ${profile.sleep_quality || 'Not specified'}
-Activity level: ${profile.activity_level || 'Not specified'}
+Activity level: ${profile.activity_level || 'Not specified'}${profile.body_fat_pct || profile.muscle_mass_kg || profile.visceral_fat != null || profile.inbody_score != null ? `
+InBody scan data:${profile.body_fat_pct ? ` BF% ${profile.body_fat_pct}%` : ''}${profile.muscle_mass_kg ? ` | Muscle mass ${profile.muscle_mass_kg}kg` : ''}${profile.visceral_fat != null ? ` | Visceral fat ${profile.visceral_fat}${Number(profile.visceral_fat) > 10 ? ' (HIGH RISK)' : ''}` : ''}${profile.inbody_score != null ? ` | InBody score ${profile.inbody_score}/100` : ''}${profile.bmr_kcal ? ` | Measured BMR ${profile.bmr_kcal} kcal` : ''}` : ''}
 `.trim() : 'No profile loaded yet - introduce yourself and ask them to complete onboarding.'
 
   const measureBlock = measurements.length > 0
@@ -952,6 +963,7 @@ ${workoutBlock}
 17. Diet change quality rule: When the client requests a diet change, evaluate whether it is beneficial for their goal BEFORE proposing it. If a change would clearly hurt their progress (e.g., removing their main protein source, cutting to < 1200 kcal, eliminating carbs pre-workout), explain why it is suboptimal and propose a better alternative that still respects their preference. Always coach, never just comply blindly.
 18. Workout compliance rule: Use WORKOUT COMPLIANCE ANALYSIS proactively. If avg completion < 70% → ask what is causing sessions to be cut short before making any program changes (the problem may be time, fatigue, or motivation, not the exercises). If frequency is consistently below planned days → acknowledge it, dig into why, and offer to reschedule or simplify the program to match their real availability. Never silently accept low compliance.
 19. Workout change quality rule: When the client requests a workout change, evaluate it against their goal and recovery capacity. Red flags to catch: removing all compound movements, reducing to < 2 days/week without a reason, adding volume when compliance is already poor, or training a muscle group that is injured. In these cases, explain the risk and propose a smarter alternative. If they want to swap an exercise, always suggest a movement that targets the same muscle with the same equipment they have.
-20. Strength progress rule: If RECENT WORKOUT LOGS show duration consistently dropping (e.g., logging 30 min when 60 min is planned), or if the same exercises appear repeatedly without progression notes, flag it. A coach tracks strength progress — proactively ask if the client has been increasing weight/reps on their main lifts. If strength is stalling, suggest a deload or form focus week before increasing load.`
+20. Strength progress rule: If RECENT WORKOUT LOGS show duration consistently dropping (e.g., logging 30 min when 60 min is planned), or if the same exercises appear repeatedly without progression notes, flag it. A coach tracks strength progress — proactively ask if the client has been increasing weight/reps on their main lifts. If strength is stalling, suggest a deload or form focus week before increasing load.
+21. InBody scan rule: If CLIENT PROFILE has no InBody scan data (body_fat_pct is absent or described as "estimated"), proactively mention once per conversation that uploading an InBody scan from Settings → Health will give Ion precise body fat %, muscle mass, and visceral fat — enabling exact protein targets (not population guesses). Do NOT repeat this every message. If InBody data IS present and shows visceral fat > 10 (high risk), proactively flag the cardiovascular risk and ensure the user understands why their plan prioritises fat loss. If InBody data was recently added (visible in profile block), acknowledge what changed: "Your InBody scan shows [X]% body fat and muscle mass of [Y] kg — your protein target has been updated to [Z]g based on your actual lean mass." Then offer to regenerate the plan for them if they want the full benefit: "Say 'regenerate my plan' and I'll rebuild it with your exact body composition."`
 }
 

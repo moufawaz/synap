@@ -78,7 +78,7 @@ export async function createCheckout(params: {
   trialDays?: number
 }): Promise<string> {
   const storeId = await getStoreId()
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.synapfit.app'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://synapfit.app'
 
   const body = {
     data: {

@@ -31,8 +31,12 @@ export async function GET(request: NextRequest) {
     )
     
     // 2. Exchange the code for a session
-    await supabase.auth.exchangeCodeForSession(code)
-    
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+    if (exchangeError) {
+      console.error('[auth/callback] Code exchange failed:', exchangeError.message)
+      return NextResponse.redirect(new URL('/auth/login?error=link_expired', request.url))
+    }
+
     // 3. Redirect to the requested 'next' page (e.g., /auth/reset-password)
     return NextResponse.redirect(new URL(next, request.url))
   }

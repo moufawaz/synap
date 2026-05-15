@@ -95,13 +95,18 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || searchParams.get('next') || '/dashboard'
 
+  const errorParam = searchParams.get('error')
+  const errorMessages: Record<string, string> = {
+    link_expired: 'This link has expired or already been used. Request a new one below.',
+  }
+
   // Email/password
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(errorParam ? (errorMessages[errorParam] ?? null) : null)
 
   // OAuth
   const [oauthLoading, setOauthLoading] = useState<'google' | null>(null)

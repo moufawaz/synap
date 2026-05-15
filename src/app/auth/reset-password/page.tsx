@@ -6,8 +6,6 @@ import AuthCard from '@/components/auth/AuthCard'
 import { createBrowserClient } from '@/lib/supabase'
 import { ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react'
 
-const recoverySessionPromises = new Map<string, Promise<boolean>>()
-
 export default function ResetPasswordPage() {
   return (
     <Suspense fallback={<div style={{ background: '#0A0A0A', minHeight: '100vh' }} />}>
@@ -44,10 +42,9 @@ function ResetPasswordForm() {
       const code = searchParams.get('code')
       if (code) {
         const { error: exchangeError } = await supabaseRef.current.auth.exchangeCodeForSession(code)
-        if (exchangeError) {
-          return finishWithCurrentSession()
-        }
-
+        // If code exchange fails the link is expired or already used — do NOT
+        // fall back to the existing session, that would allow the form to appear.
+        if (exchangeError) return false
         window.history.replaceState(null, '', window.location.pathname)
         return true
       }
@@ -60,23 +57,16 @@ function ResetPasswordForm() {
           access_token: accessToken,
           refresh_token: refreshToken,
         })
-
-        if (sessionError) {
-          return finishWithCurrentSession()
-        }
-
+        if (sessionError) return false
         window.history.replaceState(null, '', window.location.pathname)
         return true
       }
 
-      return finishWithCurrentSession()
+      // No token in URL at all — not a valid reset link
+      return false
     }
 
-    const recoveryLinkKey = `${window.location.pathname}${window.location.search}${window.location.hash}`
-    const recoveryPromise = recoverySessionPromises.get(recoveryLinkKey) ?? createRecoverySession()
-    recoverySessionPromises.set(recoveryLinkKey, recoveryPromise)
-
-    recoveryPromise.then((hasRecoverySession) => {
+    createRecoverySession().then((hasRecoverySession) => {
       if (!active) return
       setCanResetPassword(hasRecoverySession)
       if (!hasRecoverySession) setError('This reset link has expired. Please request a new one.')

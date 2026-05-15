@@ -17,7 +17,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube-nocookie.com https://www.youtube.com https://s.ytimg.com",
+              "script-src 'self' 'unsafe-inline' https://www.youtube-nocookie.com https://www.youtube.com https://s.ytimg.com",
               "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com",
               "img-src 'self' data: blob: https: http:",
               "style-src 'self' 'unsafe-inline'",

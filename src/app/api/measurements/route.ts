@@ -27,10 +27,14 @@ export async function POST(req: Request) {
   // Whitelist allowed fields — never let the client override user_id
   const insert: Record<string, any> = { user_id: user.id }
   const ALLOWED = [
-    'date', 'weight_kg', 'body_fat_percentage', 'muscle_mass_kg',
-    'chest_cm', 'waist_cm', 'hips_cm', 'left_arm_cm', 'right_arm_cm',
-    'left_thigh_cm', 'right_thigh_cm', 'left_calf_cm', 'right_calf_cm',
-    'neck_cm', 'shoulders_cm', 'notes', 'photo_url',
+    'date', 'weight_kg', 'body_fat_pct', 'muscle_mass_kg',
+    'chest_cm', 'waist_cm', 'hips_cm',
+    'bicep_left_cm', 'bicep_right_cm',
+    'forearm_left_cm', 'forearm_right_cm',
+    'thigh_left_cm', 'thigh_right_cm',
+    'calf_left_cm', 'calf_right_cm',
+    'neck_cm', 'shoulders_cm', 'wrist_cm', 'ankle_cm',
+    'notes', 'photo_url',
   ]
   for (const key of ALLOWED) {
     if (key in body && body[key] !== undefined) insert[key] = body[key]

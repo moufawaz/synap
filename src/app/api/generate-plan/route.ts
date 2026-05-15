@@ -36,7 +36,22 @@ export async function POST(req: Request) {
     }
 
     const admin = createAdminClient()
-    const [languageRow, latestMeasurementRow, measurementHistoryRow] = await Promise.all([
+
+    // Rate limit: max 3 plan generations per user per 24 hours
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { count: recentGenerations } = await admin
+      .from('workout_plans')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', since24h)
+    if ((recentGenerations ?? 0) >= 3) {
+      return NextResponse.json(
+        { error: 'Plan generation limit reached. You can generate up to 3 plans per day. Try again tomorrow.' },
+        { status: 429 }
+      )
+    }
+
+    const [languageRow, latestMeasurementRow, measurementHistoryRow, profileRow] = await Promise.all([
       admin.from('users').select('language').eq('id', user.id).maybeSingle(),
       // Most recent measurement — used for LBM-based macro calculation
       admin.from('measurements')
@@ -51,19 +66,30 @@ export async function POST(req: Request) {
         .eq('user_id', user.id)
         .order('date', { ascending: false })
         .limit(5),
+      // Full profile from DB — guarantees latest InBody scan data (body_fat_pct, muscle_mass_kg, visceral_fat, inbody_score, bmr_kcal)
+      admin.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
     ])
 
     const latestMeasurement = latestMeasurementRow.data
     const measurementHistory = measurementHistoryRow.data || []
 
+    // Merge: DB profile wins over frontend payload for InBody fields so stale frontend data can't override fresh scan data
     const profileForPlan = {
       ...profileData,
+      ...(profileRow.data ? {
+        body_fat_pct:   profileRow.data.body_fat_pct,
+        muscle_mass_kg: profileRow.data.muscle_mass_kg,
+        bmr_kcal:       profileRow.data.bmr_kcal,
+        visceral_fat:   profileRow.data.visceral_fat,
+        inbody_score:   profileRow.data.inbody_score,
+        inbody_url:     profileRow.data.inbody_url,
+      } : {}),
       language: languageRow.data?.language ?? profileData?.language ?? 'en',
     }
     const prompt = buildPrompt(profileForPlan, latestMeasurement, measurementHistory)
 
     const message = await withAnthropicRetry(() => client.messages.create({
-      model: 'claude-opus-4-5',
+      model: process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5',
       max_tokens: 16000,   // 8000 was too low; full plans with recipes easily exceed it
       system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
@@ -125,15 +151,12 @@ export async function POST(req: Request) {
       })
     )
 
-    // Deactivate existing plans sequentially to avoid inconsistent state if one fails
-    await supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id)
-    await supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id)
-
-    // Save workout plan
+    // Insert new plans first (inactive), then atomically activate them by
+    // deactivating old plans only after both inserts succeed.
     const { data: workoutPlan, error: wpError } = await supabase.from('workout_plans').insert({
       user_id: user.id,
       plan_json: plan.workout_plan,
-      active: true,
+      active: false,
     }).select().maybeSingle()
 
     if (wpError) {
@@ -148,11 +171,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Failed to save workout plan: ${wpError.message}` }, { status: 500 })
     }
 
-    // Save diet plan
     const { data: dietPlan, error: dpError } = await supabase.from('diet_plans').insert({
       user_id: user.id,
       plan_json: plan.diet_plan,
-      active: true,
+      active: false,
     }).select().maybeSingle()
 
     if (dpError) {
@@ -166,6 +188,16 @@ export async function POST(req: Request) {
       })
       return NextResponse.json({ error: `Failed to save diet plan: ${dpError.message}` }, { status: 500 })
     }
+
+    // Both rows saved — now safely swap: deactivate old, activate new
+    await Promise.all([
+      supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id).neq('id', workoutPlan!.id),
+      supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id).neq('id', dietPlan!.id),
+    ])
+    await Promise.all([
+      supabase.from('workout_plans').update({ active: true }).eq('id', workoutPlan!.id),
+      supabase.from('diet_plans').update({ active: true }).eq('id', dietPlan!.id),
+    ])
 
     // Save Ion's personal message as first chat message
     if (plan.ion_message) {
@@ -202,7 +234,8 @@ export async function POST(req: Request) {
       supabase,
       client,
       user.id,
-      { ...profileForPlan, ...profileData, body_fat_pct: latestMeasurement?.body_fat_pct },
+      // Use measured BF% from latest measurement row if available; fall back to InBody profile value (never null it out)
+      { ...profileForPlan, body_fat_pct: latestMeasurement?.body_fat_pct ?? profileForPlan.body_fat_pct },
       plan.diet_plan,
       normalizeAiLanguage(profileForPlan.language),
     ).catch(e => console.error('[generate-plan] supplement gen failed:', e))
@@ -352,9 +385,13 @@ Goal: ${goalLabels[p.goal] || p.goal}
 Target: ${p.goal_target || 'Not specified'} | Deadline: ${p.goal_date || 'No deadline set'}
 Goal speed: ${p.goal_speed || 'moderate'}
 
-BODY COMPOSITION:
+BODY COMPOSITION (InBody scan data — use this instead of population defaults):
   Lean Body Mass: ${m.leanMass} kg
-  Estimated body fat: ${m.bodyFatPct}% (${m.usingRealBf ? 'measured' : 'estimated — no scan yet'})
+  Body fat: ${m.bodyFatPct}% (${m.usingRealBf ? 'measured via InBody scan — use this value' : 'estimated default — no InBody scan on file'})${p.muscle_mass_kg ? `
+  Skeletal Muscle Mass (InBody): ${p.muscle_mass_kg} kg` : ''}${p.visceral_fat != null ? `
+  Visceral Fat Level (InBody): ${p.visceral_fat}${Number(p.visceral_fat) > 10 ? ' ⚠️ HIGH — above safe threshold of 10, elevated cardiovascular risk. Include cardiovascular health foods and prioritise fat loss.' : Number(p.visceral_fat) > 7 ? ' (moderate — monitor)' : ' (healthy range)'}` : ''}${p.inbody_score != null ? `
+  InBody Score: ${p.inbody_score}/100${Number(p.inbody_score) < 60 ? ' — well below average, prioritise body recomposition' : Number(p.inbody_score) < 75 ? ' — below average' : Number(p.inbody_score) >= 85 ? ' — above average, good foundation' : ''}` : ''}${p.bmr_kcal ? `
+  Measured BMR (InBody device): ${p.bmr_kcal} kcal/day (use this as the baseline BMR if it significantly differs from Mifflin-St Jeor)` : ''}
 
 MEASUREMENT HISTORY:
 ${measureBlock}

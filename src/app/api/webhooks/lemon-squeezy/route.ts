@@ -91,19 +91,27 @@ export async function POST(req: Request) {
         sendEmail({ to: userEmail, type: 'trial_started', data: { name: userName, trialDays: 7 } }).catch(() => {})
       }
 
-      // Ion welcome message
-      const welcomeMsg = isElite
-        ? `Welcome to Elite, ${userName}! You now have access to everything: unlimited Ion messages, weekly body composition reports, personalised supplement recommendations, and goal timeline predictions. This is the full package. Let's build something exceptional.`
-        : isInTrial
-          ? `Your 7-day free trial has started, ${userName}! You now have full Pro access. Remember: if you cancel before day 7, you will never be charged. I'll remind you before the trial ends. Let's make these 7 days count.`
-          : `Welcome to Pro, ${userName}! You now have unlimited access to Ion, your full diet and workout plans, and all tracking features. Let's get to work.`
+      // Ion welcome message — guard against duplicates on webhook retry
+      const { count: existingWelcome } = await supabase
+        .from('chat_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('message_type', 'subscription_welcome')
 
-      await supabase.from('chat_messages').insert({
-        user_id: userId,
-        role: 'assistant',
-        content: welcomeMsg,
-        message_type: 'text',
-      })
+      if (!existingWelcome) {
+        const welcomeMsg = isElite
+          ? `Welcome to Elite, ${userName}! You now have access to everything: unlimited Ion messages, weekly body composition reports, personalised supplement recommendations, and goal timeline predictions. This is the full package. Let's build something exceptional.`
+          : isInTrial
+            ? `Your 7-day free trial has started, ${userName}! You now have full Pro access. Remember: if you cancel before day 7, you will never be charged. I'll remind you before the trial ends. Let's make these 7 days count.`
+            : `Welcome to Pro, ${userName}! You now have unlimited access to Ion, your full diet and workout plans, and all tracking features. Let's get to work.`
+
+        await supabase.from('chat_messages').insert({
+          user_id: userId,
+          role: 'assistant',
+          content: welcomeMsg,
+          message_type: 'subscription_welcome',
+        })
+      }
       break
     }
 

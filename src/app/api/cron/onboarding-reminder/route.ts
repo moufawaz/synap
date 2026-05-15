@@ -31,10 +31,7 @@ const MAX_AGE_DAYS = 12   // stop reminding after this many days
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization')
-  if (
-    authHeader !== `Bearer ${process.env.CRON_SECRET}` &&
-    process.env.NODE_ENV !== 'development'
-  ) {
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -90,7 +87,7 @@ export async function GET(req: Request) {
   for (const p of profiles || []) profileMap[p.user_id] = p.name
 
   // ── 5. Process each user ──────────────────────────────────────
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.synapfit.app'
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://synapfit.app'
   let sent24h = 0
   let sent7d   = 0
   const errors: string[] = []

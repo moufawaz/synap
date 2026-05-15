@@ -135,16 +135,29 @@ export default function OnboardingPage() {
   // ── Auth check + load saved progress on mount ────────────
   useEffect(() => {
     const supabase = createBrowserClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) {
         router.replace('/auth/signup?next=/onboarding')
-      } else {
-        setIsAuthenticated(true)
-        setAuthChecked(true)
-        // Check for saved progress
-        const saved = loadProgress()
-        if (saved) setSavedProgress(saved)
+        return
       }
+
+      // Redirect users who already have an active plan back to the dashboard
+      const { data: existingPlan } = await supabase
+        .from('workout_plans')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .maybeSingle()
+
+      if (existingPlan) {
+        router.replace('/dashboard')
+        return
+      }
+
+      setIsAuthenticated(true)
+      setAuthChecked(true)
+      const saved = loadProgress()
+      if (saved) setSavedProgress(saved)
     })
   }, [])
 

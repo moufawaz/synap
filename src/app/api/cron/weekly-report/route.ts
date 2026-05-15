@@ -9,7 +9,7 @@ import { aiLanguageInstruction, aiLanguageName, normalizeAiLanguage } from '@/li
 
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && process.env.NODE_ENV !== 'development') {
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -149,7 +149,7 @@ Write a concise, personalised weekly body composition report in ${aiLanguageName
 Keep it focused, data-driven, and personal. No filler. Max 350 words.`
 
   const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5',
+    model: process.env.ANTHROPIC_CRON_MODEL || 'claude-haiku-4-5',
     max_tokens: 800,
     messages: [{ role: 'user', content: prompt }],
   })

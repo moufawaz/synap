@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 
 const resendKey = process.env.RESEND_API_KEY
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.synapfit.app'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://synapfit.app'
 
 export const resend = resendKey && resendKey !== 'your_resend_api_key'
   ? new Resend(resendKey)
