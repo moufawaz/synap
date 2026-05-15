@@ -729,7 +729,7 @@ function parseJsonObject(raw: string): any | null {
   }
 }
 
-type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan' | 'plan_proposal'
+type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan' | 'plan_proposal' | 'renewal_preview'
 
 function normalizeAssistantReply(raw: string): { content: string; messageType: MessageType } {
   const cleaned = stripCodeFences(raw)
@@ -758,7 +758,7 @@ function stripCodeFences(raw: string) {
 }
 
 function isMessageType(value: string): value is MessageType {
-  return ['text', 'suggestion', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan', 'plan_proposal'].includes(value)
+  return ['text', 'suggestion', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan', 'plan_proposal', 'renewal_preview'].includes(value)
 }
 
 async function enrichWorkoutVideos(plan: any) {

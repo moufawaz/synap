@@ -5,7 +5,7 @@ import {
   Users, MessageCircle, Crown, DollarSign,
   TrendingUp, Zap, Activity, ExternalLink as ExternalLinkIcon,
   XCircle, BarChart3, Dumbbell, CheckCircle2, AlertCircle, Clock,
-  Flag, Shield,
+  Flag, Shield, RefreshCw as RefreshCwIcon,
 } from 'lucide-react'
 import { estimateAnthropicCostUsd, formatUsd, TOKEN_PRICING } from '@/lib/token-cost'
 
@@ -55,6 +55,53 @@ function estimateTokensFromText(text?: string | null) {
   return Math.max(1, Math.ceil((text || '').length / 4))
 }
 
+function planEndDate(row: any, fallbackDays: number) {
+  if (row?.end_date) return new Date(row.end_date)
+  if (!row?.created_at) return null
+  return new Date(new Date(row.created_at).getTime() + fallbackDays * 86400000)
+}
+
+function expiredPlanRiskUsers(dietPlans: any[], workoutPlans: any[], authUsers: any[], profiles: any[]) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const expiredByUser: Record<string, { userId: string; email?: string; name?: string; dietExpired: boolean; workoutExpired: boolean; oldestExpiredAt: string }> = {}
+
+  for (const row of dietPlans.filter((p: any) => p.active)) {
+    const end = planEndDate(row, 28)
+    if (!end || end >= today) continue
+    expiredByUser[row.user_id] = {
+      ...(expiredByUser[row.user_id] || {}),
+      userId: row.user_id,
+      dietExpired: true,
+      workoutExpired: expiredByUser[row.user_id]?.workoutExpired || false,
+      oldestExpiredAt: minDateString(expiredByUser[row.user_id]?.oldestExpiredAt, end.toISOString()),
+    }
+  }
+
+  for (const row of workoutPlans.filter((p: any) => p.active)) {
+    const end = planEndDate(row, 42)
+    if (!end || end >= today) continue
+    expiredByUser[row.user_id] = {
+      ...(expiredByUser[row.user_id] || {}),
+      userId: row.user_id,
+      dietExpired: expiredByUser[row.user_id]?.dietExpired || false,
+      workoutExpired: true,
+      oldestExpiredAt: minDateString(expiredByUser[row.user_id]?.oldestExpiredAt, end.toISOString()),
+    }
+  }
+
+  return Object.values(expiredByUser).map(row => {
+    const user = authUsers.find((u: any) => u.id === row.userId)
+    const profile = profiles.find((p: any) => p.user_id === row.userId)
+    return { ...row, email: user?.email, name: profile?.name }
+  }).sort((a, b) => a.oldestExpiredAt.localeCompare(b.oldestExpiredAt))
+}
+
+function minDateString(current: string | undefined, next: string) {
+  if (!current) return next
+  return next < current ? next : current
+}
+
 export default async function AdminPage({ searchParams }: { searchParams?: Promise<{ tab?: string }> }) {
   const params = await searchParams
   const activeTab = getAdminTab(params?.tab)
@@ -82,6 +129,8 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
     msgUsageRes,
     tokenMessagesRes,
     workoutPlansRes,
+    dietPlansRes,
+    allWorkoutPlansRes,
     appEventsRes,
   ] = await Promise.all([
     admin.auth.admin.listUsers({ perPage: 1000 }),
@@ -107,6 +156,8 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
       .range(0, 9999),
     // Users who have an active plan
     admin.from('workout_plans').select('user_id').eq('active', true),
+    admin.from('diet_plans').select('id,user_id,active,created_at,start_date,end_date,plan_json').range(0, 9999),
+    admin.from('workout_plans').select('id,user_id,active,created_at,start_date,end_date,plan_json').range(0, 9999),
     admin.from('app_events')
       .select('user_id,event_type,severity,source,message,metadata,created_at')
       .order('created_at', { ascending: false })
@@ -121,6 +172,8 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
   const msgUsage      = msgUsageRes.data || []
   const tokenRows = tokenMessagesRes.data || []
   const tokenLogError = tokenMessagesRes.error?.message || null
+  const dietPlanRows = dietPlansRes.data || []
+  const workoutPlanRows = allWorkoutPlansRes.data || []
   const appEvents = appEventsRes.data || []
   const appEventsError = appEventsRes.error?.message || null
   const planUserIds   = new Set((workoutPlansRes.data || []).map((r: any) => r.user_id))
@@ -394,6 +447,21 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
   const planFailures30d = appEvents.filter((e: any) => e.event_type === 'plan_generation_failed' && e.created_at >= monthAgo).length
   const planSuccess30d = appEvents.filter((e: any) => e.event_type === 'plan_generation_succeeded' && e.created_at >= monthAgo).length
   const profileSaves30d = appEvents.filter((e: any) => e.event_type === 'onboarding_profile_saved' && e.created_at >= monthAgo).length
+  const renewalPreview30d = appEvents.filter((e: any) => e.event_type === 'plan_renewal_preview_generated' && e.created_at >= monthAgo).length
+  const renewalApplied30d = appEvents.filter((e: any) => e.event_type === 'plan_renewal_applied' && e.created_at >= monthAgo).length
+  const rollback30d = appEvents.filter((e: any) => e.event_type === 'plan_rollback_applied' && e.created_at >= monthAgo).length
+  const renewalFailures30d = appEvents.filter((e: any) => e.event_type === 'plan_renewal_failed' && e.created_at >= monthAgo).length
+  const renewalTokenRows = tokenRows.filter((row: any) => String(row.feature || '').startsWith('renew_plan') || String(row.feature || '').startsWith('renewal_preview'))
+  const renewalCost30d = renewalTokenRows
+    .filter((row: any) => row.created_at >= monthAgo)
+    .reduce((sum: number, row: any) => sum + (Number(row.estimated_cost_usd || 0) || estimateAnthropicCostUsd({
+      input_tokens: row.input_tokens || 0,
+      output_tokens: row.output_tokens || 0,
+      cache_creation_input_tokens: row.cache_write_tokens || 0,
+      cache_read_input_tokens: row.cache_read_tokens || 0,
+    }, row.model)), 0)
+  const avgRenewalCost = renewalApplied30d > 0 ? renewalCost30d / renewalApplied30d : renewalPreview30d > 0 ? renewalCost30d / renewalPreview30d : 0
+  const expiredPlanUsers = expiredPlanRiskUsers(dietPlanRows, workoutPlanRows, authUsers, profiles)
   const errorBySource = Object.values(eventErrors.reduce((acc: Record<string, { source: string; count: number; last: string }>, event: any) => {
     const source = event.source || event.event_type || 'unknown'
     if (!acc[source]) acc[source] = { source, count: 0, last: '' }
@@ -786,6 +854,10 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
           <StatCard label="Active 7d / 30d" value={`${active7d} / ${active30d}`} sub="chat or tracked activity" icon={TrendingUp} color="#3B82F6" />
           <StatCard label="Profile Saves 30d" value={profileSaves30d} sub={`${onboardingRate}% profiles / signup`} icon={Users} color="#BB5CF6" />
           <StatCard label="Plan Gen 30d" value={`${planSuccess30d}/${planFailures30d}`} sub="success / failures tracked" icon={Dumbbell} color={planFailures30d > 0 ? '#F59E0B' : '#10B981'} />
+          <StatCard label="Renewals 30d" value={`${renewalApplied30d}/${renewalPreview30d}`} sub="applied / previews" icon={RefreshCwIcon} color="#60A5FA" />
+          <StatCard label="Avg Renewal Cost" value={formatUsd(avgRenewalCost)} sub={`${formatUsd(renewalCost30d)} total 30d`} icon={DollarSign} color="#10B981" />
+          <StatCard label="Rollback 30d" value={rollback30d} sub="restored previous cycles" icon={Clock} color={rollback30d > 0 ? '#F59E0B' : '#64748B'} />
+          <StatCard label="Expired Plans" value={expiredPlanUsers.length} sub="active users needing renewal" icon={AlertCircle} color={expiredPlanUsers.length > 0 ? '#F59E0B' : '#10B981'} />
         </div>
         <div className="grid sm:grid-cols-2 gap-5">
           <div className="glass-card p-5">
@@ -822,6 +894,22 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
               <RevenueRow label="Users without plan" value={String(noPlanUsers.length)} color={noPlanUsers.length > 0 ? '#F59E0B' : '#10B981'} />
             </div>
           </div>
+          <div className="glass-card p-5 sm:col-span-2">
+            <SectionTitle>EXPIRED BUT NOT RENEWED</SectionTitle>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {expiredPlanUsers.length === 0 ? (
+                <p className="font-heading text-xs" style={{ color: '#475569' }}>No expired active plans right now.</p>
+              ) : expiredPlanUsers.slice(0, 10).map((row: any) => (
+                <div key={row.userId} className="rounded-xl px-3 py-2" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.14)' }}>
+                  <p className="font-heading text-xs text-white truncate">{row.name || row.email || row.userId}</p>
+                  <p className="font-heading text-[10px] mt-1" style={{ color: '#F59E0B' }}>
+                    {row.dietExpired ? 'Diet expired' : ''}{row.dietExpired && row.workoutExpired ? ' · ' : ''}{row.workoutExpired ? 'Workout expired' : ''}
+                  </p>
+                  <p className="font-heading text-[9px] mt-0.5" style={{ color: '#475569' }}>{new Date(row.oldestExpiredAt).toLocaleDateString('en-GB')}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -829,6 +917,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard label="Errors 30d" value={recentErrors.length} sub={appEventsError ? 'Run SQL table first' : 'tracked app events'} icon={AlertCircle} color={recentErrors.length > 0 ? '#EF4444' : '#10B981'} />
           <StatCard label="Plan Failures 30d" value={planFailures30d} sub={`${planSuccess30d} successes`} icon={XCircle} color={planFailures30d > 0 ? '#F59E0B' : '#10B981'} />
+          <StatCard label="Renewal Failures 30d" value={renewalFailures30d} sub={`${renewalApplied30d} applied`} icon={XCircle} color={renewalFailures30d > 0 ? '#EF4444' : '#10B981'} />
           <StatCard label="Error Sources" value={errorBySource.length} sub="unique failing areas" icon={BarChart3} color="#3B82F6" />
           <StatCard label="Monitoring" value={appEventsError ? 'Table missing' : 'Internal'} sub="Sentry-ready event trail" icon={Shield} color={appEventsError ? '#F59E0B' : '#10B981'} />
         </div>

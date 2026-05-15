@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
 import Link from 'next/link'
-import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp, MessageSquare, FlaskConical, Lock, Zap, ShieldCheck, Sparkles, ShoppingBasket } from 'lucide-react'
+import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp, MessageSquare, FlaskConical, Lock, Zap, ShieldCheck, Sparkles, ShoppingBasket, History, RotateCcw, CheckCircle } from 'lucide-react'
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
 import { RecipeButton } from '@/components/ui/RecipeModal'
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
@@ -28,6 +28,11 @@ export default function PlanPage() {
   const [supplementRec, setSupplementRec] = useState<any>(null)
   const [suppLoading, setSuppLoading] = useState(false)
   const [suppExpanded, setSuppExpanded] = useState(false)
+  const [planHistory, setPlanHistory] = useState<any>(null)
+  const [renewalPreview, setRenewalPreview] = useState<any>(null)
+  const [renewingType, setRenewingType] = useState<Tab | null>(null)
+  const [applyingPreview, setApplyingPreview] = useState(false)
+  const [rollingBackId, setRollingBackId] = useState<string | null>(null)
 
   useEffect(() => { loadPlans() }, [])
 
@@ -36,16 +41,18 @@ export default function PlanPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const [dietRes, workoutRes, profileRes, tierRes] = await Promise.all([
+    const [dietRes, workoutRes, profileRes, tierRes, historyRes] = await Promise.all([
       supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),
+      fetch('/api/plan-history', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
     ])
 
     setDietPlan(dietRes.data?.plan_json || null)
     setWorkoutPlan(normalizeWorkoutPlanDays(workoutRes.data?.plan_json || null))
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
+    setPlanHistory(historyRes)
 
     if (workoutRes.data?.created_at) {
       const age = Math.floor((Date.now() - new Date(workoutRes.data.created_at).getTime()) / 86400000)
@@ -71,6 +78,61 @@ export default function PlanPage() {
     }
 
     setLoading(false)
+  }
+
+  async function previewRenewal(planType: Tab) {
+    setRenewingType(planType)
+    setRenewalPreview(null)
+    try {
+      const res = await fetch('/api/renew-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'preview', planType }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Renewal preview failed')
+      setRenewalPreview(data)
+    } catch (err: any) {
+      setRenewalPreview({ error: err?.message || 'Renewal preview failed' })
+    } finally {
+      setRenewingType(null)
+    }
+  }
+
+  async function applyRenewalPreview() {
+    if (!renewalPreview?.previewId) return
+    setApplyingPreview(true)
+    try {
+      const res = await fetch('/api/renew-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'apply', previewId: renewalPreview.previewId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not apply renewal')
+      setRenewalPreview(null)
+      await loadPlans()
+    } catch (err: any) {
+      setRenewalPreview((prev: any) => ({ ...prev, error: err?.message || 'Could not apply renewal' }))
+    } finally {
+      setApplyingPreview(false)
+    }
+  }
+
+  async function rollbackPlan(planType: Tab, targetPlanId: string) {
+    setRollingBackId(targetPlanId)
+    try {
+      const res = await fetch('/api/renew-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rollback', planType, targetPlanId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not restore previous plan')
+      await loadPlans()
+    } finally {
+      setRollingBackId(null)
+    }
   }
 
   if (loading) return (
@@ -128,6 +190,17 @@ export default function PlanPage() {
         onToggle={() => setSuppExpanded(e => !e)}
       />
 
+      <PlanRenewalPanel
+        history={planHistory}
+        preview={renewalPreview}
+        renewingType={renewingType}
+        applyingPreview={applyingPreview}
+        rollingBackId={rollingBackId}
+        onPreview={previewRenewal}
+        onApply={applyRenewalPreview}
+        onRollback={rollbackPlan}
+      />
+
       {/* Tab switcher */}
       <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
         <button
@@ -159,6 +232,187 @@ export default function PlanPage() {
       ) : (
         <WorkoutPlanView plan={workoutPlan} expandedDay={expandedDay} setExpandedDay={setExpandedDay} />
       )}
+    </div>
+  )
+}
+
+function PlanRenewalPanel({
+  history,
+  preview,
+  renewingType,
+  applyingPreview,
+  rollingBackId,
+  onPreview,
+  onApply,
+  onRollback,
+}: {
+  history: any
+  preview: any
+  renewingType: Tab | null
+  applyingPreview: boolean
+  rollingBackId: string | null
+  onPreview: (type: Tab) => void
+  onApply: () => void
+  onRollback: (type: Tab, id: string) => void
+}) {
+  const dietTiming = history?.timing?.diet
+  const workoutTiming = history?.timing?.workout
+  const dietHistory = history?.diet || []
+  const workoutHistory = history?.workout || []
+
+  return (
+    <div className="glass-card p-5 mb-6" style={{ borderColor: 'rgba(59,130,246,0.16)' }}>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <History size={14} style={{ color: '#60A5FA' }} />
+            <p className="font-heading text-xs font-black tracking-widest uppercase" style={{ color: '#60A5FA', letterSpacing: '0.14em' }}>
+              Renewal Control
+            </p>
+          </div>
+          <p className="font-heading text-xs leading-relaxed" style={{ color: '#64748B' }}>
+            Preview a full new cycle before Ion saves anything. Previous cycles stay available for rollback.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3 mb-4">
+        <CycleTimingCard
+          icon={<Utensils size={14} />}
+          title="Diet cycle"
+          timing={dietTiming}
+          color="#10B981"
+          loading={renewingType === 'diet'}
+          onPreview={() => onPreview('diet')}
+        />
+        <CycleTimingCard
+          icon={<Dumbbell size={14} />}
+          title="Workout cycle"
+          timing={workoutTiming}
+          color="#BB5CF6"
+          loading={renewingType === 'workout'}
+          onPreview={() => onPreview('workout')}
+        />
+      </div>
+
+      {preview?.error && (
+        <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <p className="font-heading text-xs" style={{ color: '#FCA5A5' }}>{preview.error}</p>
+        </div>
+      )}
+
+      {preview?.preview && (
+        <div className="rounded-2xl p-4 mb-4" style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.22)' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles size={14} style={{ color: '#93C5FD' }} />
+            <p className="font-heading text-xs font-black tracking-widest uppercase" style={{ color: '#93C5FD' }}>
+              Here&apos;s what will change
+            </p>
+          </div>
+          <p className="font-heading text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#E2E8F0' }}>
+            {preview.preview.message}
+          </p>
+          <div className="flex gap-2 mt-4 flex-wrap">
+            <button
+              type="button"
+              onClick={onApply}
+              disabled={applyingPreview}
+              className="px-4 py-2 rounded-xl font-heading text-xs font-black tracking-wider transition-all"
+              style={{ background: '#10B981', color: 'white', opacity: applyingPreview ? 0.6 : 1 }}
+            >
+              {applyingPreview ? 'APPLYING...' : 'APPLY NEW PLAN'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onPreview(preview.preview.planType)}
+              className="px-4 py-2 rounded-xl font-heading text-xs font-bold tracking-wider"
+              style={{ background: 'rgba(255,255,255,0.04)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              REGENERATE PREVIEW
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <PlanHistoryList title="Nutrition history" type="diet" plans={dietHistory} rollingBackId={rollingBackId} onRollback={onRollback} />
+        <PlanHistoryList title="Workout history" type="workout" plans={workoutHistory} rollingBackId={rollingBackId} onRollback={onRollback} />
+      </div>
+    </div>
+  )
+}
+
+function CycleTimingCard({ icon, title, timing, color, loading, onPreview }: any) {
+  const expired = timing?.expired
+  return (
+    <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
+            {icon}
+          </span>
+          <div>
+            <p className="font-heading text-sm font-bold text-white">{title}</p>
+            <p className="font-heading text-xs" style={{ color: expired ? '#F59E0B' : '#64748B' }}>
+              {timing?.label || 'No active cycle'}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onPreview}
+          disabled={loading}
+          className="px-3 py-2 rounded-xl font-heading text-[10px] font-black tracking-wider"
+          style={{ background: `${color}18`, color, border: `1px solid ${color}35`, opacity: loading ? 0.6 : 1 }}
+        >
+          {loading ? 'PREVIEWING...' : expired ? 'RENEW' : 'PREVIEW'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PlanHistoryList({ title, type, plans, rollingBackId, onRollback }: any) {
+  return (
+    <div>
+      <p className="font-heading text-xs font-bold tracking-widest uppercase mb-2" style={{ color: '#64748B' }}>{title}</p>
+      <div className="flex flex-col gap-2">
+        {plans.length === 0 ? (
+          <p className="font-heading text-xs" style={{ color: '#475569' }}>No cycles yet.</p>
+        ) : plans.slice(0, 5).map((plan: any, idx: number) => (
+          <div key={plan.id} className="rounded-xl p-3" style={{ background: plan.active ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.025)', border: `1px solid ${plan.active ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.05)'}` }}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  {plan.active && <CheckCircle size={12} style={{ color: '#10B981' }} />}
+                  <p className="font-heading text-xs font-bold text-white truncate">
+                    {plan.active ? 'Current Plan' : idx === 1 ? 'Previous Cycle' : `Cycle ${plans.length - idx}`}
+                  </p>
+                </div>
+                <p className="font-heading text-[11px] truncate mt-1" style={{ color: '#64748B' }}>
+                  {plan.summary?.name || 'Plan'} · {plan.start_date || plan.created_at?.slice(0, 10)}
+                </p>
+                <p className="font-heading text-[10px] truncate mt-0.5" style={{ color: '#475569' }}>
+                  {type === 'diet'
+                    ? `${plan.summary?.calories ?? '?'} kcal · ${plan.summary?.protein_g ?? '?'}g protein`
+                    : `${plan.summary?.daysPerWeek ?? '?'} days/week · ${plan.summary?.exercises ?? 0} exercises`}
+                </p>
+              </div>
+              {!plan.active && (
+                <button
+                  type="button"
+                  onClick={() => onRollback(type, plan.id)}
+                  disabled={rollingBackId === plan.id}
+                  className="px-2.5 py-1.5 rounded-lg font-heading text-[10px] font-bold flex items-center gap-1"
+                  style={{ background: 'rgba(245,158,11,0.09)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.2)', opacity: rollingBackId === plan.id ? 0.6 : 1 }}
+                >
+                  <RotateCcw size={11} /> {rollingBackId === plan.id ? 'RESTORING' : 'RESTORE'}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

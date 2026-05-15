@@ -11,21 +11,34 @@ import { withAnthropicRetry } from '@/lib/anthropic'
 import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
 import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntelligenceRule } from '@/lib/plan-builder'
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
+import { recordAppEvent } from '@/lib/app-events'
 
 // POST /api/renew-plan  — called when a user's plan cycle expires
 export async function POST(req: Request) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
-    }
-    const client = new Anthropic()
     const supabase = await createServerClient()
     const admin    = createAdminClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { planType }: { planType: 'diet' | 'workout' } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const action = body.action || 'preview'
+
+    if (action === 'apply') {
+      return applyRenewalPreview({ supabase, admin, userId: user.id, email: user.email, previewId: body.previewId })
+    }
+
+    if (action === 'rollback') {
+      return rollbackPlan({ admin, userId: user.id, planType: body.planType, targetPlanId: body.targetPlanId })
+    }
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
+    }
+    const client = new Anthropic()
+
+    const { planType }: { planType: 'diet' | 'workout' } = body
     if (!planType) return NextResponse.json({ error: 'Missing planType' }, { status: 400 })
 
     // ── Load everything in parallel ───────────────────────────────────
@@ -113,53 +126,347 @@ export async function POST(req: Request) {
     }
 
     // ── Save ───────────────────────────────────────────────────────────
-    const table        = planType === 'diet' ? 'diet_plans' : 'workout_plans'
-    const durationWeeks = planType === 'diet' ? 4 : 6
-    const startDate    = new Date().toISOString().split('T')[0]
-    const endDate      = new Date(Date.now() + durationWeeks * 7 * 86400000).toISOString().split('T')[0]
-
-    await supabase.from(table).update({ active: false }).eq('user_id', user.id).eq('active', true)
-    await supabase.from(table).insert({ user_id: user.id, plan_json: planJson, active: true, start_date: startDate, end_date: endDate })
-
-    // ── Chat message ───────────────────────────────────────────────────
-    const ionMessage = language === 'ar'
-      ? (planType === 'diet'
-        ? `خطة التغذية الجديدة جاهزة يا ${profile.name}. عدّلت السعرات والماكروز بناءً على تقدمك الفعلي في القياسات الأخيرة.`
-        : `برنامج التمرين الجديد جاهز يا ${profile.name}. رفعت الحجم والشدة بناءً على مستواك الحالي.`)
-      : (planType === 'diet'
-        ? `Your renewed diet plan is live, ${profile.name}. I've updated calories and macros based on your actual measurement progress.`
-        : `New workout programme unlocked, ${profile.name}. I've increased the volume and intensity based on where you are now.`)
-
-    await supabase.from('chat_messages').insert({
-      user_id: user.id,
-      role: 'ion',
-      content: ionMessage,
-      message_type: 'new_plan',
+    const preview = buildRenewalPreview({
+      planType,
+      oldPlan,
+      newPlan: planJson,
+      progressBlock,
+      language,
     })
 
-    // ── Notifications (fire-and-forget) ────────────────────────────────
-    await Promise.allSettled([
-      sendEmail({ to: user.email!, type: 'new_plan', data: { name: profile.name, planType, weeks: durationWeeks } }),
-      sendPushNotification({ userId: user.id, type: 'plan_renewal' }),
-    ])
+    const { data: previewRow, error: previewError } = await admin.from('chat_messages').insert({
+      user_id: user.id,
+      role: 'assistant',
+      content: preview.message,
+      message_type: 'renewal_preview',
+      metadata: {
+        pending_plan_json: planJson,
+        pending_plan_type: planType,
+        previous_plan_id: oldPlanRes.data?.id ?? null,
+        preview,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        total_estimated_cost_usd: estimateRenewalCost(message),
+      },
+    }).select('id').single()
 
-    // ── Supplement recs for Elite (non-blocking) ───────────────────────
-    const dietPlanForSupp = planType === 'diet' ? planJson : null
-    generateSupplementRecsIfElite(
-      supabase, client, user.id,
-      { ...profile, body_fat_pct: latestMeasurement?.body_fat_pct },
-      dietPlanForSupp,
-      language,
-    ).catch(e => console.error('[renew-plan] supplement gen failed:', e))
+    if (previewError) throw previewError
 
-    return NextResponse.json({ ok: true, plan: planJson })
+    await recordAppEvent({
+      userId: user.id,
+      eventType: 'plan_renewal_preview_generated',
+      source: 'renew-plan',
+      message: `${planType} renewal preview generated`,
+      metadata: { planType, previewId: previewRow?.id, cost: estimateRenewalCost(message) },
+    })
+
+    return NextResponse.json({ ok: true, action: 'preview', previewId: previewRow?.id, preview, plan: planJson })
   } catch (err: any) {
     console.error('[renew-plan]', err)
+    await recordAppEvent({
+      eventType: 'plan_renewal_failed',
+      severity: 'error',
+      source: 'renew-plan',
+      message: err?.message || 'Renewal failed',
+    }).catch(() => {})
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
 
 // ── Diet renewal prompt ───────────────────────────────────────────────────────
+
+async function applyRenewalPreview({
+  supabase,
+  admin,
+  userId,
+  email,
+  previewId,
+}: {
+  supabase: Awaited<ReturnType<typeof createServerClient>>
+  admin: ReturnType<typeof createAdminClient>
+  userId: string
+  email?: string | null
+  previewId?: string
+}) {
+  if (!previewId) return NextResponse.json({ error: 'Missing previewId' }, { status: 400 })
+
+  const { data: previewRow, error } = await admin.from('chat_messages')
+    .select('id, metadata, created_at')
+    .eq('id', previewId)
+    .eq('user_id', userId)
+    .eq('message_type', 'renewal_preview')
+    .maybeSingle()
+
+  if (error) throw error
+  if (!previewRow?.metadata?.pending_plan_json) {
+    return NextResponse.json({ error: 'Renewal preview not found' }, { status: 404 })
+  }
+  if (previewRow.metadata?.applied_at) {
+    return NextResponse.json({ error: 'Renewal preview already applied' }, { status: 409 })
+  }
+
+  const planType = previewRow.metadata.pending_plan_type as 'diet' | 'workout'
+  if (planType !== 'diet' && planType !== 'workout') {
+    return NextResponse.json({ error: 'Invalid renewal preview' }, { status: 400 })
+  }
+
+  const table = planType === 'diet' ? 'diet_plans' : 'workout_plans'
+  const durationWeeks = planType === 'diet' ? 4 : 6
+  const startDate = new Date().toISOString().split('T')[0]
+  const endDate = new Date(Date.now() + durationWeeks * 7 * 86400000).toISOString().split('T')[0]
+  const planJson = {
+    ...previewRow.metadata.pending_plan_json,
+    _renewal: {
+      preview_id: previewId,
+      previous_plan_id: previewRow.metadata.previous_plan_id ?? null,
+      applied_at: new Date().toISOString(),
+      summary: previewRow.metadata.preview ?? null,
+    },
+  }
+
+  const { error: deactivateError } = await admin.from(table).update({ active: false }).eq('user_id', userId).eq('active', true)
+  if (deactivateError) throw deactivateError
+
+  const { data: insertedPlan, error: insertError } = await admin.from(table).insert({
+    user_id: userId,
+    plan_json: planJson,
+    active: true,
+    start_date: startDate,
+    end_date: endDate,
+  }).select('id, plan_json').single()
+  if (insertError) throw insertError
+
+  const { data: profile } = await admin.from('profiles').select('*').eq('user_id', userId).maybeSingle()
+  const language = normalizeAiLanguage(profile?.language)
+  const ionMessage = language === 'ar'
+    ? `تم حفظ دورة ${planType === 'diet' ? 'التغذية' : 'التمرين'} الجديدة. إذا لم تناسبك، يمكنك الرجوع للخطة السابقة من صفحة الخطة.`
+    : `Done. Your renewed ${planType === 'diet' ? 'nutrition' : 'workout'} cycle is now saved. If it feels wrong, you can restore the previous cycle from the Plan page.`
+
+  await admin.from('chat_messages').insert({
+    user_id: userId,
+    role: 'assistant',
+    content: ionMessage,
+    message_type: 'new_plan',
+    metadata: { renewal_applied: true, plan_type: planType, plan_id: insertedPlan?.id },
+  })
+
+  await admin.from('chat_messages').update({
+    metadata: {
+      ...previewRow.metadata,
+      applied_at: new Date().toISOString(),
+      applied_plan_id: insertedPlan?.id,
+    },
+  }).eq('id', previewId)
+
+  await Promise.allSettled([
+    email ? sendEmail({ to: email, type: 'new_plan', data: { name: profile?.name || 'there', planType, weeks: durationWeeks } }) : Promise.resolve(),
+    sendPushNotification({ userId, type: 'plan_renewal' }),
+  ])
+
+  if (planType === 'diet' && process.env.ANTHROPIC_API_KEY) {
+    generateSupplementRecsIfElite(
+      supabase,
+      new Anthropic(),
+      userId,
+      profile || {},
+      insertedPlan?.plan_json,
+      language,
+    ).catch(e => console.error('[renew-plan] supplement gen failed:', e))
+  }
+
+  await recordAppEvent({
+    userId,
+    eventType: 'plan_renewal_applied',
+    source: 'renew-plan',
+    message: `${planType} renewal applied`,
+    metadata: { planType, previewId, planId: insertedPlan?.id },
+  })
+
+  return NextResponse.json({ ok: true, action: 'apply', planType, plan: insertedPlan?.plan_json })
+}
+
+async function rollbackPlan({
+  admin,
+  userId,
+  planType,
+  targetPlanId,
+}: {
+  admin: ReturnType<typeof createAdminClient>
+  userId: string
+  planType?: 'diet' | 'workout'
+  targetPlanId?: string
+}) {
+  if (planType !== 'diet' && planType !== 'workout') {
+    return NextResponse.json({ error: 'Missing planType' }, { status: 400 })
+  }
+
+  const table = planType === 'diet' ? 'diet_plans' : 'workout_plans'
+  const currentRes = await admin.from(table).select('id').eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const targetBase = admin.from(table).select('*').eq('user_id', userId).eq('active', false)
+  const targetRes = targetPlanId
+    ? await targetBase.eq('id', targetPlanId).maybeSingle()
+    : await targetBase.order('created_at', { ascending: false }).limit(1).maybeSingle()
+
+  if (targetRes.error) throw targetRes.error
+  if (!targetRes.data) return NextResponse.json({ error: 'No previous plan found' }, { status: 404 })
+
+  if (currentRes.data?.id) {
+    const { error } = await admin.from(table).update({ active: false }).eq('id', currentRes.data.id).eq('user_id', userId)
+    if (error) throw error
+  }
+
+  const restoredPlanJson = {
+    ...(targetRes.data.plan_json || {}),
+    _restored: {
+      restored_at: new Date().toISOString(),
+      replaced_plan_id: currentRes.data?.id ?? null,
+    },
+  }
+
+  const { error: restoreError } = await admin.from(table).update({
+    active: true,
+    plan_json: restoredPlanJson,
+  }).eq('id', targetRes.data.id).eq('user_id', userId)
+  if (restoreError) throw restoreError
+
+  await admin.from('chat_messages').insert({
+    user_id: userId,
+    role: 'assistant',
+    content: planType === 'diet'
+      ? 'I restored your previous nutrition plan. Your nutrition page now uses that cycle again.'
+      : 'I restored your previous workout plan. Your workout pages now use that cycle again.',
+    message_type: 'new_plan',
+    metadata: { rollback: true, plan_type: planType, restored_plan_id: targetRes.data.id, replaced_plan_id: currentRes.data?.id ?? null },
+  })
+
+  await recordAppEvent({
+    userId,
+    eventType: 'plan_rollback_applied',
+    source: 'renew-plan',
+    message: `${planType} plan rolled back`,
+    metadata: { planType, restoredPlanId: targetRes.data.id, replacedPlanId: currentRes.data?.id ?? null },
+  })
+
+  return NextResponse.json({ ok: true, action: 'rollback', planType, restoredPlanId: targetRes.data.id, plan: restoredPlanJson })
+}
+
+function estimateRenewalCost(message: any) {
+  const usage = message?.usage
+  if (!usage) return 0
+  const input = usage.input_tokens || 0
+  const output = usage.output_tokens || 0
+  const cacheWrite = usage.cache_creation_input_tokens || 0
+  const cacheRead = usage.cache_read_input_tokens || 0
+  return input * 0.000015 + output * 0.000075 + cacheWrite * 0.00001875 + cacheRead * 0.0000015
+}
+
+function buildRenewalPreview({ planType, oldPlan, newPlan, progressBlock, language }: any) {
+  const ar = language === 'ar'
+  const oldCalories = oldPlan?.daily_calories ?? oldPlan?.calories_per_day
+  const newCalories = newPlan?.daily_calories ?? newPlan?.calories_per_day
+  const oldMacros = extractMacros(oldPlan)
+  const newMacros = extractMacros(newPlan)
+  const oldWorkout = extractWorkoutSummary(oldPlan)
+  const newWorkout = extractWorkoutSummary(newPlan)
+  const keyExerciseChanges = planType === 'workout' ? diffExercises(oldPlan, newPlan) : []
+
+  const summary = {
+    planType,
+    calories: planType === 'diet' ? { before: oldCalories ?? null, after: newCalories ?? null } : null,
+    macros: planType === 'diet' ? { before: oldMacros, after: newMacros } : null,
+    trainingSplit: planType === 'workout' ? { before: oldWorkout.split, after: newWorkout.split } : null,
+    daysPerWeek: planType === 'workout' ? { before: oldWorkout.daysPerWeek, after: newWorkout.daysPerWeek } : null,
+    keyExerciseChanges,
+    why: buildRenewalWhy(planType, progressBlock, ar),
+  }
+
+  const message = ar ? buildArabicPreviewMessage(summary) : buildEnglishPreviewMessage(summary)
+  return { ...summary, message }
+}
+
+function extractMacros(plan: any) {
+  if (!plan) return null
+  const macros = plan.macros || plan
+  return {
+    protein_g: macros.protein_g ?? null,
+    carbs_g: macros.carbs_g ?? null,
+    fat_g: macros.fat_g ?? macros.fats_g ?? null,
+  }
+}
+
+function extractWorkoutSummary(plan: any) {
+  if (!plan) return { split: null, daysPerWeek: null }
+  const days = Array.isArray(plan.days)
+    ? plan.days
+    : Array.isArray(plan.weeks)
+      ? (plan.weeks[0]?.days || [])
+      : []
+  return {
+    split: plan.split_type || plan.training_split || plan.program_type || plan.program_name || null,
+    daysPerWeek: plan.training_days_per_week || days.filter((day: any) => (day.exercises || []).length > 0).length || null,
+  }
+}
+
+function exerciseNames(plan: any) {
+  const days = Array.isArray(plan?.days)
+    ? plan.days
+    : Array.isArray(plan?.weeks)
+      ? plan.weeks.flatMap((week: any) => week.days || [])
+      : []
+  return days.flatMap((day: any) => (day.exercises || []).map((ex: any) => ex.name || ex.title).filter(Boolean))
+}
+
+function diffExercises(oldPlan: any, newPlan: any) {
+  const oldNames = new Set(exerciseNames(oldPlan).map((name: string) => name.toLowerCase()))
+  const added = exerciseNames(newPlan).filter((name: string) => !oldNames.has(name.toLowerCase()))
+  return added.slice(0, 6)
+}
+
+function buildRenewalWhy(planType: string, progressBlock: string, ar: boolean) {
+  const hasMeasurements = progressBlock && !progressBlock.startsWith('No measurements')
+  if (ar) {
+    return hasMeasurements
+      ? `اعتمدت على القياسات الأخيرة، سجل التقدم، والخطة الحالية لتجديد ${planType === 'diet' ? 'التغذية' : 'التمرين'} بدون تغيير عشوائي.`
+      : `لا توجد قياسات كافية، لذلك أبقيت التجديد محافظا ومبنيا على ملفك والخطة الحالية.`
+  }
+  return hasMeasurements
+    ? `Based on recent measurements, progress trend, and your current plan, this renewal changes the next cycle without guessing.`
+    : `Because there is limited measurement data, this renewal stays conservative and uses your profile plus the current plan as the baseline.`
+}
+
+function formatMacroLine(macros: any) {
+  if (!macros) return 'not tracked'
+  return `${macros.protein_g ?? '?'}g protein / ${macros.carbs_g ?? '?'}g carbs / ${macros.fat_g ?? '?'}g fat`
+}
+
+function buildEnglishPreviewMessage(summary: any) {
+  const lines = [`Here is what will change before I save this ${summary.planType} renewal:`]
+  if (summary.planType === 'diet') {
+    lines.push(`Calories: ${summary.calories.before ?? '?'} -> ${summary.calories.after ?? '?'} kcal`)
+    lines.push(`Macros: ${formatMacroLine(summary.macros.before)} -> ${formatMacroLine(summary.macros.after)}`)
+  } else {
+    lines.push(`Training split: ${summary.trainingSplit.before ?? '?'} -> ${summary.trainingSplit.after ?? '?'}`)
+    lines.push(`Days/week: ${summary.daysPerWeek.before ?? '?'} -> ${summary.daysPerWeek.after ?? '?'}`)
+    if (summary.keyExerciseChanges.length) lines.push(`Key exercise changes: ${summary.keyExerciseChanges.join(', ')}`)
+  }
+  lines.push(`Why: ${summary.why}`)
+  lines.push('Reply or tap "Apply new plan" only if this looks right.')
+  return lines.join('\n')
+}
+
+function buildArabicPreviewMessage(summary: any) {
+  const lines = [`هذه معاينة ما سيتغير قبل حفظ تجديد ${summary.planType === 'diet' ? 'التغذية' : 'التمرين'}:`]
+  if (summary.planType === 'diet') {
+    lines.push(`السعرات: ${summary.calories.before ?? '?'} -> ${summary.calories.after ?? '?'} كالوري`)
+    lines.push(`الماكروز: ${formatMacroLine(summary.macros.before)} -> ${formatMacroLine(summary.macros.after)}`)
+  } else {
+    lines.push(`تقسيم التمرين: ${summary.trainingSplit.before ?? '?'} -> ${summary.trainingSplit.after ?? '?'}`)
+    lines.push(`أيام التمرين أسبوعيا: ${summary.daysPerWeek.before ?? '?'} -> ${summary.daysPerWeek.after ?? '?'}`)
+    if (summary.keyExerciseChanges.length) lines.push(`أهم تغييرات التمارين: ${summary.keyExerciseChanges.join(', ')}`)
+  }
+  lines.push(`السبب: ${summary.why}`)
+  lines.push('اضغط أو اكتب "طبق الخطة الجديدة" فقط إذا كانت مناسبة.')
+  return lines.join('\n')
+}
 
 function buildDietRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, dietPrefs, supplements, latestMeasurement }: any) {
   const ar = language === 'ar'
@@ -182,7 +489,7 @@ Name: ${profile.name} | Age: ${profile.age} | Gender: ${profile.gender}
 Weight: ${latestMeasurement?.weight_kg || profile.weight_kg} kg | Height: ${profile.height_cm} cm
 Goal: ${goalLabels[profile.goal] || profile.goal}
 Goal speed: ${profile.goal_speed || 'moderate'}
-LBM: ${m.leanMass} kg | Body fat: ${m.bodyFatPct}% (${m.usingRealBf ? 'measured' : 'estimated'})
+LBM: ${m.leanMass} kg | Body fat: ${m.bodyFatPct}% (${m.usingRealBf ? 'measured via InBody scan' : 'estimated — no InBody scan'})${profile.muscle_mass_kg ? `\nSkeletal Muscle Mass (InBody): ${profile.muscle_mass_kg} kg` : ''}${profile.visceral_fat != null ? `\nVisceral Fat Level (InBody): ${profile.visceral_fat}${Number(profile.visceral_fat) > 10 ? ' ⚠️ HIGH — cardiovascular risk, prioritise fat loss' : ''}` : ''}${profile.inbody_score != null ? `\nInBody Score: ${profile.inbody_score}/100` : ''}${profile.bmr_kcal ? `\nMeasured BMR (InBody): ${profile.bmr_kcal} kcal/day` : ''}
 Wake: ${profile.wake_time || '7:00'} | Sleep: ${profile.sleep_time || '23:00'}
 Meals per day: ${profile.meals_per_day || 3} | Cooking: ${profile.cooking_ability || 'moderate'} | Budget: ${profile.food_budget || 'moderate'}
 
@@ -281,6 +588,7 @@ Exercises NEVER to include: ${profile.exercises_hated || 'None'}
 Injuries/limitations: ${profile.injuries || 'None'}
 Stress: ${profile.stress_level || 'moderate'} | Sleep: ${profile.sleep_quality || 'average'}
 Previous split: ${prevSplit} (${prevDays} training days)
+Body composition: LBM ${m.leanMass} kg | BF% ${m.bodyFatPct}% (${m.usingRealBf ? 'InBody scan' : 'estimated'})${profile.muscle_mass_kg ? ` | Muscle mass ${profile.muscle_mass_kg} kg` : ''}${profile.visceral_fat != null ? ` | Visceral fat ${profile.visceral_fat}${Number(profile.visceral_fat) > 10 ? ' (HIGH)' : ''}` : ''}${profile.inbody_score != null ? ` | InBody score ${profile.inbody_score}/100` : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PROGRESS HISTORY

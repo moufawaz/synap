@@ -9,7 +9,7 @@ const PLAN_MODIFY_WINDOW_DAYS = 30
 
 export const dynamic = 'force-dynamic'
 
-type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan' | 'plan_proposal'
+type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan' | 'plan_proposal' | 'renewal_preview'
 type Role = 'user' | 'ion' | 'assistant'
 
 interface Message {
@@ -577,6 +577,7 @@ function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender:
     alert: { bg: 'rgba(239,68,68,0.05)', border: 'rgba(239,68,68,0.2)', icon: <AlertCircle size={13} style={{ color: '#EF4444' }} />, label: 'Alert' },
     new_plan: { bg: 'rgba(187,92,246,0.08)', border: 'rgba(187,92,246,0.3)', icon: <TrendingUp size={13} style={{ color: '#D88BFF' }} />, label: 'New Plan' },
     plan_proposal: { bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.28)', icon: <Zap size={13} style={{ color: '#F59E0B' }} />, label: 'Proposed Change' },
+    renewal_preview: { bg: 'rgba(59,130,246,0.06)', border: 'rgba(59,130,246,0.25)', icon: <TrendingUp size={13} style={{ color: '#60A5FA' }} />, label: 'Renewal Preview' },
     text: { bg: '#0E0E0E', border: 'rgba(255,255,255,0.05)', icon: null, label: null },
   }
 
@@ -632,6 +633,13 @@ function MessageBubble({ msg, gender, onPrompt, isRTL }: { msg: Message; gender:
           <div className="flex gap-2 mt-3 flex-wrap">
             <a href="/plan" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(187,92,246,0.15)', color: '#D88BFF', border: '1px solid rgba(187,92,246,0.2)' }}>
               View New Plan
+            </a>
+          </div>
+        )}
+        {type === 'renewal_preview' && (
+          <div className="flex gap-2 mt-3 flex-wrap">
+            <a href="/plan" className="px-3 py-1 rounded-lg font-heading text-xs font-semibold" style={{ background: 'rgba(59,130,246,0.14)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.25)' }}>
+              {isRTL ? 'راجع التجديد' : 'Review Renewal'}
             </a>
           </div>
         )}
