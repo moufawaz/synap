@@ -84,24 +84,31 @@ export async function POST(req: Request) {
     }
 
     // Load user profile + plans + context in parallel
-    const [profileRes, userLangRes, workoutRes, dietRes, historyRes, subRes, measureRes, workoutLogRes, mealLogRes, pendingProposalRes] = await Promise.all([
+    const [profileRes, userLangRes, workoutRes, dietRes, historyRes, subRes, measureRes, workoutLogRes, mealLogRes, pendingProposalRes, planChangesRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('workout_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
       supabase.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
       supabase.from('chat_messages').select('role, content').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
       getUserSubscription(user.id),
-      // Latest 3 measurements
+      // Latest 5 measurements — enough to compute a meaningful trend
       supabase.from('measurements').select('date,weight_kg,body_fat_pct,waist_cm,chest_cm,hips_cm,bicep_left_cm,bicep_right_cm,thigh_left_cm,thigh_right_cm')
-        .eq('user_id', user.id).order('date', { ascending: false }).limit(3),
+        .eq('user_id', user.id).order('date', { ascending: false }).limit(5),
       // Last 7 workout logs
       supabase.from('workout_log').select('date,day_name,completion_pct,duration_min,exercises_completed')
         .eq('user_id', user.id).order('date', { ascending: false }).limit(7),
-      // Last 7 meal logs
+      // Last 14 meal logs (2 weeks of data for compliance analysis)
       supabase.from('meals_log').select('date,meal_time,description,calories_estimated,protein_g,carbs_g,fats_g')
-        .eq('user_id', user.id).order('date', { ascending: false }).limit(7),
+        .eq('user_id', user.id).order('date', { ascending: false }).limit(14),
       // Latest pending plan proposals (for two-step confirm flow)
       supabase.from('chat_messages').select('id, metadata, created_at').eq('user_id', user.id).eq('message_type', 'plan_proposal').order('created_at', { ascending: false }).limit(3),
+      // Recent plan changes made via chat (last 30 days)
+      supabase.from('chat_messages')
+        .select('content, message_type, metadata, created_at')
+        .eq('user_id', user.id)
+        .in('message_type', ['meal_card', 'workout_card'])
+        .order('created_at', { ascending: false })
+        .limit(10),
     ])
 
     const profile     = profileRes.data ? { ...profileRes.data, language: userLangRes.data?.language ?? profileRes.data.language } : null
@@ -112,6 +119,7 @@ export async function POST(req: Request) {
     const workoutLogs  = workoutLogRes.data || []
     const mealLogs     = mealLogRes.data || []
     const pendingProposals = pendingProposalRes.data || []
+    const recentPlanChanges = planChangesRes.data || []
 
     // Reverse to get chronological order
     const history = (historyRes.data || []).reverse()
@@ -180,7 +188,7 @@ export async function POST(req: Request) {
       })
     }
 
-    const systemPrompt = buildSystemPrompt(profile, workoutPlan, dietPlan, planTier, measurements, workoutLogs, mealLogs)
+    const systemPrompt = buildSystemPrompt(profile, workoutPlan, dietPlan, planTier, measurements, workoutLogs, mealLogs, recentPlanChanges)
 
     // Build conversation history. Anthropic only accepts 'user' | 'assistant'.
     const normalizedHistory: Anthropic.MessageParam[] = history
@@ -693,6 +701,7 @@ function buildSystemPrompt(
   measurements: any[],
   workoutLogs: any[],
   mealLogs: any[],
+  recentPlanChanges: any[] = [],
 ): string {
   const language = normalizeAiLanguage(profile?.language)
   const now = new Date()
@@ -737,6 +746,70 @@ Activity level: ${profile.activity_level || 'Not specified'}
     ? JSON.stringify(workoutPlan, null, 2).slice(0, 2000)
     : 'No workout plan yet - encourage them to generate one.'
 
+  // ── Calorie compliance analysis ──────────────────────────────────────────
+  let complianceBlock = 'Not enough meal log data to assess compliance.'
+  if (mealLogs.length > 0 && dietPlan?.daily_calories) {
+    const dayCalMap: Record<string, number> = {}
+    const dayProtMap: Record<string, number> = {}
+    for (const l of mealLogs) {
+      if (!l.date) continue
+      dayCalMap[l.date] = (dayCalMap[l.date] || 0) + (l.calories_estimated || 0)
+      dayProtMap[l.date] = (dayProtMap[l.date] || 0) + (l.protein_g || 0)
+    }
+    const calDays = Object.values(dayCalMap).filter(v => v > 0)
+    const protDays = Object.values(dayProtMap).filter(v => v > 0)
+    if (calDays.length > 0) {
+      const avgCal = Math.round(calDays.reduce((a, b) => a + b, 0) / calDays.length)
+      const avgProt = protDays.length > 0 ? Math.round(protDays.reduce((a, b) => a + b, 0) / protDays.length) : null
+      const calDiff = avgCal - dietPlan.daily_calories
+      const calStatus = Math.abs(calDiff) <= 100 ? 'ON TARGET' : calDiff > 0 ? `OVER by ${calDiff} kcal` : `UNDER by ${Math.abs(calDiff)} kcal`
+      const protStatus = avgProt && dietPlan.protein_g
+        ? (avgProt >= dietPlan.protein_g * 0.9 ? 'ON TARGET' : `UNDER — avg ${avgProt}g vs ${dietPlan.protein_g}g target`)
+        : null
+      complianceBlock = `Logged over ${calDays.length} day(s):
+  Avg daily calories: ${avgCal} kcal (${calStatus})
+  ${protStatus ? `Avg daily protein: ${avgProt}g (${protStatus})` : 'Protein: not enough data'}`
+    }
+  }
+
+  // ── Weight trend vs expected rate of change ──────────────────────────────
+  let trendBlock = 'Not enough measurements to compute trend.'
+  if (measurements.length >= 2) {
+    const sorted = [...measurements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const oldest = sorted[0]
+    const newest = sorted[sorted.length - 1]
+    const daysDiff = (new Date(newest.date).getTime() - new Date(oldest.date).getTime()) / (1000 * 60 * 60 * 24)
+    if (daysDiff > 0 && oldest.weight_kg && newest.weight_kg) {
+      const totalChange = newest.weight_kg - oldest.weight_kg
+      const weeklyRate = (totalChange / daysDiff) * 7
+      const goal = profile?.goal || ''
+      // Expected weekly rate by goal
+      const expectedRate = goal === 'lose_fat' ? -0.5 : goal === 'build_muscle' ? 0.25 : goal === 'recomp' ? 0 : null
+      const rateStr = weeklyRate >= 0 ? `+${weeklyRate.toFixed(2)}` : weeklyRate.toFixed(2)
+      trendBlock = `Over ${Math.round(daysDiff)} days: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(1)} kg total | ${rateStr} kg/week`
+      if (expectedRate !== null) {
+        const diff = weeklyRate - expectedRate
+        if (Math.abs(diff) > 0.1) {
+          trendBlock += `\n  Expected ~${expectedRate >= 0 ? '+' : ''}${expectedRate} kg/week for ${goal} — currently ${Math.abs(diff) > 0.2 ? 'SIGNIFICANTLY ' : ''}${diff > 0 ? 'FASTER' : 'SLOWER'} than expected`
+        } else {
+          trendBlock += `\n  On track for ${goal} goal`
+        }
+      }
+    }
+  }
+
+  // ── Recent plan changes made via chat ────────────────────────────────────
+  let planChangesBlock = 'No plan changes via chat yet.'
+  if (recentPlanChanges.length > 0) {
+    const lines = recentPlanChanges.map(c => {
+      const date = new Date(c.created_at).toLocaleDateString('en-GB')
+      const summary = c.metadata?.plan_edit?.summary || c.content?.slice(0, 120) || 'Change applied'
+      const type = c.message_type === 'meal_card' ? '[DIET]' : '[WORKOUT]'
+      return `${date} ${type}: ${summary}`
+    })
+    planChangesBlock = lines.join('\n')
+  }
+
   return `You are Ion, an elite AI personal trainer and nutrition coach for SYNAP. You speak directly to ${profile?.name || 'your client'}.
 
 ${aiLanguageInstruction(language, 'every chat reply, coaching note, suggestion, plan-change summary, and structured-card text')}
@@ -749,6 +822,15 @@ ${profileBlock}
 
 === LATEST BODY MEASUREMENTS ===
 ${measureBlock}
+
+=== WEIGHT TREND ANALYSIS ===
+${trendBlock}
+
+=== CALORIE & PROTEIN COMPLIANCE (from meal logs) ===
+${complianceBlock}
+
+=== RECENT PLAN CHANGES (via chat) ===
+${planChangesBlock}
 
 === RECENT WORKOUT LOGS (last 7) ===
 ${workoutLogBlock}
@@ -776,6 +858,9 @@ ${workoutBlock}
 11. Supplement rule: If CLIENT TIER is ELITE, you may give detailed personalised supplement protocols with timing, dosing, and stacking. For STARTER or PRO clients, acknowledge supplement questions briefly and let them know personalised protocols are available on the Elite plan — do not give a full protocol.
 12. Data integrity rule: Never fabricate body metrics, food calories, exercise names, or plan data. If a data point is missing, say so clearly rather than estimating a number.
 13. Billing rule: If the client asks about their subscription plan, pricing, upgrading, or cancelling, direct them politely to Settings → Billing. Do not discuss plan pricing or feature tiers in chat.
-14. Goal timeline rule: If CLIENT TIER is ELITE, you may give a detailed month-by-month projection toward their goal based on current rate of change. For STARTER or PRO clients, give general progress encouragement only — no specific timeline projections.`
+14. Goal timeline rule: If CLIENT TIER is ELITE, you may give a detailed month-by-month projection toward their goal based on current rate of change. For STARTER or PRO clients, give general progress encouragement only — no specific timeline projections.
+15. Diet change tracking rule: When a diet change was made recently (see RECENT PLAN CHANGES), monitor whether it is working. Specifically: if the WEIGHT TREND ANALYSIS shows the client is slower than expected AFTER the change, flag it proactively — e.g. "Your calories were adjusted 2 weeks ago but you're still losing slower than target — let's check your actual calorie intake." If the change appears to be working, affirm it with data.
+16. Calorie compliance rule: If CALORIE & PROTEIN COMPLIANCE shows the client is consistently UNDER or OVER their targets, proactively mention it with a concrete suggestion. Under by > 200 kcal → risk of muscle loss, suggest a specific food addition. Over by > 200 kcal → identify the likely source from meal logs, suggest a specific adjustment. Protein under 70% of target → prioritise fixing this above all else.
+17. Change quality rule: When the client requests a diet change, evaluate whether it is beneficial for their goal BEFORE proposing it. If a change would clearly hurt their progress (e.g., removing their main protein source, cutting to < 1200 kcal, eliminating carbs pre-workout), explain why it is suboptimal and propose a better alternative that still respects their preference. Always coach, never just comply blindly.`
 }
 
