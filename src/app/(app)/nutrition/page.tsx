@@ -88,7 +88,7 @@ export default function NutritionPage() {
     if (!user) { setLoading(false); return }
 
     const [planRes, profileRes, logsRes, hydrationRes, subRes, coachRes] = await Promise.all([
-      supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       fetch(`/api/log-meal?date=${TODAY}`).then(r => r.json()).catch(() => ({ logs: [] })),
       fetch(`/api/hydration?date=${TODAY}`).then(r => r.json()).catch(() => ({ hydration: null })),

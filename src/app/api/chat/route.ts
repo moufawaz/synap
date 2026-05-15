@@ -141,6 +141,7 @@ export async function POST(req: Request) {
       workoutPlanRow: workoutRes.data,
       dietPlanRow: dietRes.data,
       pendingProposals,
+      recentHistory: history,
     })
 
     if (planEdit.shouldStop) {
@@ -301,6 +302,7 @@ async function maybeApplyPlanEdit({
   workoutPlanRow,
   dietPlanRow,
   pendingProposals,
+  recentHistory,
 }: {
   client: Anthropic
   supabase: Awaited<ReturnType<typeof createServerClient>>
@@ -310,6 +312,7 @@ async function maybeApplyPlanEdit({
   workoutPlanRow: any
   dietPlanRow: any
   pendingProposals: any[]
+  recentHistory: { role: string; content: string }[]
 }): Promise<PlanEditResult> {
 
   // ── STEP 1: Check if user is confirming a previous proposal ───
@@ -348,7 +351,8 @@ async function maybeApplyPlanEdit({
   }
 
   // ── STEP 2: Detect new edit intent ────────────────────────────
-  const intent = detectPlanEditIntent(message)
+  const recentContext = buildRecentPlanEditContext(recentHistory)
+  const intent = detectPlanEditIntent(message, recentContext)
   if (!intent) return { applied: false, proposed: false, shouldStop: false, reason: 'no_plan_edit_intent' }
   if ((intent === 'workout' || intent === 'rest_today') && !workoutPlanRow?.plan_json) {
     return { applied: false, proposed: false, shouldStop: true, reason: 'no_active_workout_plan' }
@@ -360,7 +364,7 @@ async function maybeApplyPlanEdit({
   // Rest-day is immediate — no proposal needed
   if (intent === 'rest_today') {
     try {
-      const result = applyRestDayToday(workoutPlanRow.plan_json, message)
+      const result = applyRestDayToday(workoutPlanRow.plan_json, buildEffectivePlanEditRequest(message, recentContext))
       const { error } = await supabase.from('workout_plans').update({ plan_json: result.plan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
       if (error) throw error
       return {
@@ -377,7 +381,8 @@ async function maybeApplyPlanEdit({
   // ── STEP 3: Generate proposal (DO NOT save to DB yet) ─────────
   try {
     const currentPlan = intent === 'workout' ? workoutPlanRow.plan_json : dietPlanRow.plan_json
-    const prompt = buildPlanEditPrompt({ type: intent, profile, userRequest: message, currentPlan })
+    const userRequest = buildEffectivePlanEditRequest(message, recentContext)
+    const prompt = buildPlanEditPrompt({ type: intent, profile, userRequest, currentPlan })
 
     const editResponse = await withAnthropicRetry(() => client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -392,6 +397,33 @@ async function maybeApplyPlanEdit({
     }
 
     await recordAiUsage({ userId, feature: `plan_proposal_${intent}`, model: editResponse.model, usage: editResponse.usage })
+
+    if (detectConfirmation(message) && hasPlanEditContext(recentContext)) {
+      let finalPlan = edit.updated_plan
+      if (intent === 'workout') {
+        finalPlan = normalizeWorkoutPlanDays(finalPlan)
+        await enrichWorkoutVideos(finalPlan)
+        const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('diet_plans').update({ plan_json: finalPlan }).eq('id', dietPlanRow.id).eq('user_id', userId)
+        if (error) throw error
+      }
+
+      return {
+        applied: true,
+        proposed: false,
+        shouldStop: true,
+        type: intent,
+        summary: edit.proposal_text.slice(0, 500),
+        usage: {
+          model: editResponse.model,
+          input_tokens: editResponse.usage.input_tokens,
+          output_tokens: editResponse.usage.output_tokens,
+          estimated_cost_usd: estimateAnthropicCostUsd(editResponse.usage, editResponse.model),
+        },
+      }
+    }
 
     return {
       applied: false,
@@ -413,24 +445,47 @@ async function maybeApplyPlanEdit({
   }
 }
 
-function detectPlanEditIntent(message: string): PlanEditIntent | null {
-  const text = message.toLowerCase()
+function detectPlanEditIntent(message: string, recentContext = ''): PlanEditIntent | null {
+  const currentText = message.toLowerCase()
+  const text = currentText
+  const contextText = `${currentText}\n${recentContext}`.toLowerCase()
   const hasArabic = /[\u0600-\u06FF]/.test(message)
   const restTodayWords = /\b(rest day|take a rest|rest today|skip today|day off|move today|reschedule today|postpone today|recover today)\b|راحة|استراحة|ارتاح|ريست|أجل|اجل|انقل.*اليوم|راحة اليوم/
   if (restTodayWords.test(text)) return 'rest_today'
 
   const changeWords = /\b(change|swap|replace|remove|avoid|hate|dislike|allergic|allergy|can't eat|cannot eat|adjust|update|modify|instead|alternative|increase|decrease|raise|lower|more|less|reduce|add)\b|غير|غيّر|بدل|استبدل|احذف|شيل|عدل|عدّل|تعديل|تحديث|زود|قلل|أضف|اضف|حساسية|ما اقدر|ما أقدر|لا أستطيع|بديل/
-  if (!changeWords.test(text)) return null
+  const confirmationOnly = detectConfirmation(message)
+  if (!changeWords.test(text) && !confirmationOnly) return null
 
   const workoutWords = /\b(exercise|workout|training|lift|bench|squat|deadlift|cardio|sets|reps|gym|machine|dumbbell|barbell|shoulder|knee|back pain|leg|chest|back|biceps|triceps)\b|تمرين|تمارين|تدريب|جيم|سكوات|بنش|ديدلفت|كارديو|مجموعات|تكرارات|كتف|ركبة|ظهر|صدر|رجل|بايسبس|ترايسبس/
   const dietWords = /\b(food|meal|diet|nutrition|calorie|calories|macro|protein|carb|fat|breakfast|lunch|dinner|snack|chicken|rice|egg|milk|fish|beef|vegetarian|vegan|oats|bread)\b|أكل|اكل|وجبة|وجبات|غذاء|تغذية|سعرات|سعرة|بروتين|كارب|كربوهيدرات|دهون|فطور|غداء|عشاء|سناك|دجاج|رز|أرز|بيض|حليب|سمك|لحم|شوفان|خبز/
 
   if (workoutWords.test(text) && !dietWords.test(text)) return 'workout'
   if (dietWords.test(text) && !workoutWords.test(text)) return 'diet'
+  if ((changeWords.test(text) || confirmationOnly) && workoutWords.test(contextText) && !dietWords.test(contextText)) return 'workout'
+  if ((changeWords.test(text) || confirmationOnly) && dietWords.test(contextText)) return 'diet'
   if (/\b(exercise|workout|training|gym)\b|تمرين|تدريب|جيم/.test(text)) return 'workout'
   if (/\b(food|meal|diet|nutrition|calorie|macro)\b|أكل|اكل|وجبة|غذاء|تغذية|سعرات/.test(text)) return 'diet'
   if (hasArabic) return null
   return null
+}
+
+function buildRecentPlanEditContext(history: { role: string; content: string }[]) {
+  return history
+    .slice(-8)
+    .map(item => `${item.role}: ${normalizeAssistantReply(item.content).content}`)
+    .join('\n')
+    .slice(-3000)
+}
+
+function hasPlanEditContext(context: string) {
+  return /\b(update|change|replace|swap|remove|instead|meal|dinner|lunch|breakfast|food|nutrition|workout|exercise|plan|chicken|rice|beef|pasta)\b|تغيير|غير|بدل|استبدل|وجبة|أكل|اكل|تغذية|تمرين/.test(context.toLowerCase())
+}
+
+function buildEffectivePlanEditRequest(message: string, recentContext: string) {
+  return recentContext
+    ? `Current user message: ${message}\n\nRecent chat context that explains the requested plan change:\n${recentContext}`
+    : message
 }
 
 function buildPlanEditReply(profile: any, edit: Extract<PlanEditResult, { applied: true }>) {
@@ -884,6 +939,7 @@ ${workoutBlock}
 5. Proactively call out patterns you see in the data: weight plateaus (< 0.5 kg change over 3+ measurements), 3+ consecutive missed sessions, protein intake below 70% of daily target, or left/right body symmetry gaps > 1.5 cm. Don't wait to be asked.
 6. When the client asks to modify their plan, FIRST propose the specific personalised change you intend to make (2–3 sentences: what, why it fits them, invite confirmation). NEVER apply a plan edit without the client confirming first. After they say yes/okay/go ahead, apply immediately. For simple rest-day swaps you may apply directly without a proposal.
 7. For medical or injury questions, recommend a doctor first, then still give practical guidance within safe limits.
+7a. Critical plan-save rule: In normal chat, NEVER claim a nutrition or workout plan has been saved, applied, or updated. Only the plan-edit handler can say that after a database update. If unsure, ask the user to confirm the exact meal/exercise change.
 8. If the client is struggling or feeling demotivated, be honest and encouraging — no hollow praise. Name what's actually going well.
 9. Language rule: If the saved client language is Arabic, ALWAYS reply in Arabic even if the user types English or Arabizi. If English, reply in English unless the user explicitly asks to switch.
 10. Format rule: Return plain natural-language text only. Never wrap replies in JSON, markdown code fences, or code blocks.
