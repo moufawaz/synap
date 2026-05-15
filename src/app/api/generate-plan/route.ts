@@ -10,6 +10,7 @@ import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { recordAppEvent } from '@/lib/app-events'
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
+import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntelligenceRule } from '@/lib/plan-builder'
 
 export async function POST(req: Request) {
   // Guard: API key must be set
@@ -309,175 +310,7 @@ function repairTruncatedJSON(s: string): string | null {
   }
 }
 
-/**
- * Evidence-based workout parameters — volume, intensity, split, and progression
- * tailored to the client's experience, goal, recovery capacity, and available time.
- */
-function calculateWorkoutParams(p: any) {
-  const days      = parseInt(p.training_days) || 3
-  const duration  = parseInt(p.session_duration) || 60
-  const rawExp    = (p.training_experience || '').toLowerCase()
-  const goal      = p.goal || 'be_healthier'
-  const stress    = (p.stress_level || 'moderate').toLowerCase()
-  const sleep     = (p.sleep_quality || 'average').toLowerCase()
-
-  // ── Experience tier ───────────────────────────────────────────────
-  const expTier = rawExp.includes('adv') ? 'advanced'
-    : rawExp.includes('inter') || rawExp.includes('med') ? 'intermediate'
-    : 'beginner'
-
-  // ── Weekly sets per muscle group ──────────────────────────────────
-  const setsPerMuscle = expTier === 'advanced'   ? { min: 16, max: 22 }
-    : expTier === 'intermediate'                  ? { min: 12, max: 16 }
-    : /* beginner */                                { min: 10, max: 12 }
-
-  // ── Rep ranges by goal ────────────────────────────────────────────
-  type RepZone = { compounds: string; accessories: string }
-  const repMap: Record<string, RepZone> = {
-    hypertrophy: { compounds: '6–12', accessories: '10–15' },
-    fat_loss:    { compounds: '10–15', accessories: '12–20' },
-    strength:    { compounds: '3–6', accessories: '6–10' },
-    health:      { compounds: '10–15', accessories: '12–20' },
-  }
-  const repKey = goal === 'build_muscle' ? 'hypertrophy'
-    : goal === 'lose_fat' ? 'fat_loss'
-    : goal === 'recomposition' ? 'hypertrophy'
-    : 'health'
-  const reps = repMap[repKey]
-
-  // ── Rest periods ──────────────────────────────────────────────────
-  const restSec = {
-    compounds:   goal === 'lose_fat' ? 60 : goal === 'build_muscle' ? 120 : 90,
-    accessories: goal === 'lose_fat' ? 45 : goal === 'build_muscle' ? 90  : 60,
-  }
-
-  // ── RPE target (adjusted for recovery capacity) ───────────────────
-  const baseRPE       = expTier === 'beginner' ? 7 : expTier === 'intermediate' ? 8 : 8.5
-  const stressPenalty = stress.includes('very') || stress.includes('high') ? -1 : stress === 'high' ? -0.5 : 0
-  const sleepPenalty  = sleep.includes('poor') ? -0.5 : sleep.includes('very') ? -1 : 0
-  const targetRPE     = Math.max(6, Math.round((baseRPE + stressPenalty + sleepPenalty) * 2) / 2)
-
-  // ── Exercises per session ─────────────────────────────────────────
-  const exercisesPerSession = duration <= 45 ? 5 : duration <= 60 ? 7 : duration <= 75 ? 8 : 10
-
-  // ── Split recommendation ──────────────────────────────────────────
-  let splitType: string
-  if      (days <= 2)  splitType = 'full_body'
-  else if (days === 3) splitType = goal === 'build_muscle' ? 'push_pull_legs' : 'full_body_x3'
-  else if (days === 4) splitType = 'upper_lower'
-  else if (days === 5) splitType = goal === 'build_muscle' ? 'push_pull_legs_x2_upper' : 'push_pull_legs_cardio'
-  else                 splitType = 'push_pull_legs_x2'
-
-  // ── Progressive overload model ────────────────────────────────────
-  const progressionModel = expTier === 'beginner'
-    ? 'Linear: add 2.5 kg (upper body) or 5 kg (lower body) every session once all prescribed reps are completed with good form'
-    : expTier === 'intermediate'
-    ? 'Double progression: hit the top of the rep range for every set → increase weight by 2.5 kg next session. If you miss reps, stay at the same weight'
-    : 'Wave loading: 3-week progressive overload block (volume+intensity) → 1 deload week at 50% volume. Increase loading by ~2.5% per wave on main compound lifts'
-
-  // ── Deload weeks ──────────────────────────────────────────────────
-  const deloadWeeks = expTier === 'beginner' ? [12]
-    : expTier === 'intermediate'             ? [6, 12]
-    : /* advanced */                           [4, 8, 12]
-
-  // ── Intensity technique notes (advanced only) ─────────────────────
-  const intensityTechniques = expTier === 'advanced'
-    ? 'Drop sets, rest-pause, and mechanical drop sets may be used on the last set of isolation exercises only. Do NOT apply to compound lifts.'
-    : expTier === 'intermediate'
-    ? 'Optional: add 1 back-off set (60% working weight × 15 reps) after main compounds for extra volume'
-    : 'Focus on form and consistency — no advanced techniques needed at this stage'
-
-  return {
-    expTier,
-    setsPerMuscle,
-    reps,
-    restSec,
-    targetRPE,
-    exercisesPerSession,
-    splitType,
-    progressionModel,
-    deloadWeeks,
-    intensityTechniques,
-    volumeNote: `${setsPerMuscle.min}–${setsPerMuscle.max} working sets per muscle group per week`,
-  }
-}
-
-/**
- * Evidence-based macro targets using Lean Body Mass when body composition data is available.
- * LBM-based protein is more accurate — a 90kg person at 30% BF needs far less protein
- * than a 90kg person at 10% BF, despite the same total weight.
- */
-function calculateMacros(p: any, latestMeasurement?: any) {
-  const weight  = parseFloat(latestMeasurement?.weight_kg || p.weight_kg) || 70
-  const height  = parseFloat(p.height_cm) || 170
-  const age     = parseInt(p.age)         || 25
-  const female  = p.gender === 'female'
-  const days    = parseInt(p.training_days) || 3
-  const duration = parseInt(p.session_duration) || 60
-  const speed   = p.goal_speed || 'moderate'
-
-  // ── Body composition ─────────────────────────────────────────────
-  // Use measured body fat % if available; otherwise use population averages
-  const measuredBf  = latestMeasurement?.body_fat_pct ? parseFloat(latestMeasurement.body_fat_pct) : null
-  const defaultBf   = female ? 28 : 20
-  const bodyFatPct  = measuredBf ?? defaultBf
-  const leanMass    = weight * (1 - bodyFatPct / 100)
-  const usingRealBf = !!measuredBf
-
-  // ── TDEE (Mifflin-St Jeor + training-specific burn) ───────────────
-  const bmr = female
-    ? 10 * weight + 6.25 * height - 5 * age - 161
-    : 10 * weight + 6.25 * height - 5 * age + 5
-
-  // NEAT multiplier (daily life, work type)
-  const workType   = (p.work_schedule || 'work').toLowerCase()
-  const neatMult   = workType.includes('shift') ? 1.5 : workType === 'flexible' ? 1.45 : 1.4
-  // Add weekly training kcal amortised per day (~5 kcal/min moderate training, 7 kcal/min intense)
-  const weeklyTrainKcal = days * duration * (days >= 5 ? 6 : 5)
-  const tdee = Math.round(bmr * neatMult + weeklyTrainKcal / 7)
-
-  // ── Calorie target ────────────────────────────────────────────────
-  // Deficit/surplus scaled to bodyweight — scientifically more appropriate than flat numbers
-  const weeklyRateKg = speed === 'aggressive' ? weight * 0.01 : speed === 'slow' ? weight * 0.005 : weight * 0.007
-  const deficit   = Math.min(700, Math.round(weeklyRateKg * 7700 / 7))  // 7700 kcal ≈ 1 kg fat
-  const surplus   = speed === 'aggressive' ? 350 : speed === 'slow' ? 150 : 250
-
-  const minCalories = female ? 1300 : 1500
-  let calories: number
-  switch (p.goal) {
-    case 'lose_fat':      calories = Math.max(minCalories, tdee - deficit); break
-    case 'build_muscle':  calories = tdee + surplus; break
-    case 'recomposition': calories = tdee;  break
-    default:              calories = Math.max(minCalories, tdee - 100)
-  }
-
-  // ── Protein (LBM-based) ───────────────────────────────────────────
-  // Cutting: higher (muscle preservation) · Building: moderate · Maintenance: lower
-  const protGKgLBM = p.goal === 'lose_fat' ? 2.5
-    : p.goal === 'recomposition' ? 2.3
-    : p.goal === 'build_muscle' ? 2.0
-    : 1.8
-  const protein = Math.round(leanMass * protGKgLBM)
-
-  // ── Fat (25-30% of calories for hormonal health) ──────────────────
-  const fatFromPct   = Math.round(calories * 0.27 / 9)
-  const fatFromLBM   = Math.round(leanMass * 0.8)
-  const fat          = Math.max(fatFromPct, fatFromLBM, 40)
-
-  // ── Carbs (fill remaining) ────────────────────────────────────────
-  const carbs = Math.max(50, Math.round((calories - protein * 4 - fat * 9) / 4))
-
-  // ── Water ─────────────────────────────────────────────────────────
-  const water = Math.round((weight * 35 + Math.min(days, 5) * 400) / 100) / 10
-
-  return {
-    calories, protein, fat, carbs, water, tdee,
-    leanMass: Math.round(leanMass),
-    bodyFatPct: Math.round(bodyFatPct),
-    usingRealBf,
-    weeklyWeightChangeKg: Math.round(weeklyRateKg * 100) / 100,
-  }
-}
+// calculateMacros and calculateWorkoutParams are imported from @/lib/plan-builder
 
 function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[]): string {
   const language = normalizeAiLanguage(p.language)
@@ -640,15 +473,10 @@ CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
    - Each session must fit within ${p.session_duration || 60} min total
 
 2. EXERCISE SELECTION — NON-NEGOTIABLE:
-   Available equipment: ${Array.isArray(p.equipment) ? p.equipment.join(' | ') : p.equipment || (p.gym_access ? 'Full gym' : 'Bodyweight only')}
+   Available equipment: ${equipmentString(p)}
    NEVER use: ${p.exercises_hated || 'None'} | Design around injuries: ${p.injuries || 'None'}
 
-   For EVERY exercise, pick the BEST variant (barbell, dumbbell, machine, or cable) based on what produces the best outcome for this person's goal and experience — not just the most common option:
-   - Compound movements (squat, hinge, press, row): use BARBELL or DUMBBELL variants — greater muscle activation and hormonal stimulus
-   - Isolation and accessory work: MACHINES and CABLES are often SUPERIOR — they provide constant tension, safer joint loading, and better mind-muscle connection (e.g. Cable Fly > Dumbbell Fly for chest isolation; Leg Extension Machine for quad; Seated Cable Row for lat engagement)
-   - When both options are equally effective, prefer machines for safety and load consistency
-   - ALWAYS write the SPECIFIC variant name: "Lat Pulldown Machine", "Seated Leg Curl Machine", "Cable Tricep Pushdown (Rope)", "Chest Press Machine", "Leg Press Machine", "Seated Cable Row" — never vague names like "leg press" or "row"
-   - Balance push/pull volume — equal sets of horizontal push + horizontal pull per week
+   ${machineIntelligenceRule(p, w)}
    - Balance left/right — if unilateral exercises are used, both sides must be trained equally
 
 3. LOAD & INTENSITY:

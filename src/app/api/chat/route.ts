@@ -813,7 +813,7 @@ Activity level: ${profile.activity_level || 'Not specified'}
       const weeklyRate = (totalChange / daysDiff) * 7
       const goal = profile?.goal || ''
       // Expected weekly rate by goal
-      const expectedRate = goal === 'lose_fat' ? -0.5 : goal === 'build_muscle' ? 0.25 : goal === 'recomp' ? 0 : null
+      const expectedRate = goal === 'lose_fat' ? -0.5 : goal === 'build_muscle' ? 0.25 : goal === 'recomposition' ? 0 : null
       const rateStr = weeklyRate >= 0 ? `+${weeklyRate.toFixed(2)}` : weeklyRate.toFixed(2)
       trendBlock = `Over ${Math.round(daysDiff)} days: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(1)} kg total | ${rateStr} kg/week`
       if (expectedRate !== null) {
