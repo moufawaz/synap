@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
-import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown } from 'lucide-react'
+import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown, Utensils, Heart } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/lib/useLanguage'
@@ -119,11 +119,13 @@ export default function SettingsPage() {
   const isLaunchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
 
   const SECTIONS = [
-    { id: 'profile', label: t(lang, 'settings_profile'), icon: User },
-    { id: 'training', label: t(lang, 'settings_training'), icon: Dumbbell },
+    { id: 'profile',     label: t(lang, 'settings_profile'),     icon: User },
+    { id: 'training',    label: t(lang, 'settings_training'),    icon: Dumbbell },
+    { id: 'nutrition',   label: lang === 'ar' ? 'التغذية'       : 'Nutrition',  icon: Utensils },
+    { id: 'health',      label: lang === 'ar' ? 'الصحة'          : 'Health',     icon: Heart },
     { id: 'preferences', label: t(lang, 'settings_preferences'), icon: Globe },
-    { id: 'billing', label: t(lang, 'settings_billing'), icon: CreditCard },
-    { id: 'integrations', label: 'Integrations', icon: Zap },
+    { id: 'billing',     label: t(lang, 'settings_billing'),     icon: CreditCard },
+    { id: 'integrations',label: 'Integrations',                  icon: Zap },
   ]
 
   if (!profile) return (
@@ -206,6 +208,7 @@ export default function SettingsPage() {
       {/* ── Profile ────────────────────────────────────────── */}
       {activeSection === 'profile' && (
         <div className="flex flex-col gap-4">
+          {/* Personal info */}
           <div className="glass-card p-5">
             <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_personal_info')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -215,14 +218,60 @@ export default function SettingsPage() {
               <Field label={t(lang, 'settings_height')} value={String(profile.height_cm || '')} onChange={v => updateProfile('height_cm', parseFloat(v) || v)} type="number" />
               <SelectField label={t(lang, 'settings_gender')} value={profile.gender || 'male'} onChange={v => updateProfile('gender', v)}
                 options={[{ value: 'male', label: t(lang, 'settings_gender_male') }, { value: 'female', label: t(lang, 'settings_gender_female') }]} />
+            </div>
+          </div>
+          {/* Goal details */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{lang === 'ar' ? 'الهدف' : 'YOUR GOAL'}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <SelectField label={t(lang, 'settings_goal')} value={profile.goal || ''} onChange={v => updateProfile('goal', v)}
                 options={[
-                  { value: 'lose_fat', label: t(lang, 'settings_goal_lose_fat') },
-                  { value: 'build_muscle', label: t(lang, 'settings_goal_build_muscle') },
-                  { value: 'recomposition', label: t(lang, 'settings_goal_recomp') },
-                  { value: 'improve_fitness', label: t(lang, 'settings_goal_fitness') },
-                  { value: 'be_healthier', label: t(lang, 'settings_goal_healthier') },
+                  { value: 'lose_fat',       label: t(lang, 'settings_goal_lose_fat') },
+                  { value: 'build_muscle',   label: t(lang, 'settings_goal_build_muscle') },
+                  { value: 'recomposition',  label: t(lang, 'settings_goal_recomp') },
+                  { value: 'improve_fitness',label: t(lang, 'settings_goal_fitness') },
+                  { value: 'be_healthier',   label: t(lang, 'settings_goal_healthier') },
                 ]} />
+              <SelectField
+                label={lang === 'ar' ? 'سرعة الوصول للهدف' : 'Goal Speed'}
+                value={profile.goal_speed || 'moderate'}
+                onChange={v => updateProfile('goal_speed', v)}
+                options={[
+                  { value: 'slow',       label: lang === 'ar' ? 'بطيء وثابت'          : 'Slow & Steady' },
+                  { value: 'moderate',   label: lang === 'ar' ? 'معتدل (مُنصح به)'     : 'Moderate (Recommended)' },
+                  { value: 'aggressive', label: lang === 'ar' ? 'سريع (أكثر صرامة)'   : 'Aggressive (Stricter)' },
+                ]}
+              />
+              <Field
+                label={lang === 'ar' ? 'الهدف المحدد (مثل: 80 كجم)' : 'Specific Target (e.g. 80 kg, 15% BF)'}
+                value={profile.goal_target || ''}
+                onChange={v => updateProfile('goal_target', v)}
+              />
+              <Field
+                label={lang === 'ar' ? 'الموعد النهائي للهدف' : 'Goal Deadline'}
+                value={profile.goal_date || ''}
+                onChange={v => updateProfile('goal_date', v)}
+                type="date"
+              />
+            </div>
+          </div>
+          {/* Schedule */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{lang === 'ar' ? 'الجدول اليومي' : 'DAILY SCHEDULE'}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label={lang === 'ar' ? 'وقت الاستيقاظ' : 'Wake Time'} value={profile.wake_time || ''} onChange={v => updateProfile('wake_time', v)} type="time" />
+              <Field label={lang === 'ar' ? 'وقت النوم' : 'Sleep Time'} value={profile.sleep_time || ''} onChange={v => updateProfile('sleep_time', v)} type="time" />
+              <SelectField
+                label={lang === 'ar' ? 'نوع جدول العمل' : 'Work Schedule'}
+                value={profile.work_schedule || 'work'}
+                onChange={v => updateProfile('work_schedule', v)}
+                options={[
+                  { value: 'work',     label: lang === 'ar' ? 'دوام كامل'   : 'Full-time work' },
+                  { value: 'student',  label: lang === 'ar' ? 'طالب'        : 'Student' },
+                  { value: 'flexible', label: lang === 'ar' ? 'جدول مرن'    : 'Flexible schedule' },
+                  { value: 'shifts',   label: lang === 'ar' ? 'دوام بالورديات' : 'Shift work' },
+                ]}
+              />
             </div>
           </div>
         </div>
@@ -231,6 +280,7 @@ export default function SettingsPage() {
       {/* ── Training ────────────────────────────────────────── */}
       {activeSection === 'training' && (
         <div className="flex flex-col gap-4">
+          {/* Training schedule */}
           <div className="glass-card p-5">
             <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_training_prefs')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -247,22 +297,242 @@ export default function SettingsPage() {
                 options={[{ value: 'true', label: t(lang, 'settings_gym') }, { value: 'false', label: t(lang, 'settings_home') }]} />
               <SelectField label={t(lang, 'settings_training_time')} value={profile.training_time || 'morning'} onChange={v => updateProfile('training_time', v)}
                 options={[
-                  { value: 'morning', label: t(lang, 'settings_morning') },
-                  { value: 'afternoon', label: t(lang, 'settings_afternoon') },
-                  { value: 'evening', label: t(lang, 'settings_evening') },
+                  { value: 'morning',    label: t(lang, 'settings_morning') },
+                  { value: 'afternoon',  label: t(lang, 'settings_afternoon') },
+                  { value: 'evening',    label: t(lang, 'settings_evening') },
                   { value: 'late_night', label: t(lang, 'settings_late_night') },
                 ]} />
             </div>
-            <div className="mt-4">
-              <label className="font-heading text-[10px] tracking-wider block mb-1.5" style={{ color: '#475569' }}>{t(lang, 'settings_injuries')}</label>
-              <textarea
-                value={profile.injuries || ''}
-                onChange={e => updateProfile('injuries', e.target.value)}
-                rows={2}
-                placeholder={t(lang, 'settings_injuries_placeholder')}
-                className="w-full rounded-xl px-3 py-2.5 font-heading text-sm outline-none resize-none"
-                style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
+          </div>
+
+          {/* Home equipment — shown only for home trainers */}
+          {!profile.gym_access && (
+            <div className="glass-card p-5">
+              <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+                {lang === 'ar' ? 'الأجهزة المتاحة في المنزل' : 'HOME EQUIPMENT'}
+              </p>
+              <p className="font-heading text-xs mb-4" style={{ color: '#475569' }}>
+                {lang === 'ar' ? 'Ion يستخدم هذا لبناء تمارينك' : 'Ion uses this to build your workouts'}
+              </p>
+              <CheckboxGroup
+                options={[
+                  { value: 'dumbbells',      label: lang === 'ar' ? 'دمبلز'         : 'Dumbbells' },
+                  { value: 'barbell',        label: lang === 'ar' ? 'بار + أوزان'   : 'Barbell & Plates' },
+                  { value: 'pull_up_bar',    label: lang === 'ar' ? 'عارضة عقلة'    : 'Pull-up Bar' },
+                  { value: 'resistance_bands',label: lang === 'ar' ? 'حزام مقاومة'  : 'Resistance Bands' },
+                  { value: 'kettlebell',     label: lang === 'ar' ? 'كيتل بيل'      : 'Kettlebell' },
+                  { value: 'bench',          label: lang === 'ar' ? 'كرسي تمرين'    : 'Bench' },
+                  { value: 'treadmill',      label: lang === 'ar' ? 'جهاز جري'      : 'Treadmill' },
+                  { value: 'none',           label: lang === 'ar' ? 'بدون أجهزة'    : 'Bodyweight only' },
+                ]}
+                selected={Array.isArray(profile.equipment) ? profile.equipment : (profile.equipment || '').split(',').filter(Boolean)}
+                onChange={vals => updateProfile('equipment', vals)}
               />
+            </div>
+          )}
+
+          {/* Exercises to avoid */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'تمارين يجب تجنبها' : 'EXERCISES TO AVOID'}
+            </p>
+            <p className="font-heading text-xs mb-3" style={{ color: '#475569' }}>
+              {lang === 'ar' ? 'Ion لن يضع هذه التمارين في برنامجك أبداً' : 'Ion will never program these — injuries, dislikes, or any reason'}
+            </p>
+            <textarea
+              value={profile.exercises_hated || ''}
+              onChange={e => updateProfile('exercises_hated', e.target.value)}
+              rows={2}
+              placeholder={lang === 'ar' ? 'مثل: سكوات، بيرفي، تمارين ركبة...' : 'e.g. Burpees, barbell squats, running...'}
+              className="w-full rounded-xl px-3 py-2.5 font-heading text-sm outline-none resize-none"
+              style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
+              onFocus={e => e.target.style.borderColor = 'rgba(187,92,246,0.4)'}
+              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.07)'}
+            />
+          </div>
+
+          {/* Wellbeing */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'الصحة النفسية والجسدية' : 'WELLBEING'}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <SelectField
+                label={lang === 'ar' ? 'مستوى التوتر اليومي' : 'Daily Stress Level'}
+                value={profile.stress_level || 'moderate'}
+                onChange={v => updateProfile('stress_level', v)}
+                options={[
+                  { value: 'low',      label: lang === 'ar' ? 'منخفض'        : 'Low' },
+                  { value: 'moderate', label: lang === 'ar' ? 'متوسط'        : 'Moderate' },
+                  { value: 'high',     label: lang === 'ar' ? 'عالٍ'         : 'High' },
+                  { value: 'severe',   label: lang === 'ar' ? 'شديد جداً'    : 'Severe' },
+                ]}
+              />
+              <SelectField
+                label={lang === 'ar' ? 'جودة النوم' : 'Sleep Quality'}
+                value={profile.sleep_quality || 'average'}
+                onChange={v => updateProfile('sleep_quality', v)}
+                options={[
+                  { value: 'great',   label: lang === 'ar' ? 'ممتازة'    : 'Great (7-9 hrs)' },
+                  { value: 'average', label: lang === 'ar' ? 'متوسطة'   : 'Average (5-7 hrs)' },
+                  { value: 'poor',    label: lang === 'ar' ? 'ضعيفة'    : 'Poor (<5 hrs)' },
+                ]}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Nutrition ───────────────────────────────────────── */}
+      {activeSection === 'nutrition' && (
+        <div className="flex flex-col gap-4">
+          {/* Dietary restrictions */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'النظام الغذائي والقيود' : 'DIETARY PREFERENCES'}
+            </p>
+            <p className="font-heading text-xs mb-4" style={{ color: '#475569' }}>
+              {lang === 'ar' ? 'Ion يستخدم هذا لبناء خطتك الغذائية' : 'Ion builds every meal around these restrictions'}
+            </p>
+            <CheckboxGroup
+              options={[
+                { value: 'vegan',         label: lang === 'ar' ? 'نباتي صرف (فيغان)'    : 'Vegan' },
+                { value: 'vegetarian',    label: lang === 'ar' ? 'نباتي'                : 'Vegetarian' },
+                { value: 'pescatarian',   label: lang === 'ar' ? 'بيسكيتاريان'          : 'Pescatarian' },
+                { value: 'gluten_free',   label: lang === 'ar' ? 'خالٍ من الجلوتين'     : 'Gluten-free' },
+                { value: 'dairy_free',    label: lang === 'ar' ? 'خالٍ من منتجات الألبان': 'Dairy-free' },
+                { value: 'low_carb',      label: lang === 'ar' ? 'كربوهيدرات منخفضة'   : 'Low-carb / Keto' },
+                { value: 'halal',         label: lang === 'ar' ? 'حلال'                 : 'Halal' },
+                { value: 'no_pork',       label: lang === 'ar' ? 'بدون لحم خنزير'       : 'No pork' },
+              ]}
+              selected={Array.isArray(profile.dietary_preference) ? profile.dietary_preference : (profile.dietary_preference || '').split(',').filter(Boolean)}
+              onChange={vals => updateProfile('dietary_preference', vals)}
+            />
+          </div>
+
+          {/* Food preferences */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'الأطعمة المفضلة والمكروهة' : 'FOOD PREFERENCES'}
+            </p>
+            <div className="flex flex-col gap-4">
+              <TextareaField
+                label={lang === 'ar' ? '🟢 أطعمة أحبها — Ion سيضمّنها في الخطة' : '🟢 Foods I love — Ion will include these'}
+                value={profile.foods_loved || ''}
+                onChange={v => updateProfile('foods_loved', v)}
+                placeholder={lang === 'ar' ? 'مثل: دجاج، أرز، تفاح، بيض، حليب...' : 'e.g. Chicken, rice, eggs, oats, apples...'}
+                rows={2}
+              />
+              <TextareaField
+                label={lang === 'ar' ? '🔴 أطعمة أكرهها — Ion لن يضعها أبداً' : '🔴 Foods I hate — Ion will never include these'}
+                value={profile.foods_hated || ''}
+                onChange={v => updateProfile('foods_hated', v)}
+                placeholder={lang === 'ar' ? 'مثل: الكزبرة، السمك، الفطر...' : 'e.g. Coriander, fish, mushrooms...'}
+                rows={2}
+              />
+              <TextareaField
+                label={lang === 'ar' ? '⚠️ حساسية غذائية / حساسيات' : '⚠️ Allergies & intolerances'}
+                value={profile.allergies || ''}
+                onChange={v => updateProfile('allergies', v)}
+                placeholder={lang === 'ar' ? 'مثل: فول السوداني، الغلوتين، اللاكتوز...' : 'e.g. Peanuts, gluten, lactose, shellfish...'}
+                rows={2}
+              />
+            </div>
+          </div>
+
+          {/* Meal logistics */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'إعداد الطعام والميزانية' : 'COOKING & BUDGET'}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <SelectField
+                label={lang === 'ar' ? 'عدد الوجبات يومياً' : 'Meals per day'}
+                value={String(profile.meals_per_day || '3')}
+                onChange={v => updateProfile('meals_per_day', parseInt(v))}
+                options={['2','3','4','5','6'].map(v => ({ value: v, label: `${v} ${t(lang, 'settings_meals_suffix')}` }))}
+              />
+              <SelectField
+                label={lang === 'ar' ? 'مستوى الطبخ' : 'Cooking ability'}
+                value={profile.cooking_ability || 'cook'}
+                onChange={v => updateProfile('cooking_ability', v)}
+                options={[
+                  { value: 'cook',    label: lang === 'ar' ? 'أحب الطبخ'          : 'I enjoy cooking' },
+                  { value: 'quick',   label: lang === 'ar' ? 'وجبات سريعة فقط'    : 'Quick meals only' },
+                  { value: 'eat_out', label: lang === 'ar' ? 'أفضل الأكل من الخارج': 'Prefer eating out' },
+                ]}
+              />
+              <SelectField
+                label={lang === 'ar' ? 'ميزانية الطعام' : 'Food budget'}
+                value={profile.food_budget || 'moderate'}
+                onChange={v => updateProfile('food_budget', v)}
+                options={[
+                  { value: 'budget',    label: lang === 'ar' ? 'اقتصادي'     : 'Budget-friendly' },
+                  { value: 'moderate',  label: lang === 'ar' ? 'متوسط'       : 'Moderate' },
+                  { value: 'high',      label: lang === 'ar' ? 'مرتفع'       : 'High (premium foods)' },
+                ]}
+              />
+            </div>
+          </div>
+
+          {/* Supplements */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'المكملات الحالية' : 'CURRENT SUPPLEMENTS'}
+            </p>
+            <p className="font-heading text-xs mb-3" style={{ color: '#475569' }}>
+              {lang === 'ar' ? 'Ion يأخذ هذا بالاعتبار عند تقديم توصياته' : 'Ion factors these in when making supplement recommendations'}
+            </p>
+            <TextareaField
+              label=""
+              value={Array.isArray(profile.supplements) ? profile.supplements.join(', ') : (profile.supplements || '')}
+              onChange={v => updateProfile('supplements', v.split(',').map((s: string) => s.trim()).filter(Boolean))}
+              placeholder={lang === 'ar' ? 'مثل: بروتين، كرياتين، فيتامين D...' : 'e.g. Whey protein, creatine, vitamin D... (comma separated)'}
+              rows={2}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Health ──────────────────────────────────────────── */}
+      {activeSection === 'health' && (
+        <div className="flex flex-col gap-4">
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'الإصابات والقيود الجسدية' : 'INJURIES & PHYSICAL LIMITATIONS'}
+            </p>
+            <p className="font-heading text-xs mb-3" style={{ color: '#475569' }}>
+              {lang === 'ar' ? 'Ion يتجنب أي تمارين تضر بهذه المناطق' : 'Ion avoids exercises that stress these areas'}
+            </p>
+            <TextareaField
+              label=""
+              value={profile.injuries || ''}
+              onChange={v => updateProfile('injuries', v)}
+              placeholder={lang === 'ar' ? 'مثل: ألم في الركبة اليسرى، مشكلة في الظهر السفلي...' : 'e.g. Left knee pain, lower back disc, shoulder impingement...'}
+              rows={3}
+            />
+          </div>
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'الحالات الطبية' : 'MEDICAL CONDITIONS'}
+            </p>
+            <p className="font-heading text-xs mb-3" style={{ color: '#475569' }}>
+              {lang === 'ar' ? 'Ion يراعي هذا في كل توصياته' : 'Ion takes this into account for all recommendations'}
+            </p>
+            <TextareaField
+              label=""
+              value={profile.medical_conditions || ''}
+              onChange={v => updateProfile('medical_conditions', v)}
+              placeholder={lang === 'ar' ? 'مثل: ارتفاع ضغط الدم، السكري، الربو...' : 'e.g. Hypertension, diabetes, asthma, PCOS...'}
+              rows={3}
+            />
+            <div className="mt-3 p-3 rounded-xl flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
+              <span className="text-base flex-shrink-0">⚕️</span>
+              <p className="font-heading text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
+                {lang === 'ar'
+                  ? 'Ion ليس بديلاً عن الطبيب. دائماً استشر طبيبك قبل بدء أي برنامج رياضي إذا كان لديك حالة طبية.'
+                  : 'Ion is not a substitute for medical advice. Always consult your doctor before starting a new programme if you have a medical condition.'}
+              </p>
             </div>
           </div>
         </div>
@@ -319,17 +589,12 @@ export default function SettingsPage() {
             />
           </div>
           <div className="glass-card p-5">
-            <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_nutrition_section')}</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <SelectField label={t(lang, 'settings_meals_per_day')} value={String(profile.meals_per_day || '3')} onChange={v => updateProfile('meals_per_day', parseInt(v))}
-                options={['2','3','4','5','6'].map(v => ({ value: v, label: `${v} ${t(lang, 'settings_meals_suffix')}` }))} />
-              <SelectField label={t(lang, 'settings_cooking')} value={profile.cooking_ability || 'cook'} onChange={v => updateProfile('cooking_ability', v)}
-                options={[
-                  { value: 'cook', label: t(lang, 'settings_cooking_cook') },
-                  { value: 'quick', label: t(lang, 'settings_cooking_quick') },
-                  { value: 'eat_out', label: t(lang, 'settings_cooking_eat_out') },
-                ]} />
-            </div>
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-2" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+              {lang === 'ar' ? 'التغذية والصحة' : 'NUTRITION & HEALTH'}
+            </p>
+            <p className="font-heading text-xs mb-0" style={{ color: '#475569' }}>
+              {lang === 'ar' ? 'الإعدادات التفصيلية موجودة في تبويبي "التغذية" و"الصحة"' : 'Detailed food preferences and health info are in the Nutrition & Health tabs'}
+            </p>
           </div>
         </div>
       )}
@@ -582,7 +847,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Save button (only for profile/training/preferences) */}
+      {/* Save button (all editable sections) */}
       {activeSection !== 'billing' && activeSection !== 'integrations' && (
         <div className="mt-6 flex flex-col gap-3">
           <button
@@ -611,6 +876,7 @@ export default function SettingsPage() {
       )}
 
       {(activeSection === 'billing' || activeSection === 'integrations') && (
+
         <div className="mt-4 flex flex-col gap-3">
           <button
             onClick={signOut}
@@ -755,6 +1021,62 @@ function SelectField({ label, value, onChange, options }: {
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+    </div>
+  )
+}
+
+function TextareaField({ label, value, onChange, placeholder, rows = 2 }: {
+  label: string; value: string; onChange: (v: string) => void
+  placeholder?: string; rows?: number
+}) {
+  return (
+    <div>
+      {label && <label className="font-heading text-[10px] tracking-wider block mb-1.5" style={{ color: '#475569' }}>{label}</label>}
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+        className="w-full rounded-xl px-3 py-2.5 font-heading text-sm outline-none resize-none"
+        style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
+        onFocus={e => e.target.style.borderColor = 'rgba(187,92,246,0.4)'}
+        onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.07)'}
+      />
+    </div>
+  )
+}
+
+function CheckboxGroup({ options, selected, onChange }: {
+  options: { value: string; label: string }[]
+  selected: string[]
+  onChange: (vals: string[]) => void
+}) {
+  function toggle(val: string) {
+    const next = selected.includes(val)
+      ? selected.filter(v => v !== val)
+      : [...selected, val]
+    onChange(next)
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map(o => {
+        const active = selected.includes(o.value)
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => toggle(o.value)}
+            className="px-3 py-1.5 rounded-full font-heading text-xs font-semibold transition-all"
+            style={{
+              background: active ? 'rgba(187,92,246,0.2)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${active ? 'rgba(187,92,246,0.4)' : 'rgba(255,255,255,0.07)'}`,
+              color: active ? '#D88BFF' : '#64748B',
+            }}
+          >
+            {active ? '✓ ' : ''}{o.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
