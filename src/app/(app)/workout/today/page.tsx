@@ -11,7 +11,7 @@ import {
 import confetti from 'canvas-confetti'
 
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
-import { CANONICAL_DAYS, canonicalDayName, getWorkoutDay } from '@/lib/workout-days'
+import { CANONICAL_DAYS, canonicalDayName, getWorkoutDay, normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
 export const dynamic = 'force-dynamic'
 
@@ -108,7 +108,7 @@ export default function WorkoutTodayPage() {
       fetch('/api/log-workout').then(r => r.json()).catch(() => ({ logs: [] })),
     ])
 
-    const planData = planRes.data?.plan_json || null
+    const planData = normalizeWorkoutPlanDays(planRes.data?.plan_json || null)
     setPlan(planData)
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
     setLastPerformance(buildLastPerformanceMap(logRes.logs || []))

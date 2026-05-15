@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Utensils, Dumbbell, ChevronDown, ChevronUp, Flame, Beef, Wheat, Droplets, Calendar, Clock, Target, TrendingUp, MessageSquare, FlaskConical, Lock, Zap, ShieldCheck, Sparkles, ShoppingBasket } from 'lucide-react'
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
 import { RecipeButton } from '@/components/ui/RecipeModal'
+import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ export default function PlanPage() {
     ])
 
     setDietPlan(dietRes.data?.plan_json || null)
-    setWorkoutPlan(workoutRes.data?.plan_json || null)
+    setWorkoutPlan(normalizeWorkoutPlanDays(workoutRes.data?.plan_json || null))
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
 
     if (workoutRes.data?.created_at) {

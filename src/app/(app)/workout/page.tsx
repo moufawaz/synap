@@ -5,7 +5,7 @@ import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
 import { Dumbbell, CheckCircle2, Circle, ChevronDown, ChevronUp, Clock, RotateCcw, Trophy } from 'lucide-react'
 import { VideoButton } from '@/components/ui/ExerciseVideoModal'
-import { CANONICAL_DAYS as DAYS, firstWorkoutDayName, getWorkoutDay } from '@/lib/workout-days'
+import { CANONICAL_DAYS as DAYS, firstWorkoutDayName, getWorkoutDay, normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +43,7 @@ export default function WorkoutPage() {
       supabase.from('workout_log').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(10),
     ])
 
-    const planData = planRes.data?.plan_json || null
+    const planData = normalizeWorkoutPlanDays(planRes.data?.plan_json || null)
     setPlan(planData)
     if (planData) {
       const today = DAYS[new Date().getDay()]

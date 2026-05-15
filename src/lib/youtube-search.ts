@@ -1,4 +1,5 @@
 import { getYouTubeId } from '@/lib/exercises'
+import { primaryVideoSearchTarget } from '@/lib/exercise-video-targets'
 
 const videoCache = new Map<string, string | null>()
 const validationCache = new Map<string, boolean>()
@@ -6,10 +7,13 @@ const validationCache = new Map<string, boolean>()
 export async function resolveExerciseVideo(name: string, currentVideoId?: string | null): Promise<string | null> {
   if (currentVideoId && /^[a-zA-Z0-9_-]{11}$/.test(currentVideoId)) return currentVideoId
 
-  const staticId = getYouTubeId(name)
+  const searchName = primaryVideoSearchTarget(name)
+  if (!searchName) return null
+
+  const staticId = getYouTubeId(searchName)
   if (staticId) return staticId
 
-  const key = name.toLowerCase().trim()
+  const key = searchName.toLowerCase().trim()
   if (videoCache.has(key)) return videoCache.get(key) ?? null
 
   const id = await searchYouTube(key)

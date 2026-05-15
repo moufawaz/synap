@@ -697,6 +697,7 @@ ${aiLanguageInstruction(language, 'the proposal_text and all user-facing strings
 - Return the full updated plan JSON preserving the same overall shape and all existing useful fields.
 - Make only the requested change plus directly necessary balancing adjustments.
 ${type === 'workout' ? `- Keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group.
+- Never create one combined "finisher" or "circuit" exercise with multiple movements in one name. Split each finisher movement into its own exercise object so the tutorial video matches the actual movement.
 - day_name values must stay exact English weekdays (Sunday … Saturday). Translate coaching text but not day_name.` :
 `- Keep daily calories/macros coherent. Every meal must include: title, prep_time_min, cook_time_min, ingredients, steps, tips.`}
 - If language is Arabic, all user-facing strings must be in Arabic. JSON keys must stay unchanged.

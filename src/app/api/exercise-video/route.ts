@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
 import { searchYouTubeAPI, extractVideoId } from '@/lib/youtube-api'
 import { getYouTubeId } from '@/lib/exercises'
+import { primaryVideoSearchTarget } from '@/lib/exercise-video-targets'
 
 export const runtime = 'nodejs'
 export const maxDuration = 20
@@ -26,7 +27,10 @@ export async function GET(req: Request) {
   const rawName = (searchParams.get('name') || '').trim()
   if (!rawName) return NextResponse.json({ videoId: null })
 
-  const name = rawName.toLowerCase().trim()
+  const searchName = primaryVideoSearchTarget(rawName)
+  if (!searchName) return NextResponse.json({ videoId: null, multipleTargets: true })
+
+  const name = searchName.toLowerCase().trim()
   const hasApiKey = !!process.env.YOUTUBE_API_KEY
 
   console.info(`[exercise-video] "${name}" | api_key=${hasApiKey}`)
@@ -69,7 +73,7 @@ export async function GET(req: Request) {
 
   // 2a: YouTube Data API v3
   if (hasApiKey) {
-    videoId = await searchYouTubeAPI(rawName)
+    videoId = await searchYouTubeAPI(searchName)
     if (videoId) {
       const ok = await isEmbeddable(videoId)
       if (ok) {
@@ -83,7 +87,7 @@ export async function GET(req: Request) {
 
   // 2b: Static curated map (validated via oEmbed)
   if (!videoId) {
-    const staticId = getYouTubeId(rawName)
+    const staticId = getYouTubeId(searchName)
     if (staticId) {
       const ok = await isEmbeddable(staticId)
       if (ok) {
@@ -97,7 +101,7 @@ export async function GET(req: Request) {
 
   // 2c: HTML scraper fallback
   if (!videoId) {
-    videoId = await searchAndValidate(rawName)
+    videoId = await searchAndValidate(searchName)
     if (videoId) source = 'scraper'
   }
 

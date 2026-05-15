@@ -540,6 +540,7 @@ CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
 7. GOAL-SPECIFIC WORKOUT FOCUS:
 ${p.goal === 'lose_fat' ? `   - Prioritise compound movements for metabolic effect — no isolation-only days
    - Include a 5-min metabolic finisher at the END of each session (e.g., 3 rounds: 15 goblet squats + 15 cable rows + 12 dumbbell thrusters) — this maximises calorie burn without adding session length
+   - Do not create one combined exercise named "metabolic finisher" or "circuit". Add each finisher movement as its own exercise object so every movement gets the correct tutorial video.
    - Higher rep ranges (10–15) build more lactate and burn more total calories — lean into the upper end of the rep range
    - Rest 60s between sets to keep heart rate elevated; only extend rest if form breaks down
    - Cardio is separate from resistance training unless HIIT is the stated training_style` : ''}
@@ -641,4 +642,3 @@ JSON key names must stay exactly as shown. For workout day_name, ALWAYS use Engl
   "ion_message": "Warm, direct, personal 3-4 sentence message from Ion. Reference the client's name, their specific goal target, one thing from their food preferences, and what to expect. Sound like a real elite coach."
 }`
 }
-

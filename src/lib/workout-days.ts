@@ -1,3 +1,5 @@
+import { isCompositeExerciseName, videoSearchTargets } from '@/lib/exercise-video-targets'
+
 export const CANONICAL_DAYS = [
   'Sunday',
   'Monday',
@@ -112,6 +114,9 @@ export function normalizeWorkoutPlanDays<T = any>(plan: T): T {
       day.day_name = canonical
       if ('day' in day) day.day = canonical
     }
+    if (Array.isArray(day.exercises)) {
+      day.exercises = day.exercises.flatMap(splitCompositeExercise)
+    }
     return day
   }
 
@@ -132,4 +137,23 @@ export function normalizeWorkoutPlanDays<T = any>(plan: T): T {
   }
 
   return target
+}
+
+function splitCompositeExercise(exercise: any) {
+  if (!exercise || typeof exercise !== 'object') return [exercise]
+  const name = String(exercise.name || '').trim()
+  if (!isCompositeExerciseName(name)) return [exercise]
+
+  const targets = videoSearchTargets(name)
+  if (targets.length <= 1) return [{ ...exercise, video_id: null }]
+
+  return targets.map((target, index) => ({
+    ...exercise,
+    name: target,
+    video_id: null,
+    category: exercise.category || 'finisher',
+    muscle_group: exercise.muscle_group || 'Conditioning',
+    form_tip: exercise.form_tip || `Move with clean form. This came from the original finisher: ${name}`,
+    progression_note: exercise.progression_note || exercise.notes || `Part ${index + 1} of the metabolic finisher.`,
+  }))
 }
