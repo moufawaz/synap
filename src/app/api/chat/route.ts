@@ -366,7 +366,7 @@ async function maybeApplyPlanEdit({
       const dayMove = detectWorkoutDayMove(message, recentContext)
       if (dayMove && workoutPlanRow?.plan_json) {
         try {
-          const result = applyWorkoutDayMove(workoutPlanRow.plan_json, dayMove, buildEffectivePlanEditRequest(message, recentContext))
+          const result = applyWorkoutDayMove(workoutPlanRow.plan_json, dayMove, buildEffectivePlanEditRequest(message, recentContext), profile)
           const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
           await enrichWorkoutVideos(finalPlan)
           const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
@@ -418,7 +418,7 @@ async function maybeApplyPlanEdit({
   const dayMove = detectWorkoutDayMove(message, recentContext)
   if (dayMove && workoutPlanRow?.plan_json) {
     try {
-      const result = applyWorkoutDayMove(workoutPlanRow.plan_json, dayMove, buildEffectivePlanEditRequest(message, recentContext))
+      const result = applyWorkoutDayMove(workoutPlanRow.plan_json, dayMove, buildEffectivePlanEditRequest(message, recentContext), profile)
       const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
       await enrichWorkoutVideos(finalPlan)
       const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
@@ -789,7 +789,7 @@ function findDayAfter(text: string, prefix: RegExp) {
   return match?.[1] || ''
 }
 
-function applyWorkoutDayMove(currentPlan: any, move: WorkoutDayMove, request: string) {
+function applyWorkoutDayMove(currentPlan: any, move: WorkoutDayMove, request: string, profile?: any) {
   const plan = cloneJson(currentPlan)
   const sourceDay = String(canonicalDayName(move.sourceDay))
   const targetDay = String(canonicalDayName(move.targetDay))
@@ -820,14 +820,10 @@ function applyWorkoutDayMove(currentPlan: any, move: WorkoutDayMove, request: st
       const displacedWorkout = cloneJson(withoutSource[targetIdx])
       const occupied = new Set(withoutSource.map((day: any) => String(canonicalDayName(dayNameOf(day))).toLowerCase()).filter(Boolean))
       occupied.delete(targetDay.toLowerCase())
-      let shiftedTo = ''
-      for (let offset = 1; offset < 7; offset += 1) {
-        const candidate = DAY_NAMES[(targetIndex + offset) % 7]
-        if (!occupied.has(candidate.toLowerCase()) && candidate !== sourceDay) {
-          shiftedTo = candidate
-          break
-        }
-      }
+      const candidates = DAY_NAMES.filter(candidate =>
+        candidate !== sourceDay && !occupied.has(candidate.toLowerCase())
+      )
+      const shiftedTo = chooseSmartMoveDay(candidates, targetIndex, profile, request)
       if (!shiftedTo) throw new Error(`No free day to preserve displaced ${targetDay} workout`)
       setDayName(displacedWorkout, shiftedTo)
       displacedWorkout.ion_rescheduled_from = targetDay
@@ -871,6 +867,73 @@ function applyWorkoutDayMove(currentPlan: any, move: WorkoutDayMove, request: st
     plan,
     summary: `${sourceDay} is now a rest day. I moved that workout to ${targetDay} and saved it to your workout pages.`,
   }
+}
+
+function chooseSmartMoveDay(candidates: string[], anchorIndex: number, profile: any, request: string) {
+  if (candidates.length === 0) return ''
+
+  const context = [
+    request,
+    profile?.work_schedule,
+    profile?.work_hours,
+    profile?.training_time,
+    profile?.wake_time,
+    profile?.sleep_time,
+    profile?.lunch_break,
+    profile?.lunch_break_time,
+  ].filter(Boolean).join('\n').toLowerCase()
+
+  const ranked = candidates.map(day => ({
+    day,
+    score: scoreTrainingDayCandidate(day, anchorIndex, context, profile),
+  })).sort((a, b) => b.score - a.score)
+
+  return ranked[0]?.day || ''
+}
+
+function scoreTrainingDayCandidate(day: string, anchorIndex: number, context: string, profile: any) {
+  const dayIndex = DAY_NAMES.indexOf(day)
+  const forwardDistance = (dayIndex - anchorIndex + 7) % 7 || 7
+  let score = 100 - forwardDistance * 4
+
+  const dayPattern = dayRegex(day)
+  const busyNearDay = new RegExp(`${dayPattern}.{0,40}(course|class|lecture|exam|work|shift|busy|unavailable|can't|cannot|مشغول|محاضرة|كورس|شغل|دوام|جامعة|امتحان|مش\\s+فاضي)|(?:course|class|lecture|exam|work|shift|busy|unavailable|can't|cannot|مشغول|محاضرة|كورس|شغل|دوام|جامعة|امتحان|مش\\s+فاضي).{0,40}${dayPattern}`, 'i')
+  const freeNearDay = new RegExp(`${dayPattern}.{0,40}(free|available|off|day off|can train|فاضي|متاح|اجازة|إجازة)|(?:free|available|off|day off|can train|فاضي|متاح|اجازة|إجازة).{0,40}${dayPattern}`, 'i')
+
+  if (busyNearDay.test(context)) score -= 80
+  if (freeNearDay.test(context)) score += 45
+
+  const isWeekend = day === 'Friday' || day === 'Saturday'
+  const workText = `${profile?.work_schedule || ''} ${profile?.work_hours || ''}`.toLowerCase()
+  if (/(office|9.?to.?5|9-5|standard|work|دوام|شغل)/i.test(workText) && !/weekend|shift|rotating|شفت|ورديات/i.test(workText)) {
+    score += isWeekend ? 12 : -4
+  }
+  if (/(student|course|class|university|جامعة|كورس|محاضرة)/i.test(workText)) {
+    score += isWeekend ? 8 : 0
+  }
+
+  const trainingTime = String(profile?.training_time || '').toLowerCase()
+  if (/morning|am|صباح/.test(trainingTime) && /wake|استيقاظ/.test(context)) score += 2
+  if (/evening|night|pm|مساء|ليل/.test(trainingTime) && /late|night|مساء|ليل/.test(context)) score += 2
+
+  return score
+}
+
+function dayRegex(day: string) {
+  const aliases: Record<string, string[]> = {
+    Sunday: ['sunday', 'sun', 'الأحد', 'الاحد', 'احد'],
+    Monday: ['monday', 'mon', 'الإثنين', 'الاثنين', 'اثنين'],
+    Tuesday: ['tuesday', 'tue', 'tues', 'الثلاثاء', 'ثلاثاء'],
+    Wednesday: ['wednesday', 'wed', 'الأربعاء', 'الاربعاء', 'اربعاء'],
+    Thursday: ['thursday', 'thu', 'thur', 'thurs', 'الخميس', 'خميس'],
+    Friday: ['friday', 'fri', 'الجمعة', 'الجمعه', 'جمعة', 'جمعه'],
+    Saturday: ['saturday', 'sat', 'السبت', 'سبت'],
+  }
+  return `(?:${(aliases[day] || [day]).map(escapeRegExp).join('|')})`
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function repairRestDayExerciseArtifacts(currentPlan: any) {
