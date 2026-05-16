@@ -793,6 +793,7 @@ function applyWorkoutDayMove(currentPlan: any, move: WorkoutDayMove, request: st
   const plan = cloneJson(currentPlan)
   const sourceDay = String(canonicalDayName(move.sourceDay))
   const targetDay = String(canonicalDayName(move.targetDay))
+  const targetIndex = DAY_NAMES.indexOf(targetDay)
   const adjustment = {
     date: new Date().toISOString(),
     type: 'move_workout_day',
@@ -816,7 +817,23 @@ function applyWorkoutDayMove(currentPlan: any, move: WorkoutDayMove, request: st
     const withoutSource = nextDays.filter((_: any, index: number) => index !== sourceIdx)
     const targetIdx = withoutSource.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === targetDay)
     if (targetIdx >= 0) {
+      const displacedWorkout = cloneJson(withoutSource[targetIdx])
+      const occupied = new Set(withoutSource.map((day: any) => String(canonicalDayName(dayNameOf(day))).toLowerCase()).filter(Boolean))
+      occupied.delete(targetDay.toLowerCase())
+      let shiftedTo = ''
+      for (let offset = 1; offset < 7; offset += 1) {
+        const candidate = DAY_NAMES[(targetIndex + offset) % 7]
+        if (!occupied.has(candidate.toLowerCase()) && candidate !== sourceDay) {
+          shiftedTo = candidate
+          break
+        }
+      }
+      if (!shiftedTo) throw new Error(`No free day to preserve displaced ${targetDay} workout`)
+      setDayName(displacedWorkout, shiftedTo)
+      displacedWorkout.ion_rescheduled_from = targetDay
+      displacedWorkout.ion_rescheduled_at = new Date().toISOString()
       withoutSource[targetIdx] = movedWorkout
+      withoutSource.push(displacedWorkout)
     } else {
       withoutSource.push(movedWorkout)
     }
