@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import AuthCard from '@/components/auth/AuthCard'
-import { createBrowserClient } from '@/lib/supabase'
+import { createImplicitAuthClient } from '@/lib/supabase'
 import { ArrowRight, Loader2, ArrowLeft } from 'lucide-react'
 
 export default function ForgotPasswordPage() {
@@ -16,7 +16,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const supabase = createBrowserClient()
+    const supabase = createImplicitAuthClient()
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/reset-password`,
     })

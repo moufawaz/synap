@@ -45,7 +45,42 @@ function ResetPasswordForm() {
         }
       }
 
-      // ── Path 2: Existing session already in cookies ────────────────────────────
+      const loadBrowserSessionFromRecoveryApi = async (payload: Record<string, string>) => {
+        const res = await fetch('/api/auth/recovery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) return false
+
+        // The server set the session cookie AND returned fresh tokens.
+        // We call setSession() on the browser client with those fresh tokens
+        // to load the session into the client's in-memory state — necessary
+        // because getSession() returns a stale null cached during init and
+        // doesn't re-read cookies automatically. updateUser() needs the
+        // session in memory to attach the Authorization header.
+        const body = await res.json()
+        if (!body.access_token || !body.refresh_token) return false
+
+        const { data: { session } } = await supabaseRef.current.auth.setSession({
+          access_token: body.access_token,
+          refresh_token: body.refresh_token,
+        })
+        if (!session) return false
+
+        window.history.replaceState(null, '', window.location.pathname)
+        return true
+      }
+
+      // ── Path 2: Supabase email template token hash ─────────────────────────────
+      const tokenHash = searchParams.get('token_hash')
+      const type = searchParams.get('type')
+      if (tokenHash && type === 'recovery') {
+        const ok = await loadBrowserSessionFromRecoveryApi({ token_hash: tokenHash })
+        if (ok) return true
+      }
+
+      // ── Path 3: Existing session already in cookies ────────────────────────────
       // Covers the case where /auth/callback exchanged the code server-side and
       // stored the session before redirecting here with no tokens in the URL.
       const { data: { session: existing } } = await supabaseRef.current.auth.getSession()
@@ -66,30 +101,8 @@ function ResetPasswordForm() {
         const refresh_token = hp.get('refresh_token')
 
         if (access_token && refresh_token) {
-          const res = await fetch('/api/auth/recovery', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ access_token, refresh_token }),
-          })
-          if (res.ok) {
-            // The server set the session cookie AND returned fresh tokens.
-            // We call setSession() on the browser client with those fresh tokens
-            // to load the session into the client's in-memory state — necessary
-            // because getSession() returns a stale null cached during init and
-            // doesn't re-read cookies automatically. updateUser() needs the
-            // session in memory to attach the Authorization header.
-            const body = await res.json()
-            if (body.access_token && body.refresh_token) {
-              const { data: { session } } = await supabaseRef.current.auth.setSession({
-                access_token: body.access_token,
-                refresh_token: body.refresh_token,
-              })
-              if (session) {
-                window.history.replaceState(null, '', window.location.pathname)
-                return true
-              }
-            }
-          }
+          const ok = await loadBrowserSessionFromRecoveryApi({ access_token, refresh_token })
+          if (ok) return true
         }
       }
 

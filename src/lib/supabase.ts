@@ -1,4 +1,5 @@
 import { createBrowserClient as createSSRBrowserClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -6,6 +7,20 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // ── Browser client for 'use client' components ────────────
 export function createBrowserClient() {
   return createSSRBrowserClient(supabaseUrl, supabaseAnonKey)
+}
+
+// Password recovery links must work even when opened in a different browser
+// from the one that requested the reset email. The SSR browser client uses
+// PKCE, which depends on a local verifier and can fail cross-device.
+export function createImplicitAuthClient() {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      flowType: 'implicit',
+      detectSessionInUrl: false,
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  })
 }
 
 // ── Singleton for non-component use ──────────────────────

@@ -5,7 +5,9 @@ import { cookies } from 'next/headers'
 /**
  * POST /api/auth/recovery
  *
- * Receives the access_token + refresh_token from the password-reset email hash
+ * Receives either:
+ * - access_token + refresh_token from an implicit password-reset email hash, or
+ * - token_hash from a Supabase recovery template
  * and sets the session server-side via cookies.
  *
  * Why server-side? @supabase/ssr's createBrowserClient hardcodes flowType:'pkce',
@@ -20,9 +22,9 @@ import { cookies } from 'next/headers'
  */
 export async function POST(req: Request) {
   try {
-    const { access_token, refresh_token } = await req.json()
+    const { access_token, refresh_token, token_hash } = await req.json()
 
-    if (!access_token || !refresh_token) {
+    if ((!access_token || !refresh_token) && !token_hash) {
       return NextResponse.json({ error: 'Missing tokens' }, { status: 400 })
     }
 
@@ -45,7 +47,9 @@ export async function POST(req: Request) {
       }
     )
 
-    const { data, error } = await supabase.auth.setSession({ access_token, refresh_token })
+    const { data, error } = token_hash
+      ? await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
+      : await supabase.auth.setSession({ access_token, refresh_token })
 
     if (error || !data.session) {
       return NextResponse.json(
