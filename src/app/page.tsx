@@ -19,6 +19,15 @@ export default function LandingPage() {
   const [userName, setUserName] = useState('')
 
   useEffect(() => {
+    // Supabase password recovery sends users to the site URL (homepage) with
+    // the recovery token in the URL hash when the redirectTo URL isn't in the
+    // allowlist. Detect this and forward to the reset-password page immediately.
+    const hash = window.location.hash
+    if (hash && hash.includes('type=recovery')) {
+      window.location.replace('/auth/reset-password' + hash)
+      return
+    }
+
     async function checkAuth() {
       try {
         const { createBrowserClient } = await import('@/lib/supabase')

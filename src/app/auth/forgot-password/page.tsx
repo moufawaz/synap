@@ -18,11 +18,7 @@ export default function ForgotPasswordPage() {
     setLoading(true)
     const supabase = createBrowserClient()
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      // Route through /auth/callback so the PKCE code is exchanged server-side.
-      // The callback sets the session cookie and redirects to /auth/reset-password,
-      // where getSession() picks it up — works even when the email client uses
-      // a different browser context (e.g. iOS Gmail in-app browser).
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+      redirectTo: `${window.location.origin}/auth/reset-password`,
     })
     if (resetError) { setError(resetError.message || 'Something went wrong. Please try again.'); setLoading(false); return }
     setSent(true)
