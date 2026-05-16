@@ -72,11 +72,22 @@ function ResetPasswordForm() {
             body: JSON.stringify({ access_token, refresh_token }),
           })
           if (res.ok) {
-            // Session cookie is now set by the server; read it back.
-            const { data: { session } } = await supabaseRef.current.auth.getSession()
-            if (session) {
-              window.history.replaceState(null, '', window.location.pathname)
-              return true
+            // The server set the session cookie AND returned fresh tokens.
+            // We call setSession() on the browser client with those fresh tokens
+            // to load the session into the client's in-memory state — necessary
+            // because getSession() returns a stale null cached during init and
+            // doesn't re-read cookies automatically. updateUser() needs the
+            // session in memory to attach the Authorization header.
+            const body = await res.json()
+            if (body.access_token && body.refresh_token) {
+              const { data: { session } } = await supabaseRef.current.auth.setSession({
+                access_token: body.access_token,
+                refresh_token: body.refresh_token,
+              })
+              if (session) {
+                window.history.replaceState(null, '', window.location.pathname)
+                return true
+              }
             }
           }
         }

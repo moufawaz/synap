@@ -12,6 +12,11 @@ import { cookies } from 'next/headers'
  * which makes _getSessionFromURL throw "Not a valid PKCE flow url" for implicit
  * hash tokens, and can cause browser-side setSession() to fail in some environments.
  * Setting the session server-side bypasses this entirely.
+ *
+ * The response also returns the fresh access_token + refresh_token so the
+ * browser client can call setSession() directly to load the session into its
+ * in-memory state — avoids the problem where getSession() reads stale null
+ * from the client's internal cache rather than the newly-set cookie.
  */
 export async function POST(req: Request) {
   try {
@@ -22,7 +27,10 @@ export async function POST(req: Request) {
     }
 
     const cookieStore = await cookies()
-    const response = NextResponse.json({ ok: true })
+
+    // Collect cookies written by setSession() so we can apply them to the
+    // final response (the one whose JSON body we control).
+    const pendingCookies: Array<{ name: string; value: string; options: Record<string, unknown> }> = []
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,9 +39,7 @@ export async function POST(req: Request) {
         cookies: {
           getAll() { return cookieStore.getAll() },
           setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options)
-            })
+            cookiesToSet.forEach(c => pendingCookies.push(c))
           },
         },
       }
@@ -47,6 +53,20 @@ export async function POST(req: Request) {
         { status: 401 }
       )
     }
+
+    // Build the response with the fresh session tokens in the body.
+    // The browser client will call setSession() with these to load the session
+    // into memory (so updateUser() works without a page reload).
+    const response = NextResponse.json({
+      ok: true,
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    })
+
+    // Apply all cookies that setSession() generated.
+    pendingCookies.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
+    })
 
     return response
   } catch (err: any) {
