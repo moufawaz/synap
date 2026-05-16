@@ -106,8 +106,10 @@ export async function POST(req: Request) {
       // Last 7 meal logs — one week is enough for compliance analysis
       supabase.from('meals_log').select('date,meal_time,description,calories_estimated,protein_g,carbs_g,fats_g')
         .eq('user_id', user.id).order('date', { ascending: false }).limit(7),
-      // Latest pending plan proposals (for two-step confirm flow)
-      supabase.from('chat_messages').select('id, metadata, created_at').eq('user_id', user.id).eq('message_type', 'plan_proposal').order('created_at', { ascending: false }).limit(3),
+      // Latest pending plan proposals (for two-step confirm flow).
+      // Proposals are stored as message_type='text' (to satisfy the DB check constraint)
+      // with metadata.is_plan_proposal=true so they can be found here.
+      supabase.from('chat_messages').select('id, metadata, created_at').eq('user_id', user.id).eq('message_type', 'text').contains('metadata', { is_plan_proposal: true }).order('created_at', { ascending: false }).limit(3),
       // Recent plan changes made via chat (last 30 days)
       supabase.from('chat_messages')
         .select('content, message_type, metadata, created_at')
@@ -161,10 +163,13 @@ export async function POST(req: Request) {
         messageType = planEdit.type === 'workout' ? 'workout_card' : 'meal_card'
         metadata = { plan_edit: planEdit, total_estimated_cost_usd: planEdit.usage.estimated_cost_usd }
       } else if (planEdit.proposed) {
-        // Proposal generated — show proposal card, store pending JSON in metadata
+        // Proposal generated — show proposal card, store pending JSON in metadata.
+        // message_type must be 'text' (DB check constraint); the proposal identity is
+        // stored in metadata.is_plan_proposal so the query above can find it later.
         reply = planEdit.proposalText
         messageType = 'plan_proposal'
         metadata = {
+          is_plan_proposal: true,
           pending_plan_json: planEdit.pendingPlanJson,
           pending_plan_type: planEdit.pendingPlanType,
           total_estimated_cost_usd: planEdit.usage.estimated_cost_usd,
@@ -176,11 +181,15 @@ export async function POST(req: Request) {
         metadata = { plan_edit_error: planEdit.reason, total_estimated_cost_usd: 0 }
       }
 
+      // 'plan_proposal' is not in the DB check constraint — persist as 'text' with
+      // is_plan_proposal=true in metadata (already set above). The client still
+      // receives the original messageType in the JSON response for UI rendering.
+      const dbMessageType = messageType === 'plan_proposal' ? 'text' : messageType
       await supabase.from('chat_messages').insert({
         user_id: user.id,
         role: 'assistant',
         content: reply,
-        message_type: messageType,
+        message_type: dbMessageType,
         metadata,
       })
 
@@ -737,7 +746,10 @@ function parseJsonObject(raw: string): any | null {
   }
 }
 
-type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan' | 'plan_proposal' | 'renewal_preview'
+// Only types that are valid in the DB check constraint and safe to return from the
+// AI normaliser. 'plan_proposal' and 'renewal_preview' are set programmatically,
+// never by the AI, so they must not appear here — the DB insert uses 'text' for them.
+type MessageType = 'text' | 'suggestion' | 'workout_card' | 'meal_card' | 'milestone' | 'alert' | 'new_plan'
 
 function normalizeAssistantReply(raw: string): { content: string; messageType: MessageType } {
   const cleaned = stripCodeFences(raw)
@@ -766,7 +778,7 @@ function stripCodeFences(raw: string) {
 }
 
 function isMessageType(value: string): value is MessageType {
-  return ['text', 'suggestion', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan', 'plan_proposal', 'renewal_preview'].includes(value)
+  return ['text', 'suggestion', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan'].includes(value)
 }
 
 async function enrichWorkoutVideos(plan: any) {
