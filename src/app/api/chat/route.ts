@@ -439,13 +439,11 @@ async function maybeApplyPlanEdit({
   if (daySwap && workoutPlanRow?.plan_json) {
     try {
       const result = applyWorkoutDaySwap(workoutPlanRow.plan_json, daySwap, buildEffectivePlanEditRequest(message, recentContext))
-      const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
-      await enrichWorkoutVideos(finalPlan)
-      const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
-      if (error) throw error
       return {
-        applied: true, proposed: false, shouldStop: true, type: 'workout',
-        summary: result.summary,
+        applied: false, proposed: true, shouldStop: true,
+        proposalText: buildDeterministicPlanProposal(profile, result.summary),
+        pendingPlanJson: normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan)),
+        pendingPlanType: 'workout',
         usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
       }
     } catch (err) {
@@ -457,13 +455,11 @@ async function maybeApplyPlanEdit({
   if (dayMove && workoutPlanRow?.plan_json) {
     try {
       const result = applyWorkoutDayMove(workoutPlanRow.plan_json, dayMove, buildEffectivePlanEditRequest(message, recentContext), profile)
-      const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
-      await enrichWorkoutVideos(finalPlan)
-      const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
-      if (error) throw error
       return {
-        applied: true, proposed: false, shouldStop: true, type: 'workout',
-        summary: result.summary,
+        applied: false, proposed: true, shouldStop: true,
+        proposalText: buildDeterministicPlanProposal(profile, result.summary),
+        pendingPlanJson: normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan)),
+        pendingPlanType: 'workout',
         usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
       }
     } catch (err) {
@@ -484,11 +480,11 @@ async function maybeApplyPlanEdit({
   if (todayWorkoutTarget && workoutPlanRow?.plan_json) {
     try {
       const result = applyWorkoutDayToday(workoutPlanRow.plan_json, todayWorkoutTarget, buildEffectivePlanEditRequest(message, recentContext))
-      const { error } = await supabase.from('workout_plans').update({ plan_json: result.plan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
-      if (error) throw error
       return {
-        applied: true, proposed: false, shouldStop: true, type: 'workout',
-        summary: result.summary,
+        applied: false, proposed: true, shouldStop: true,
+        proposalText: buildDeterministicPlanProposal(profile, result.summary),
+        pendingPlanJson: normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan)),
+        pendingPlanType: 'workout',
         usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
       }
     } catch (err) {
@@ -502,11 +498,11 @@ async function maybeApplyPlanEdit({
   if (intent === 'rest_today') {
     try {
       const result = applyRestDayToday(workoutPlanRow.plan_json, buildEffectivePlanEditRequest(message, recentContext))
-      const { error } = await supabase.from('workout_plans').update({ plan_json: result.plan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
-      if (error) throw error
       return {
-        applied: true, proposed: false, shouldStop: true, type: 'workout',
-        summary: result.summary,
+        applied: false, proposed: true, shouldStop: true,
+        proposalText: buildDeterministicPlanProposal(profile, result.summary),
+        pendingPlanJson: normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan)),
+        pendingPlanType: 'workout',
         usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
       }
     } catch (err) {
@@ -677,6 +673,13 @@ function buildPlanEditReply(profile: any, edit: Extract<PlanEditResult, { applie
   return edit.type === 'workout'
     ? `Done. I updated your workout plan and saved it to your workout pages. ${edit.summary}`
     : `Done. I updated your nutrition plan and saved it to your nutrition page. ${edit.summary}`
+}
+
+function buildDeterministicPlanProposal(profile: any, summary: string) {
+  const ar = profile?.language === 'ar'
+  return ar
+    ? `أقترح هذا التغيير قبل الحفظ:\n\n${summary}\n\nاكتب "تأكيد" أو اضغط Confirm وسأحفظه في خطتك.`
+    : `I'm proposing this change before saving:\n\n${summary}\n\nConfirm and I'll apply it to your plan.`
 }
 
 function buildPlanEditFailureReply(profile: any, reason: string) {
