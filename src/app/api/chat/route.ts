@@ -310,6 +310,7 @@ type PlanEditResult =
 
 type PlanEditIntent = 'workout' | 'diet' | 'rest_today'
 type TodayWorkoutTarget = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full_body'
+type WorkoutDayMove = { sourceDay: string; targetDay: string }
 
 function isExplanationQuestion(message: string): boolean {
   const text = message.trim().toLowerCase()
@@ -351,6 +352,7 @@ async function maybeApplyPlanEdit({
   pendingProposals: any[]
   recentHistory: { role: string; content: string }[]
 }): Promise<PlanEditResult> {
+  const recentContext = buildRecentPlanEditContext(recentHistory)
 
   // ── STEP 1: Check if user is confirming a previous proposal ───
   if (detectConfirmation(message) && pendingProposals.length > 0) {
@@ -361,13 +363,32 @@ async function maybeApplyPlanEdit({
     })
 
     if (recent) {
+      const dayMove = detectWorkoutDayMove(message, recentContext)
+      if (dayMove && workoutPlanRow?.plan_json) {
+        try {
+          const result = applyWorkoutDayMove(workoutPlanRow.plan_json, dayMove, buildEffectivePlanEditRequest(message, recentContext))
+          const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
+          await enrichWorkoutVideos(finalPlan)
+          const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
+          if (error) throw error
+          return {
+            applied: true, proposed: false, shouldStop: true, type: 'workout',
+            summary: result.summary,
+            usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
+          }
+        } catch (err) {
+          console.error('Apply pending day move failed:', err)
+          return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
+        }
+      }
+
       const { pending_plan_json, pending_plan_type } = recent.metadata
       const planType: 'workout' | 'diet' = pending_plan_type || 'workout'
 
       try {
         let finalPlan = pending_plan_json
         if (planType === 'workout') {
-          finalPlan = normalizeWorkoutPlanDays(finalPlan)
+          finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(finalPlan))
           // pending_plan_json was built by applyWorkoutChanges(), which preserves all
           // existing exercises and only sets video_id=null for newly swapped ones —
           // so no preserveExistingVideoIds() call is needed here.
@@ -391,9 +412,26 @@ async function maybeApplyPlanEdit({
   }
 
   // ── STEP 2: Detect new edit intent ────────────────────────────
-  const recentContext = buildRecentPlanEditContext(recentHistory)
   if (isExplanationQuestion(message)) {
     return { applied: false, proposed: false, shouldStop: false, reason: 'question_not_plan_edit' }
+  }
+  const dayMove = detectWorkoutDayMove(message, recentContext)
+  if (dayMove && workoutPlanRow?.plan_json) {
+    try {
+      const result = applyWorkoutDayMove(workoutPlanRow.plan_json, dayMove, buildEffectivePlanEditRequest(message, recentContext))
+      const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
+      await enrichWorkoutVideos(finalPlan)
+      const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
+      if (error) throw error
+      return {
+        applied: true, proposed: false, shouldStop: true, type: 'workout',
+        summary: result.summary,
+        usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
+      }
+    } catch (err) {
+      console.error('Workout day move failed:', err)
+      return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
+    }
   }
   const todayWorkoutTarget = detectTodayWorkoutTarget(message, recentContext)
   const intent = detectPlanEditIntent(message, recentContext)
@@ -479,7 +517,7 @@ async function maybeApplyPlanEdit({
     let pendingPlanJson: any
     if (intent === 'workout') {
       const { plan } = applyWorkoutChanges(workoutPlanRow.plan_json, edit.changes)
-      pendingPlanJson = plan
+      pendingPlanJson = repairRestDayExerciseArtifacts(plan)
     } else {
       pendingPlanJson = edit.updated_plan
     }
@@ -487,7 +525,7 @@ async function maybeApplyPlanEdit({
     if (detectConfirmation(message) && hasPlanEditContext(recentContext)) {
       let finalPlan = pendingPlanJson
       if (intent === 'workout') {
-        finalPlan = normalizeWorkoutPlanDays(finalPlan)
+        finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(finalPlan))
         // Only the newly swapped exercises have video_id=null; enrich just those.
         await enrichWorkoutVideos(finalPlan)
         const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
@@ -728,6 +766,112 @@ function dayMatchesWorkoutTarget(day: any, target: TodayWorkoutTarget) {
     full_body: /\b(full body|full-body|total body)\b/,
   }
   return rules[target].test(haystack)
+}
+
+function detectWorkoutDayMove(message: string, recentContext = ''): WorkoutDayMove | null {
+  const latest = latestAssistantContext(recentContext)
+  const text = `${message}\n${latest}`.toLowerCase()
+  const moving = /\b(move|reschedule|shift|switch)\b|\bfrom\b.{0,40}\bto\b|انقل|نقل|بدل|حوّل|حول/.test(text)
+  if (!moving) return null
+
+  const sourceDay = findDayAfter(text, /\bfrom\s+/i) || findDayAfter(text, /\bmoving\b.{0,60}\bfrom\s+/i)
+  const targetDay = findDayAfter(text, /\bto\s+/i) || findDayAfter(text, /(?:الى|إلى|لـ|ليوم)\s*/i)
+  if (!sourceDay || !targetDay) return null
+
+  const source = canonicalDayName(sourceDay)
+  const target = canonicalDayName(targetDay)
+  if (!source || !target || source === target) return null
+  return { sourceDay: String(source), targetDay: String(target) }
+}
+
+function findDayAfter(text: string, prefix: RegExp) {
+  const match = text.match(new RegExp(`${prefix.source}(${DAY_NAMES.join('|')}|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat|الأحد|الاحد|الإثنين|الاثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|الجمعه|السبت)`, 'i'))
+  return match?.[1] || ''
+}
+
+function applyWorkoutDayMove(currentPlan: any, move: WorkoutDayMove, request: string) {
+  const plan = cloneJson(currentPlan)
+  const sourceDay = String(canonicalDayName(move.sourceDay))
+  const targetDay = String(canonicalDayName(move.targetDay))
+  const adjustment = {
+    date: new Date().toISOString(),
+    type: 'move_workout_day',
+    source_day: sourceDay,
+    target_day: targetDay,
+    request,
+    note: `Ion moved ${sourceDay}'s workout to ${targetDay}, leaving ${sourceDay} as a rest day.`,
+  }
+
+  let changed = false
+  const applyToDays = (days: any[]) => {
+    const nextDays = cloneJson(days)
+    const sourceIdx = nextDays.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === sourceDay)
+    if (sourceIdx < 0) return { days: nextDays, changed: false }
+
+    const movedWorkout = cloneJson(nextDays[sourceIdx])
+    setDayName(movedWorkout, targetDay)
+    movedWorkout.ion_rescheduled_from = sourceDay
+    movedWorkout.ion_rescheduled_at = new Date().toISOString()
+
+    const withoutSource = nextDays.filter((_: any, index: number) => index !== sourceIdx)
+    const targetIdx = withoutSource.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === targetDay)
+    if (targetIdx >= 0) {
+      withoutSource[targetIdx] = movedWorkout
+    } else {
+      withoutSource.push(movedWorkout)
+    }
+
+    withoutSource.sort((a: any, b: any) =>
+      DAY_NAMES.indexOf(String(canonicalDayName(dayNameOf(a)))) -
+      DAY_NAMES.indexOf(String(canonicalDayName(dayNameOf(b))))
+    )
+    return { days: withoutSource, changed: true }
+  }
+
+  if (Array.isArray(plan.days)) {
+    const result = applyToDays(plan.days)
+    plan.days = result.days
+    changed = changed || result.changed
+  }
+
+  if (Array.isArray(plan.weeks)) {
+    plan.weeks = plan.weeks.map((week: any) => {
+      if (!Array.isArray(week.days)) return week
+      const result = applyToDays(week.days)
+      changed = changed || result.changed
+      return { ...week, days: result.days }
+    })
+  }
+
+  if (!changed) throw new Error(`No ${sourceDay} workout day found`)
+
+  plan.ion_adjustments = [
+    ...(Array.isArray(plan.ion_adjustments) ? plan.ion_adjustments : []),
+    adjustment,
+  ]
+
+  return {
+    plan,
+    summary: `${sourceDay} is now a rest day. I moved that workout to ${targetDay} and saved it to your workout pages.`,
+  }
+}
+
+function repairRestDayExerciseArtifacts(currentPlan: any) {
+  const plan = cloneJson(currentPlan)
+  const removeFakeRestDays = (days: any[]) =>
+    days.filter((day: any) => {
+      const exercises = Array.isArray(day?.exercises) ? day.exercises : []
+      return !exercises.some((ex: any) => /^rest\s*day$/i.test(String(ex?.name || '').trim()))
+    })
+
+  if (Array.isArray(plan.days)) plan.days = removeFakeRestDays(plan.days)
+  if (Array.isArray(plan.weeks)) {
+    plan.weeks = plan.weeks.map((week: any) => ({
+      ...week,
+      days: Array.isArray(week?.days) ? removeFakeRestDays(week.days) : week?.days,
+    }))
+  }
+  return plan
 }
 
 function applyRestDayToday(currentPlan: any, request: string) {
@@ -1083,9 +1227,9 @@ Name: ${profile.name}
 Age: ${profile.age} | Gender: ${profile.gender}
 Weight: ${profile.weight_kg}kg | Height: ${profile.height_cm}cm
 Goal: ${profile.goal}${profile.goal_target ? ` (target: ${profile.goal_target})` : ''}${profile.goal_date ? ` by ${profile.goal_date}` : ''}
-Training: ${profile.training_days} days/week | ${profile.gym_access ? 'Has gym access' : 'Home training'}${profile.session_duration ? ` | ${profile.session_duration} min sessions` : ''}
+Training: ${profile.training_days} days/week | ${profile.gym_access ? 'Has gym access' : 'Home training'}${profile.session_duration ? ` | ${profile.session_duration} min sessions` : ''}${profile.training_time ? ` | Trains in the ${profile.training_time}` : ''}
 Experience: ${profile.training_experience || 'Not specified'} | Style: ${profile.training_style || 'Not specified'}
-Wake: ${profile.wake_time || '?'} | Sleep: ${profile.sleep_time || '?'} | Work schedule: ${profile.work_schedule || 'Not specified'}
+Wake: ${profile.wake_time || '?'} | Sleep: ${profile.sleep_time || '?'} | Work/study: ${profile.work_schedule || 'Not specified'}${profile.work_hours ? ` (${profile.work_hours})` : ''}${profile.lunch_break ? ` | Lunch break: ${profile.lunch_break}` : ''}
 Injuries: ${profile.injuries || 'None'} | Medical: ${profile.medical_conditions || 'None'}
 Diet: ${Array.isArray(profile.dietary_preference) ? profile.dietary_preference.join(', ') : profile.dietary_preference || 'No restrictions'}
 Allergies: ${profile.allergies || 'None'}
