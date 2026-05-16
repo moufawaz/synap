@@ -701,7 +701,7 @@ function buildPlanEditFailureReply(profile: any, reason: string) {
   }
   return ar
     ? 'حاولت تعديل الخطة، لكن لم أستطع حفظ التغيير بشكل آمن. اكتب التغيير بشكل أوضح مثل: “بدّل تمرين السكوات” أو “اجعل اليوم راحة”.'
-    : 'I tried to update the plan, but I could not save the change safely. Try a clearer request like “swap squats” or “make today a rest day.”'
+    : 'I could not apply that change safely, so I did not save it to your plan. Try a more specific request like "replace squats with leg press", "add 2 sets to bench press", or "move Monday workout to Wednesday."'
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -1144,8 +1144,8 @@ function validateWorkoutPlanStructure(plan: any): { valid: true } | { valid: fal
       seenDays.add(String(canonical))
 
       const exercises = day.exercises
-      if (!Array.isArray(exercises) || exercises.length < 1) {
-        return { valid: false, reason: `${canonical} has no exercises` }
+      if (!Array.isArray(exercises) || exercises.length < 2) {
+        return { valid: false, reason: `${canonical} must have at least 2 exercises` }
       }
       for (const [exerciseIndex, exercise] of exercises.entries()) {
         if (!exercise || typeof exercise !== 'object' || Array.isArray(exercise)) {
@@ -1179,7 +1179,7 @@ function getExistingWorkoutDayContainers(plan: any): any[][] {
 function isValidTrainingDayPayload(day: any) {
   if (!day || typeof day !== 'object' || Array.isArray(day)) return false
   if (!DAY_NAMES.includes(String(canonicalDayName(dayNameOf(day))))) return false
-  if (!Array.isArray(day.exercises) || day.exercises.length < 1) return false
+  if (!Array.isArray(day.exercises) || day.exercises.length < 2) return false
   return day.exercises.every((exercise: any) =>
     exercise &&
     typeof exercise === 'object' &&
