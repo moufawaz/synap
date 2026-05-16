@@ -16,10 +16,11 @@ import { CANONICAL_DAYS, canonicalDayName, getWorkoutDay, normalizeWorkoutPlanDa
 export const dynamic = 'force-dynamic'
 
 // ── Session persistence ───────────────────────────────────
-// localStorage = fast local restore (same device)
-// DB (/api/workout-session) = cross-device sync source of truth
+// localStorage = fast local restore (same device), saved on every click
+// DB (/api/workout-session) = cross-device sync, written with 800 ms debounce
 const SESSION_KEY = 'synap_workout_session'
-const TODAY_DATE  = new Date().toISOString().split('T')[0]
+// Compute fresh each call — module-level constants can be stale after midnight
+const getTodayDate = () => new Date().toISOString().split('T')[0]
 
 interface WorkoutSession {
   date: string
@@ -29,6 +30,7 @@ interface WorkoutSession {
   isPaused: boolean
   completedExercises: number[]
   exercisePerformance?: Record<string, ExercisePerformance>
+  savedAt?: number  // ms timestamp of last save — used to pick newer session on restore
 }
 
 interface ExercisePerformance {
@@ -37,7 +39,7 @@ interface ExercisePerformance {
 }
 
 function saveSessionLocal(data: WorkoutSession) {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)) } catch {}
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...data, savedAt: Date.now() })) } catch {}
 }
 
 function loadSessionLocal(dayName: string): WorkoutSession | null {
@@ -61,7 +63,7 @@ function syncSessionToDB(dayName: string, completedExercises: number[], exercise
     fetch('/api/workout-session', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: TODAY_DATE, dayName, completedExercises, exercisePerformance }),
+      body: JSON.stringify({ date: getTodayDate(), dayName, completedExercises, exercisePerformance }),
     }).catch(() => {})
   }, 800) // write to DB 800 ms after last change
 }
@@ -113,17 +115,23 @@ export default function WorkoutTodayPage() {
     if (profileRes.data?.gender) setGender(profileRes.data.gender as any)
     setLastPerformance(buildLastPerformanceMap(logRes.logs || []))
 
-    // Restore paused session — DB is source of truth, localStorage is fast fallback
+    // Restore paused session — load BOTH sources in parallel, pick the newer one.
+    // localStorage is saved on every click (instant).
+    // DB is written with an 800 ms debounce — it can be stale if the user
+    // navigated away quickly. Blindly overwriting localStorage with a stale
+    // DB snapshot was causing checked exercises to disappear on return.
     if (planData) {
-      let saved: WorkoutSession | null = null
+      const todayDate = getTodayDate()
 
-      // 1. Try DB first (cross-device)
+      // Load localStorage and DB in parallel
+      const localSaved = loadSessionLocal(todayName)
+      let dbSaved: WorkoutSession | null = null
       try {
-        const res = await fetch(`/api/workout-session?date=${TODAY_DATE}`)
+        const res = await fetch(`/api/workout-session?date=${todayDate}`)
         if (res.ok) {
           const json = await res.json()
           if (json.session && canonicalDayName(json.session.dayName) === todayName) {
-            saved = {
+            dbSaved = {
               date: new Date().toDateString(),
               dayName: json.session.dayName,
               totalMs: 0,
@@ -131,16 +139,26 @@ export default function WorkoutTodayPage() {
               isPaused: true,
               completedExercises: json.session.completedExercises || [],
               exercisePerformance: json.session.exercisePerformance || {},
+              // Use DB's own updatedAt so we can compare against localStorage savedAt
+              savedAt: json.session.updatedAt ? new Date(json.session.updatedAt).getTime() : 0,
             }
-            // Write back to localStorage so next page load is instant
-            saveSessionLocal(saved)
           }
         }
       } catch {}
 
-      // 2. Fall back to localStorage (same device, fast)
-      if (!saved) {
-        saved = loadSessionLocal(todayName)
+      // Pick the newer session. localStorage wins on a tie because it's saved on
+      // every click and is always at least as fresh as the debounced DB write.
+      let saved: WorkoutSession | null = null
+      if (dbSaved && localSaved) {
+        saved = (dbSaved.savedAt ?? 0) > (localSaved.savedAt ?? 0) ? dbSaved : localSaved
+      } else {
+        saved = dbSaved ?? localSaved
+      }
+
+      // Only sync back to localStorage if the DB session was the newer one
+      // (cross-device case). Never let a stale DB snapshot overwrite fresher local data.
+      if (saved && saved === dbSaved) {
+        saveSessionLocal(saved)
       }
 
       if (saved) {
@@ -206,7 +224,7 @@ export default function WorkoutTodayPage() {
     setCompletedExercises(new Set())
     setExercisePerformance({})
     setSessionRestored(false)
-    saveSessionLocal({ date: new Date().toDateString(), dayName: todayName, totalMs: 0, resumeAt: now, isPaused: false, completedExercises: [], exercisePerformance: {} })
+    saveSessionLocal({ date: new Date().toDateString(), dayName: todayName, totalMs: 0, resumeAt: now, isPaused: false, completedExercises: [], exercisePerformance: {}, savedAt: Date.now() })
     syncSessionToDB(todayName, [], {})
   }
 
