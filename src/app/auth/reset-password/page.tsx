@@ -33,10 +33,6 @@ function ResetPasswordForm() {
     initializedRef.current = true
     let active = true
 
-    const finishWithCurrentSession = async () => {
-      const { data: { session } } = await supabaseRef.current.auth.getSession()
-      return Boolean(session)
-    }
 
     const createRecoverySession = async () => {
       const code = searchParams.get('code')
@@ -62,8 +58,10 @@ function ResetPasswordForm() {
         return true
       }
 
-      // No token in URL at all — not a valid reset link
-      return false
+      // /auth/callback may have already exchanged the recovery code and set
+      // the Supabase cookies before redirecting here without URL tokens.
+      const { data: { session } } = await supabaseRef.current.auth.getSession()
+      return Boolean(session)
     }
 
     createRecoverySession().then((hasRecoverySession) => {

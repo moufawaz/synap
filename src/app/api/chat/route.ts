@@ -309,13 +309,22 @@ type PlanEditResult =
   | { applied: true;  proposed: false; shouldStop: true;  type: 'workout' | 'diet'; summary: string; usage: UsageMeta }
 
 type PlanEditIntent = 'workout' | 'diet' | 'rest_today'
+type TodayWorkoutTarget = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full_body'
+
+function isExplanationQuestion(message: string): boolean {
+  const text = message.trim().toLowerCase()
+  return /\?/.test(text)
+    || /^(how|what|why|where|when|can you explain|explain|tell me|show me)\b/.test(text)
+    || /\b(how to|how do i|how can i|what does|what is|don'?t understand|do not understand|not understand|confused|explain|help me understand)\b/.test(text)
+    || /(\u0643\u064a\u0641|\u0645\u0627\u0630\u0627|\u0644\u064a\u0634|\u0644\u0645\u0627\u0630\u0627|\u0627\u0632\u0627\u064a|\u0625\u0632\u0627\u064a|\u0627\u0634\u0631\u062d|\u0645\u0634\s+\u0641\u0627\u0647\u0645|\u0645\u0627\s+\u0641\u0647\u0645\u062a|\u0644\u0627\s+\u0623\u0641\u0647\u0645|\u0627\u064a\u0647|\u0625\u064a\u0647)/.test(text)
+}
 
 // ── Detect if user is confirming a previous proposal ─────────────
 function detectConfirmation(message: string): boolean {
   const text = message.trim().toLowerCase()
   if (!text) return false
 
-  const askingForExplanation = /\?|^(how|what|why|where|when|can you explain|explain|tell me|show me)\b|\b(how to|how do i|how can i|what does|what is|don'?t understand|do not understand|not understand|confused|explain|help me understand)\b|ÙƒÙŠÙ|Ù…Ø§Ø°Ø§|Ù„ÙŠØ´|Ù„Ù…Ø§Ø°Ø§|Ø§Ø´Ø±Ø­|Ù…Ø´ ÙØ§Ù‡Ù…|Ù„Ø§ Ø£ÙÙ‡Ù…|Ù…Ø§ ÙÙ‡Ù…Øª/.test(text)
+  const askingForExplanation = isExplanationQuestion(message)
   const rejectingChange = /\b(no|nope|don't|do not|not now|stop|cancel|return|revert|undo|don't change|do not change)\b|Ù„Ø§|Ø§Ù„Øº|Ø§Ù„ØºÙŠ|ØªØ±Ø§Ø¬Ø¹|Ø§Ø±Ø¬Ø¹/.test(text)
   if (askingForExplanation || rejectingChange) return false
   return /\b(yes|yeah|sure|ok|okay|do it|apply|apply it|go ahead|confirm|confirmed|that's fine|that's good|perfect|sounds good|looks good|sounds great|do that|make it|change it|update it|save it|use it|let's do it|let's go)\b|^(yes|yeah|sure|ok|okay|yep|yup|نعم|أجل|موافق|طبق|حسناً|تمام|اعمله|صح|جيد|بالتأكيد|افعل|نعم افعله|طبق التغيير)/i.test(message.trim())
@@ -383,14 +392,35 @@ async function maybeApplyPlanEdit({
 
   // ── STEP 2: Detect new edit intent ────────────────────────────
   const recentContext = buildRecentPlanEditContext(recentHistory)
+  if (isExplanationQuestion(message)) {
+    return { applied: false, proposed: false, shouldStop: false, reason: 'question_not_plan_edit' }
+  }
+  const todayWorkoutTarget = detectTodayWorkoutTarget(message, recentContext)
   const intent = detectPlanEditIntent(message, recentContext)
-  if (!intent) return { applied: false, proposed: false, shouldStop: false, reason: 'no_plan_edit_intent' }
-  if ((intent === 'workout' || intent === 'rest_today') && !workoutPlanRow?.plan_json) {
+  if (!intent && !todayWorkoutTarget) return { applied: false, proposed: false, shouldStop: false, reason: 'no_plan_edit_intent' }
+  if ((intent === 'workout' || intent === 'rest_today' || todayWorkoutTarget) && !workoutPlanRow?.plan_json) {
     return { applied: false, proposed: false, shouldStop: true, reason: 'no_active_workout_plan' }
   }
   if (intent === 'diet' && !dietPlanRow?.plan_json) {
     return { applied: false, proposed: false, shouldStop: true, reason: 'no_active_diet_plan' }
   }
+
+  if (todayWorkoutTarget && workoutPlanRow?.plan_json) {
+    try {
+      const result = applyWorkoutDayToday(workoutPlanRow.plan_json, todayWorkoutTarget, buildEffectivePlanEditRequest(message, recentContext))
+      const { error } = await supabase.from('workout_plans').update({ plan_json: result.plan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
+      if (error) throw error
+      return {
+        applied: true, proposed: false, shouldStop: true, type: 'workout',
+        summary: result.summary,
+        usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
+      }
+    } catch (err) {
+      console.error('Today workout swap failed:', err)
+      return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
+    }
+  }
+  if (!intent) return { applied: false, proposed: false, shouldStop: false, reason: 'no_plan_edit_intent' }
 
   // Rest-day is immediate — no proposal needed
   if (intent === 'rest_today') {
@@ -508,7 +538,7 @@ function detectPlanEditIntent(message: string, recentContext = ''): PlanEditInte
   const contextText = `${currentText}\n${recentContext}`.toLowerCase()
   const latestContext = latestAssistantContext(recentContext).toLowerCase()
   const hasArabic = /[\u0600-\u06FF]/.test(message)
-  const restTodayWords = /\b(rest day|take a rest|rest today|skip today|day off|move today|reschedule today|postpone today|recover today)\b|راحة|استراحة|ارتاح|ريست|أجل|اجل|انقل.*اليوم|راحة اليوم/
+  const restTodayWords = /\b(rest day|take a rest|rest today|skip today|day off|move today|reschedule today|postpone today|recover today)\b|(?:\u062e\u0644\u064a|\u0627\u062c\u0639\u0644|\u0627\u0639\u0645\u0644|\u062d\u0648\u0644|\u063a\u064a\u0631|\u0628\u062f\u0644|\u0627\u0646\u0642\u0644|\u0623\u062c\u0644|\u0627\u062c\u0644).{0,24}(?:\u0627\u0644\u064a\u0648\u0645|\u0627\u0644\u0646\u0647\u0627\u0631\u062f\u0647).{0,24}(?:\u0631\u0627\u062d\u0629|\u0627\u0633\u062a\u0631\u0627\u062d\u0629|\u0631\u064a\u0633\u062a)|(?:\u0627\u0644\u064a\u0648\u0645|\u0627\u0644\u0646\u0647\u0627\u0631\u062f\u0647).{0,24}(?:\u0631\u0627\u062d\u0629|\u0627\u0633\u062a\u0631\u0627\u062d\u0629|\u0631\u064a\u0633\u062a)/
   if (restTodayWords.test(text)) return 'rest_today'
 
   const changeWords = /\b(change|swap|replace|remove|avoid|hate|dislike|allergic|allergy|can't eat|cannot eat|adjust|update|modify|instead|alternative|increase|decrease|raise|lower|more|less|reduce|add)\b|غير|غيّر|بدل|استبدل|احذف|شيل|عدل|عدّل|تعديل|تحديث|زود|قلل|أضف|اضف|حساسية|ما اقدر|ما أقدر|لا أستطيع|بديل/
@@ -605,6 +635,99 @@ function dayNameOf(day: any) {
 function setDayName(day: any, name: string) {
   if ('day_name' in day || !('day' in day)) day.day_name = name
   if ('day' in day) day.day = name
+}
+
+function detectTodayWorkoutTarget(message: string, recentContext = ''): TodayWorkoutTarget | null {
+  const text = `${message}\n${latestAssistantContext(recentContext)}`.toLowerCase()
+  const refersToToday = /\b(today|tonight|this day)\b|\u0627\u0644\u064a\u0648\u0645|\u0627\u0644\u0646\u0647\u0627\u0631\u062f\u0647/.test(text)
+  if (!refersToToday) return null
+
+  if (/\b(push|chest|shoulders?|triceps?)\b|\u0628\u0648\u0634|\u0635\u062f\u0631|\u0643\u062a\u0641|\u062a\u0631\u0627\u064a/.test(text)) return 'push'
+  if (/\b(pull|back|biceps?|lats?|row)\b|\u0633\u062d\u0628|\u0638\u0647\u0631|\u0628\u0627\u064a/.test(text)) return 'pull'
+  if (/\b(legs?|leg day|quads?|hamstrings?|glutes?|calves?|squat)\b|\u0631\u062c\u0644|\u0623\u0631\u062c\u0644|\u0627\u0631\u062c\u0644|\u0633\u0643\u0648\u0627\u062a/.test(text)) return 'legs'
+  if (/\b(upper|upper body)\b/.test(text)) return 'upper'
+  if (/\b(lower|lower body)\b/.test(text)) return 'lower'
+  if (/\b(full body|full-body)\b|\u0641\u0648\u0644\s*\u0628\u0627\u062f\u064a/.test(text)) return 'full_body'
+  return null
+}
+
+function applyWorkoutDayToday(currentPlan: any, target: TodayWorkoutTarget, request: string) {
+  const plan = cloneJson(currentPlan)
+  const today = DAY_NAMES[new Date().getDay()]
+  const adjustment = {
+    date: new Date().toISOString(),
+    type: 'set_today_workout',
+    target,
+    request,
+    note: `Ion set ${today} to ${target.replace('_', ' ')} day as requested.`,
+  }
+
+  let changed = false
+  const applyToDays = (days: any[]) => {
+    const nextDays = cloneJson(days)
+    const sourceIdx = nextDays.findIndex((day: any) => dayMatchesWorkoutTarget(day, target))
+    if (sourceIdx < 0) return { days: nextDays, changed: false }
+
+    const todayIdx = nextDays.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === today)
+    if (todayIdx >= 0 && todayIdx !== sourceIdx) {
+      const sourceName = dayNameOf(nextDays[sourceIdx])
+      setDayName(nextDays[sourceIdx], dayNameOf(nextDays[todayIdx]) || sourceName)
+      setDayName(nextDays[todayIdx], today)
+    } else {
+      setDayName(nextDays[sourceIdx], today)
+    }
+
+    nextDays.sort((a: any, b: any) =>
+      DAY_NAMES.indexOf(String(canonicalDayName(dayNameOf(a)))) -
+      DAY_NAMES.indexOf(String(canonicalDayName(dayNameOf(b))))
+    )
+    return { days: nextDays, changed: true }
+  }
+
+  if (Array.isArray(plan.days)) {
+    const result = applyToDays(plan.days)
+    plan.days = result.days
+    changed = changed || result.changed
+  }
+
+  if (Array.isArray(plan.weeks)) {
+    plan.weeks = plan.weeks.map((week: any) => {
+      if (!Array.isArray(week.days)) return week
+      const result = applyToDays(week.days)
+      changed = changed || result.changed
+      return { ...week, days: result.days }
+    })
+  }
+
+  if (!changed) throw new Error(`No ${target} workout day found`)
+
+  plan.ion_adjustments = [
+    ...(Array.isArray(plan.ion_adjustments) ? plan.ion_adjustments : []),
+    adjustment,
+  ]
+
+  return {
+    plan,
+    summary: `Today is now ${target.replace('_', ' ')} day. I updated your workout pages so you can train it today.`,
+  }
+}
+
+function dayMatchesWorkoutTarget(day: any, target: TodayWorkoutTarget) {
+  const haystack = [
+    day?.day_name, day?.day, day?.name, day?.title, day?.focus, day?.split, day?.workout_type,
+    ...(Array.isArray(day?.muscle_groups) ? day.muscle_groups : []),
+    ...(day?.exercises || []).flatMap((ex: any) => [ex?.name, ex?.title, ex?.muscle_group, ex?.target_muscle]),
+  ].filter(Boolean).join(' ').toLowerCase()
+
+  const rules: Record<TodayWorkoutTarget, RegExp> = {
+    push: /\b(push|chest|shoulder|tricep|bench press|incline .*press|shoulder press|chest press|cable fly|lateral raise)\b/,
+    pull: /\b(pull|back|bicep|lat|row|pulldown|face pull)\b/,
+    legs: /\b(leg|lower|quad|hamstring|glute|calf|squat|lunge|deadlift|leg press)\b/,
+    upper: /\b(upper|chest|back|shoulder|bicep|tricep)\b/,
+    lower: /\b(lower|leg|quad|hamstring|glute|calf|squat|lunge|deadlift)\b/,
+    full_body: /\b(full body|full-body|total body)\b/,
+  }
+  return rules[target].test(haystack)
 }
 
 function applyRestDayToday(currentPlan: any, request: string) {
