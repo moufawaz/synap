@@ -311,6 +311,7 @@ type PlanEditResult =
 type PlanEditIntent = 'workout' | 'diet' | 'rest_today'
 type TodayWorkoutTarget = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full_body'
 type WorkoutDayMove = { sourceDay: string; targetDay: string }
+type WorkoutDaySwap = { firstDay: string; secondDay: string }
 
 function isExplanationQuestion(message: string): boolean {
   const text = message.trim().toLowerCase()
@@ -363,6 +364,25 @@ async function maybeApplyPlanEdit({
     })
 
     if (recent) {
+      const daySwap = detectWorkoutDaySwap(message, recentContext)
+      if (daySwap && workoutPlanRow?.plan_json) {
+        try {
+          const result = applyWorkoutDaySwap(workoutPlanRow.plan_json, daySwap, buildEffectivePlanEditRequest(message, recentContext))
+          const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
+          await enrichWorkoutVideos(finalPlan)
+          const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
+          if (error) throw error
+          return {
+            applied: true, proposed: false, shouldStop: true, type: 'workout',
+            summary: result.summary,
+            usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
+          }
+        } catch (err) {
+          console.error('Apply pending day swap failed:', err)
+          return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
+        }
+      }
+
       const dayMove = detectWorkoutDayMove(message, recentContext)
       if (dayMove && workoutPlanRow?.plan_json) {
         try {
@@ -414,6 +434,24 @@ async function maybeApplyPlanEdit({
   // ── STEP 2: Detect new edit intent ────────────────────────────
   if (isExplanationQuestion(message)) {
     return { applied: false, proposed: false, shouldStop: false, reason: 'question_not_plan_edit' }
+  }
+  const daySwap = detectWorkoutDaySwap(message, recentContext)
+  if (daySwap && workoutPlanRow?.plan_json) {
+    try {
+      const result = applyWorkoutDaySwap(workoutPlanRow.plan_json, daySwap, buildEffectivePlanEditRequest(message, recentContext))
+      const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
+      await enrichWorkoutVideos(finalPlan)
+      const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
+      if (error) throw error
+      return {
+        applied: true, proposed: false, shouldStop: true, type: 'workout',
+        summary: result.summary,
+        usage: { model: 'deterministic', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
+      }
+    } catch (err) {
+      console.error('Workout day swap failed:', err)
+      return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
+    }
   }
   const dayMove = detectWorkoutDayMove(message, recentContext)
   if (dayMove && workoutPlanRow?.plan_json) {
@@ -766,6 +804,106 @@ function dayMatchesWorkoutTarget(day: any, target: TodayWorkoutTarget) {
     full_body: /\b(full body|full-body|total body)\b/,
   }
   return rules[target].test(haystack)
+}
+
+function detectWorkoutDaySwap(message: string, recentContext = ''): WorkoutDaySwap | null {
+  const latest = latestAssistantContext(recentContext)
+  const text = `${message}\n${latest}`.toLowerCase()
+  const swapping = /\b(swap|exchange|switch|trade)\b.{0,30}\b(between|days?|workouts?)\b|\bbetween\b.{0,40}\band\b|بدل|بدّل|بادل|تبديل|استبدل/.test(text)
+  if (!swapping) return null
+
+  const found = findDayMentions(text)
+  if (found.length < 2) return null
+  const first = canonicalDayName(found[0])
+  const second = canonicalDayName(found[1])
+  if (!first || !second || first === second) return null
+  return { firstDay: String(first), secondDay: String(second) }
+}
+
+function findDayMentions(text: string) {
+  const aliases: Array<[string, string]> = [
+    ['Sunday', 'sunday|sun|الأحد|الاحد|احد'],
+    ['Monday', 'monday|mon|الإثنين|الاثنين|اثنين'],
+    ['Tuesday', 'tuesday|tue|tues|الثلاثاء|ثلاثاء'],
+    ['Wednesday', 'wednesday|wed|الأربعاء|الاربعاء|اربعاء'],
+    ['Thursday', 'thursday|thu|thur|thurs|الخميس|خميس'],
+    ['Friday', 'friday|fri|الجمعة|الجمعه|جمعة|جمعه'],
+    ['Saturday', 'saturday|sat|السبت|سبت'],
+  ]
+  const mentions: Array<{ index: number; day: string }> = []
+  for (const [day, pattern] of aliases) {
+    const re = new RegExp(`\\b(?:${pattern})\\b|(?:${pattern})`, 'gi')
+    let match: RegExpExecArray | null
+    while ((match = re.exec(text))) {
+      mentions.push({ index: match.index, day })
+    }
+  }
+  return mentions
+    .sort((a, b) => a.index - b.index)
+    .map(item => item.day)
+    .filter((day, index, arr) => arr.indexOf(day) === index)
+}
+
+function applyWorkoutDaySwap(currentPlan: any, swap: WorkoutDaySwap, request: string) {
+  const plan = cloneJson(currentPlan)
+  const firstDay = String(canonicalDayName(swap.firstDay))
+  const secondDay = String(canonicalDayName(swap.secondDay))
+  const adjustment = {
+    date: new Date().toISOString(),
+    type: 'swap_workout_days',
+    first_day: firstDay,
+    second_day: secondDay,
+    request,
+    note: `Ion swapped ${firstDay}'s workout with ${secondDay}'s workout.`,
+  }
+
+  let changed = false
+  const applyToDays = (days: any[]) => {
+    const nextDays = cloneJson(days)
+    const firstIdx = nextDays.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === firstDay)
+    const secondIdx = nextDays.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === secondDay)
+    if (firstIdx < 0 || secondIdx < 0) return { days: nextDays, changed: false }
+
+    const firstWorkout = cloneJson(nextDays[firstIdx])
+    const secondWorkout = cloneJson(nextDays[secondIdx])
+    setDayName(firstWorkout, secondDay)
+    setDayName(secondWorkout, firstDay)
+    firstWorkout.ion_rescheduled_from = firstDay
+    secondWorkout.ion_rescheduled_from = secondDay
+    firstWorkout.ion_rescheduled_at = new Date().toISOString()
+    secondWorkout.ion_rescheduled_at = new Date().toISOString()
+    nextDays[firstIdx] = secondWorkout
+    nextDays[secondIdx] = firstWorkout
+    nextDays.sort((a: any, b: any) =>
+      DAY_NAMES.indexOf(String(canonicalDayName(dayNameOf(a)))) -
+      DAY_NAMES.indexOf(String(canonicalDayName(dayNameOf(b))))
+    )
+    return { days: nextDays, changed: true }
+  }
+
+  if (Array.isArray(plan.days)) {
+    const result = applyToDays(plan.days)
+    plan.days = result.days
+    changed = changed || result.changed
+  }
+  if (Array.isArray(plan.weeks)) {
+    plan.weeks = plan.weeks.map((week: any) => {
+      if (!Array.isArray(week.days)) return week
+      const result = applyToDays(week.days)
+      changed = changed || result.changed
+      return { ...week, days: result.days }
+    })
+  }
+
+  if (!changed) throw new Error(`Could not find both ${firstDay} and ${secondDay} workout days`)
+  plan.ion_adjustments = [
+    ...(Array.isArray(plan.ion_adjustments) ? plan.ion_adjustments : []),
+    adjustment,
+  ]
+  return {
+    plan,
+    summary: `I swapped ${firstDay} and ${secondDay}. ${firstDay} now has ${secondDay}'s workout, and ${secondDay} now has ${firstDay}'s workout.`,
+  }
 }
 
 function detectWorkoutDayMove(message: string, recentContext = ''): WorkoutDayMove | null {
