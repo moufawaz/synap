@@ -25,8 +25,10 @@ export async function isEmbeddableVideo(videoId: string): Promise<boolean> {
   if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return false
   if (validationCache.has(videoId)) return validationCache.get(videoId) ?? false
 
+  // oEmbed is the cheapest embeddability signal — 3 s is plenty for a CDN-backed endpoint.
   const publicOk = await fetch(
-    `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+    `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+    { signal: AbortSignal.timeout(3000) }
   )
     .then(r => r.ok)
     .catch(() => false)
@@ -36,12 +38,14 @@ export async function isEmbeddableVideo(videoId: string): Promise<boolean> {
     return false
   }
 
+  // Secondary embed check — give it 4 s; reading the full body is intentional but bounded.
   const embedOk = await fetch(`https://www.youtube-nocookie.com/embed/${videoId}`, {
     headers: {
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Accept-Language': 'en-US,en;q=0.9',
     },
+    signal: AbortSignal.timeout(4000),
   })
     .then(async r => {
       if (!r.ok) return false
@@ -65,6 +69,8 @@ async function searchYouTube(exerciseName: string): Promise<string | null> {
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Accept-Language': 'en-US,en;q=0.9',
         },
+        // Without a timeout this fetch can hang indefinitely inside a serverless function.
+        signal: AbortSignal.timeout(7000),
       }
     )
     if (!res.ok) return null

@@ -9,6 +9,11 @@ import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { canonicalDayName, normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
+// Plan-edit calls Claude with up to 10 000 output tokens — can take 30-40 s.
+// Without this Vercel cuts the connection at the platform default (10-15 s),
+// which causes the client to receive a network error ("Load failed").
+export const maxDuration = 60
+
 export async function GET(req: Request) {
   const supabase = await createServerClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -354,6 +359,9 @@ async function maybeApplyPlanEdit({
         let finalPlan = pending_plan_json
         if (planType === 'workout') {
           finalPlan = normalizeWorkoutPlanDays(finalPlan)
+          // Restore video_ids for unchanged exercises before searching YouTube,
+          // so only truly new/swapped exercises trigger a network lookup.
+          preserveExistingVideoIds(workoutPlanRow.plan_json, finalPlan)
           await enrichWorkoutVideos(finalPlan)
           const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
           if (error) throw error
@@ -407,13 +415,24 @@ async function maybeApplyPlanEdit({
     const userRequest = buildEffectivePlanEditRequest(message, recentContext)
     const { system: editSystem, user: editUser } = buildPlanEditPrompt({ type: intent, profile, userRequest, currentPlan })
 
+    // Plan edits are structured JSON rewrites — Haiku handles them perfectly and
+    // costs ~10× less than Sonnet. Workout plans can be 5 000–7 000 tokens of JSON;
+    // 8 000 gives enough headroom to avoid mid-JSON truncation (the #1 source of
+    // invalid_plan_edit_response errors). Diet plans are smaller — 3 500 is safe.
     const editResponse = await withAnthropicRetry(() => client.messages.create({
-      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
-      max_tokens: intent === 'workout' ? 10000 : 6000,
+      model: process.env.ANTHROPIC_CRON_MODEL || 'claude-haiku-4-5',
+      max_tokens: intent === 'workout' ? 8000 : 3500,
       // Static profile + rules cached; only the plan JSON + request changes per call
       system: [{ type: 'text', text: editSystem, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: editUser }],
     }))
+
+    // If Claude hit the token ceiling mid-response the JSON will be malformed.
+    // Detect this explicitly so the log message is unambiguous.
+    if (editResponse.stop_reason === 'max_tokens') {
+      console.error('[plan-edit] output truncated at max_tokens — plan JSON too large')
+      return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
+    }
 
     const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
     const edit = parseJsonObject(raw)
@@ -427,6 +446,9 @@ async function maybeApplyPlanEdit({
       let finalPlan = edit.updated_plan
       if (intent === 'workout') {
         finalPlan = normalizeWorkoutPlanDays(finalPlan)
+        // Restore video_ids for unchanged exercises before searching YouTube,
+        // so only truly new/swapped exercises trigger a network lookup.
+        preserveExistingVideoIds(workoutPlanRow.plan_json, finalPlan)
         await enrichWorkoutVideos(finalPlan)
         const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
         if (error) throw error
@@ -710,7 +732,8 @@ OUTPUT RULES:
 ${aiLanguageInstruction(language, 'the proposal_text and all user-facing strings inside updated_plan')}
 - Return the full updated plan JSON preserving the same overall shape and all existing useful fields.
 - Make only the requested change plus directly necessary balancing adjustments.
-${type === 'workout' ? `- Keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group.
+${type === 'workout' ? `- Keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group, video_id.
+- IMPORTANT: preserve the existing video_id value on every exercise you did NOT change. Only omit video_id on brand-new or swapped-in exercises.
 - Never create one combined "finisher" or "circuit" exercise with multiple movements in one name. Split each finisher movement into its own exercise object so the tutorial video matches the actual movement.
 - day_name values must stay exact English weekdays (Sunday … Saturday). Translate coaching text but not day_name.` :
 `- Keep daily calories/macros coherent. Every meal must include: title, prep_time_min, cook_time_min, ingredients, steps, tips.`}
@@ -779,6 +802,32 @@ function stripCodeFences(raw: string) {
 
 function isMessageType(value: string): value is MessageType {
   return ['text', 'suggestion', 'workout_card', 'meal_card', 'milestone', 'alert', 'new_plan'].includes(value)
+}
+
+/**
+ * Copy video_id values from the original plan onto any matching exercise in the
+ * updated plan that is missing one. Haiku does not reliably preserve video_id
+ * (it's not in its output schema), so without this step every exercise in the
+ * updated plan would trigger a fresh YouTube scrape — even the ones that were
+ * not changed at all — blocking the event loop for tens of seconds.
+ */
+function preserveExistingVideoIds(originalPlan: any, updatedPlan: any) {
+  const originalById: Record<string, string> = {}
+  for (const day of getWorkoutDays(originalPlan)) {
+    for (const ex of day.exercises || []) {
+      if (ex.name && ex.video_id && /^[a-zA-Z0-9_-]{11}$/.test(ex.video_id)) {
+        originalById[ex.name.toLowerCase().trim()] = ex.video_id
+      }
+    }
+  }
+  for (const day of getWorkoutDays(updatedPlan)) {
+    for (const ex of day.exercises || []) {
+      if (ex.name && !ex.video_id) {
+        const preserved = originalById[ex.name.toLowerCase().trim()]
+        if (preserved) ex.video_id = preserved
+      }
+    }
+  }
 }
 
 async function enrichWorkoutVideos(plan: any) {
