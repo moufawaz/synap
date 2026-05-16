@@ -35,6 +35,7 @@ function ResetPasswordForm() {
 
 
     const createRecoverySession = async () => {
+      // ── Path 1: PKCE code (sent by /auth/callback after server-side exchange) ──
       const code = searchParams.get('code')
       if (code) {
         const { error: exchangeError } = await supabaseRef.current.auth.exchangeCodeForSession(code)
@@ -42,28 +43,46 @@ function ResetPasswordForm() {
           window.history.replaceState(null, '', window.location.pathname)
           return true
         }
-        // Client-side exchange failed (e.g. PKCE verifier missing because the link
-        // was opened in a different browser context). Fall through to getSession()
-        // in case /auth/callback already handled the exchange server-side.
       }
 
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-      const accessToken = hashParams.get('access_token')
-      const refreshToken = hashParams.get('refresh_token')
-      if (accessToken && refreshToken) {
-        const { error: sessionError } = await supabaseRef.current.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        })
-        if (sessionError) return false
+      // ── Path 2: Existing session already in cookies ────────────────────────────
+      // Covers the case where /auth/callback exchanged the code server-side and
+      // stored the session before redirecting here with no tokens in the URL.
+      const { data: { session: existing } } = await supabaseRef.current.auth.getSession()
+      if (existing) {
         window.history.replaceState(null, '', window.location.pathname)
         return true
       }
 
-      // /auth/callback may have already exchanged the recovery code and set
-      // the Supabase cookies before redirecting here without URL tokens.
-      const { data: { session } } = await supabaseRef.current.auth.getSession()
-      return Boolean(session)
+      // ── Path 3: Implicit-flow hash tokens (#access_token=…&type=recovery) ─────
+      // @supabase/ssr's createBrowserClient hardcodes flowType:'pkce', which causes
+      // the browser client's auto-detection to reject these hash tokens and can make
+      // client-side setSession() unreliable. We send them to a server-side API
+      // route that sets the session via cookies — no PKCE conflict on the server.
+      const rawHash = window.location.hash.replace(/^#/, '')
+      if (rawHash) {
+        const hp = new URLSearchParams(rawHash)
+        const access_token = hp.get('access_token')
+        const refresh_token = hp.get('refresh_token')
+
+        if (access_token && refresh_token) {
+          const res = await fetch('/api/auth/recovery', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token, refresh_token }),
+          })
+          if (res.ok) {
+            // Session cookie is now set by the server; read it back.
+            const { data: { session } } = await supabaseRef.current.auth.getSession()
+            if (session) {
+              window.history.replaceState(null, '', window.location.pathname)
+              return true
+            }
+          }
+        }
+      }
+
+      return false
     }
 
     createRecoverySession().then((hasRecoverySession) => {
