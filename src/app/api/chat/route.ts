@@ -103,9 +103,9 @@ export async function POST(req: Request) {
       // Last 7 workout logs
       supabase.from('workout_log').select('date,day_name,completion_pct,duration_min,exercises_completed')
         .eq('user_id', user.id).order('date', { ascending: false }).limit(7),
-      // Last 14 meal logs (2 weeks of data for compliance analysis)
+      // Last 7 meal logs — one week is enough for compliance analysis
       supabase.from('meals_log').select('date,meal_time,description,calories_estimated,protein_g,carbs_g,fats_g')
-        .eq('user_id', user.id).order('date', { ascending: false }).limit(14),
+        .eq('user_id', user.id).order('date', { ascending: false }).limit(7),
       // Latest pending plan proposals (for two-step confirm flow)
       supabase.from('chat_messages').select('id, metadata, created_at').eq('user_id', user.id).eq('message_type', 'plan_proposal').order('created_at', { ascending: false }).limit(3),
       // Recent plan changes made via chat (last 30 days)
@@ -211,10 +211,12 @@ export async function POST(req: Request) {
     ]
 
     // Stream the response via SSE
+    // system is an array so we can attach cache_control — the prompt is re-used across
+    // multiple turns in a session and caching it cuts repeated input cost by ~10×
     const stream = client.messages.stream({
-      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-6',
+      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
       max_tokens: 1024,
-      system: systemPrompt,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages,
     })
 
@@ -394,12 +396,14 @@ async function maybeApplyPlanEdit({
   try {
     const currentPlan = intent === 'workout' ? workoutPlanRow.plan_json : dietPlanRow.plan_json
     const userRequest = buildEffectivePlanEditRequest(message, recentContext)
-    const prompt = buildPlanEditPrompt({ type: intent, profile, userRequest, currentPlan })
+    const { system: editSystem, user: editUser } = buildPlanEditPrompt({ type: intent, profile, userRequest, currentPlan })
 
     const editResponse = await withAnthropicRetry(() => client.messages.create({
-      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-6',
+      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
       max_tokens: intent === 'workout' ? 10000 : 6000,
-      messages: [{ role: 'user', content: prompt }],
+      // Static profile + rules cached; only the plan JSON + request changes per call
+      system: [{ type: 'text', text: editSystem, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: editUser }],
     }))
 
     const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
@@ -640,20 +644,20 @@ function buildPlanEditPrompt({
   profile: any
   userRequest: string
   currentPlan: any
-}) {
+}): { system: string; user: string } {
   const language = normalizeAiLanguage(profile?.language)
   const ar = language === 'ar'
 
-  const foodsLoved   = profile?.foods_loved   || 'Not specified'
-  const foodsHated   = profile?.foods_hated   || 'None'
-  const exHated      = profile?.exercises_hated || 'None'
-  const allergies    = profile?.allergies || profile?.food_allergies || 'None'
-  const dietary      = Array.isArray(profile?.dietary_preference) ? profile.dietary_preference.join(', ') : profile?.dietary_preference || 'None'
-  const injuries     = profile?.injuries || 'None'
-  const equipment    = Array.isArray(profile?.equipment) ? profile.equipment.join(', ') : 'Not specified'
-  const gymAccess    = profile?.gym_access ? 'Yes' : 'No'
+  const foodsLoved     = profile?.foods_loved   || 'Not specified'
+  const foodsHated     = profile?.foods_hated   || 'None'
+  const exHated        = profile?.exercises_hated || 'None'
+  const allergies      = profile?.allergies || profile?.food_allergies || 'None'
+  const dietary        = Array.isArray(profile?.dietary_preference) ? profile.dietary_preference.join(', ') : profile?.dietary_preference || 'None'
+  const injuries       = profile?.injuries || 'None'
+  const equipment      = Array.isArray(profile?.equipment) ? profile.equipment.join(', ') : 'Not specified'
+  const gymAccess      = profile?.gym_access ? 'Yes' : 'No'
   const cookingAbility = profile?.cooking_ability || 'Not specified'
-  const budget       = profile?.food_budget || 'Not specified'
+  const budget         = profile?.food_budget || 'Not specified'
   const strengthLevels = profile?.strength_levels || 'Not specified'
 
   const inbodyText = (profile?.body_fat_pct || profile?.muscle_mass_kg || profile?.visceral_fat != null || profile?.inbody_score != null)
@@ -672,16 +676,11 @@ Exercises HATED (never program these): ${exHated}
 Cooking ability: ${cookingAbility} | Food budget: ${budget}
 Strength levels (current working weights): ${strengthLevels}${inbodyText ? `\nInBody scan data: ${inbodyText}` : ''}` : 'No profile loaded'
 
-  return `You are Ion, an elite personal trainer and nutrition coach. The user wants to change their active ${type === 'workout' ? 'workout' : 'nutrition'} plan.
+  // ── System (static per-user — cached across edits in same session) ──────
+  const system = `You are Ion, an elite personal trainer and nutrition coach. The user wants to change their active ${type === 'workout' ? 'workout' : 'nutrition'} plan.
 
 USER PROFILE:
 ${profileText}
-
-USER REQUEST:
-"${userRequest}"
-
-CURRENT ACTIVE PLAN JSON:
-${JSON.stringify(currentPlan, null, 2)}
 
 YOUR TASK:
 You must PROPOSE a personalised change — not apply it blindly. Think like a coach: interpret what the user actually needs, then build a specific updated plan using ONLY their personal preferences, foods, and constraints above.
@@ -717,6 +716,15 @@ Return ONLY valid JSON in this exact wrapper:
   "proposal_text": "2–3 sentence personalised proposal for the user to review",
   "updated_plan": { ...full updated plan... }
 }`
+
+  // ── User message (dynamic — plan JSON + request change each call) ────────
+  const user = `USER REQUEST:
+"${userRequest}"
+
+CURRENT ACTIVE PLAN JSON:
+${JSON.stringify(currentPlan, null, 2)}`
+
+  return { system, user }
 }
 
 function parseJsonObject(raw: string): any | null {
