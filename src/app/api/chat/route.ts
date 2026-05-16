@@ -517,11 +517,11 @@ async function maybeApplyPlanEdit({
     const userRequest = buildEffectivePlanEditRequest(message, recentContext)
     const { system: editSystem, user: editUser } = buildPlanEditPrompt({ type: intent, profile, userRequest, currentPlan })
 
-    // Broad plan edits return a full updated plan so Ion can accept more than
-    // simple exercise swaps: volume, days, cardio, rest, timing, and split edits.
+    // Workout edits return typed patch operations, not full-plan rewrites.
+    // This keeps cost low and prevents unrelated plan sections from drifting.
     const editResponse = await withAnthropicRetry(() => client.messages.create({
       model: process.env.ANTHROPIC_CRON_MODEL || 'claude-haiku-4-5',
-      max_tokens: intent === 'workout' ? 7000 : 3500,
+      max_tokens: intent === 'workout' ? 2200 : 3500,
       // Static profile + rules cached; only the exercise list / plan JSON changes per call
       system: [{ type: 'text', text: editSystem, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: editUser }],
@@ -536,8 +536,8 @@ async function maybeApplyPlanEdit({
     const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
     const edit = parseJsonObject(raw)
 
-    // Validate: both diet and workout plan edits now return a full updated_plan.
-    const validWorkout = intent === 'workout' && !!edit?.updated_plan && getWorkoutDays(edit.updated_plan).some((day: any) => Array.isArray(day?.exercises) && day.exercises.length > 0)
+    // Validate: workout expects typed operations; diet expects full updated_plan.
+    const validWorkout = intent === 'workout' && Array.isArray(edit?.operations) && edit.operations.length > 0
     const validDiet    = intent === 'diet'    && !!edit?.updated_plan
     if (typeof edit?.proposal_text !== 'string' || (!validWorkout && !validDiet)) {
       console.error('[plan-edit] invalid response shape', JSON.stringify(edit)?.slice(0, 200))
@@ -546,10 +546,15 @@ async function maybeApplyPlanEdit({
 
     await recordAiUsage({ userId, feature: `plan_proposal_${intent}`, model: editResponse.model, usage: editResponse.usage })
 
-    // Build the pending plan: full replacement for broad user edits.
+    // Build the pending plan: workout patches are applied server-side; diet uses full replacement.
     let pendingPlanJson: any
     if (intent === 'workout') {
-      pendingPlanJson = repairRestDayExerciseArtifacts(edit.updated_plan)
+      const { plan, appliedCount } = applyWorkoutChanges(workoutPlanRow.plan_json, edit.operations)
+      if (appliedCount < 1 || JSON.stringify(plan) === JSON.stringify(workoutPlanRow.plan_json)) {
+        console.error('[plan-edit] workout operations produced no change', JSON.stringify(edit.operations)?.slice(0, 500))
+        return { applied: false, proposed: false, shouldStop: true, reason: 'invalid_plan_edit_response' }
+      }
+      pendingPlanJson = repairRestDayExerciseArtifacts(plan)
     } else {
       pendingPlanJson = edit.updated_plan
     }
@@ -1217,17 +1222,18 @@ SMART EDIT RULES:
 - MUST NOT program any exercise from "Exercises HATED": ${exHated}
 - MUST use their available equipment: ${equipment}
 - MUST respect injuries: ${injuries}
-- Preserve the same plan JSON shape and all useful fields. Do not delete unrelated weeks/days/metadata.
+- Return only targeted operations. Do not rewrite the whole plan.
 - If moving or swapping days, preserve the same number of training days unless the user explicitly asks to reduce/increase days.
 - Do not add fake exercises named "Rest Day". A rest day means that day is absent from the workout days list.
 
 OUTPUT RULES:
-${aiLanguageInstruction(language, 'proposal_text and all user-facing strings inside updated_plan')}
+${aiLanguageInstruction(language, 'proposal_text and all user-facing strings inside operation values')}
 - day_name must be an exact English weekday (Sunday … Saturday).
 - Never combine multiple movements into one exercise name.
-- Every exercise object must remain complete enough for the UI: name, sets, reps, rest_sec or rest_seconds, weight guidance/suggestion, muscle_group, and category when possible.
-- New or changed exercises should have video_id null so the app can resolve the correct tutorial.
-- Return the full updated workout plan JSON preserving the current schema.
+- New or changed exercise objects must include enough fields for the UI: name, sets, reps, rest_sec or rest_seconds, weight guidance/suggestion, muscle_group, category.
+- New or changed exercises should set video_id to null.
+- For vague requests like "make it harder", prefer small progressive overload: add 1 set to 1-2 main lifts OR tighten rest by 15s OR add a short finisher. Do not change everything.
+- For training-day count changes, use add_training_day/remove_training_day only when the user explicitly asks for a different number of days.
 - Do NOT include markdown or any text outside the JSON wrapper.
 
 proposal_text: 2–4 sentences in ${ar ? 'Arabic' : 'English'} — state exactly WHAT changed, WHY it fits this user's data, and invite confirm.
@@ -1235,14 +1241,24 @@ proposal_text: 2–4 sentences in ${ar ? 'Arabic' : 'English'} — state exactly
 Return ONLY valid JSON in this exact wrapper:
 {
   "proposal_text": "2–4 sentence personalised proposal for the user to review",
-  "updated_plan": { ...full updated workout plan... }
+  "operations": [
+    { "op": "replace_exercise", "day_name": "Monday", "old_exercise_name": "Exact existing name", "new_exercise": { "name": "...", "sets": 4, "reps": "8-12", "rest_sec": 60, "weight_guidance": "...", "form_tip": "...", "muscle_group": "...", "category": "compound", "video_id": null } },
+    { "op": "update_exercise_fields", "day_name": "Monday", "exercise_name": "Exact existing name", "fields": { "sets": 4, "reps": "10-12", "rest_sec": 75, "weight_guidance": "..." } },
+    { "op": "add_exercise", "day_name": "Monday", "after_exercise_name": "Optional exact existing name", "exercise": { "name": "...", "sets": 3, "reps": "12-15", "rest_sec": 45, "weight_guidance": "...", "form_tip": "...", "muscle_group": "...", "category": "accessory", "video_id": null } },
+    { "op": "remove_exercise", "day_name": "Monday", "exercise_name": "Exact existing name" },
+    { "op": "move_exercise", "day_name": "Monday", "exercise_name": "Exact existing name", "after_exercise_name": "Optional exact existing name or empty for top" },
+    { "op": "reorder_exercises", "day_name": "Monday", "exercise_names": ["Exact existing name 1", "Exact existing name 2"] },
+    { "op": "update_day_metadata", "day_name": "Monday", "fields": { "duration_min": 60, "focus": "...", "title": "..." } },
+    { "op": "add_training_day", "day": { "day_name": "Friday", "title": "...", "duration_min": 45, "exercises": [ ...complete exercise objects... ] } },
+    { "op": "remove_training_day", "day_name": "Friday" }
+  ]
 }`
 
     const user = `USER REQUEST:
 "${userRequest}"
 
-CURRENT ACTIVE WORKOUT PLAN JSON:
-${JSON.stringify(currentPlan, null, 2)}`
+CURRENT ACTIVE WORKOUT PLAN INDEX:
+${buildWorkoutPatchContext(currentPlan)}`
 
     return { system, user }
   }
@@ -1286,39 +1302,207 @@ ${JSON.stringify(currentPlan, null, 2)}`
   return { system, user }
 }
 
+function buildWorkoutPatchContext(plan: any) {
+  return getWorkoutDays(plan).map((day: any) => {
+    const exercises = (day.exercises || []).map((ex: any) => ({
+      name: ex.name,
+      sets: ex.sets,
+      reps: ex.reps,
+      rest_sec: ex.rest_sec ?? ex.rest_seconds,
+      weight_guidance: ex.weight_guidance ?? ex.weight_suggestion,
+      muscle_group: ex.muscle_group,
+      category: ex.category,
+    }))
+    return JSON.stringify({
+      day_name: dayNameOf(day),
+      title: day.title ?? day.workout_name ?? day.focus ?? day.muscle_focus,
+      duration_min: day.duration_min,
+      muscle_groups: day.muscle_groups ?? day.muscle_focus,
+      exercises,
+    })
+  }).join('\n')
+}
+
 /**
- * Apply exercise changes returned by the diff-based workout prompt.
+ * Apply typed workout operations returned by the patch prompt.
  * Mutates a deep clone of originalPlan and returns it.
- * Only the swapped-in exercises have video_id=null; everything else is untouched.
  */
-function applyWorkoutChanges(originalPlan: any, changes: any[]): { plan: any; newExercises: any[] } {
+function applyWorkoutChanges(originalPlan: any, operations: any[]): { plan: any; newExercises: any[]; appliedCount: number } {
   const plan = cloneJson(originalPlan)
-  const allDays = getWorkoutDays(plan)
+  const dayEntries = getWorkoutDayEntries(plan)
   const newExercises: any[] = []
+  let appliedCount = 0
 
-  for (const change of changes) {
-    if (!change?.old_exercise_name || !change?.new_exercise) continue
-    const targetDay = String(change.day_name || '').trim()
+  const findDayEntries = (dayName: string) =>
+    dayEntries.filter((entry) => canonicalDayName(dayNameOf(entry.day)) === canonicalDayName(dayName))
 
-    for (const day of allDays) {
-      // Match by day_name (case-insensitive) or accept if no day_name specified
-      const dayName = dayNameOf(day)
-      if (targetDay && canonicalDayName(dayName) !== canonicalDayName(targetDay)) continue
+  const findExerciseIndex = (day: any, name: string) => {
+    const exercises: any[] = Array.isArray(day?.exercises) ? day.exercises : []
+    return exercises.findIndex((ex: any) => String(ex?.name || '').toLowerCase().trim() === String(name || '').toLowerCase().trim())
+  }
 
-      const exercises: any[] = day.exercises || []
-      const idx = exercises.findIndex((ex: any) =>
-        ex.name?.toLowerCase().trim() === change.old_exercise_name.toLowerCase().trim()
-      )
-      if (idx < 0) continue
+  for (const operation of operations) {
+    if (!operation?.op) continue
+    const op = String(operation.op)
 
-      const newEx = { ...change.new_exercise, video_id: null }
-      exercises[idx] = newEx
-      newExercises.push(newEx)
-      break // stop after first match per change
+    if (op === 'add_training_day' && operation.day) {
+      const dayName = dayNameOf(operation.day)
+      if (!dayName) continue
+      for (const targetDays of getWorkoutDayContainers(plan)) {
+        const existsInContainer = targetDays.some((day: any) => canonicalDayName(dayNameOf(day)) === canonicalDayName(dayName))
+        if (existsInContainer) continue
+        const day = cloneJson(operation.day)
+        day.exercises = Array.isArray(day.exercises) ? day.exercises.map((ex: any) => ({ ...ex, video_id: ex.video_id ?? null })) : []
+        targetDays.push(day)
+        dayEntries.push({ day, days: targetDays })
+        newExercises.push(...day.exercises)
+        appliedCount++
+      }
+      continue
+    }
+
+    const targetEntries = findDayEntries(operation.day_name)
+    if (!targetEntries.length) continue
+
+    if (op === 'remove_training_day') {
+      for (const targetEntry of [...targetEntries]) {
+        const idx = targetEntry.days.indexOf(targetEntry.day)
+        if (idx >= 0) {
+          targetEntry.days.splice(idx, 1)
+          const entryIdx = dayEntries.indexOf(targetEntry)
+          if (entryIdx >= 0) dayEntries.splice(entryIdx, 1)
+          appliedCount++
+        }
+      }
+      continue
+    }
+
+    if (op === 'update_day_metadata' && operation.fields && typeof operation.fields === 'object') {
+      for (const { day: targetDay } of targetEntries) {
+        Object.assign(targetDay, operation.fields)
+        appliedCount++
+      }
+      continue
+    }
+
+    if (op === 'replace_exercise') {
+      if (!operation.new_exercise) continue
+      for (const { day: targetDay } of targetEntries) {
+        const exercises: any[] = Array.isArray(targetDay.exercises) ? targetDay.exercises : []
+        targetDay.exercises = exercises
+        const idx = findExerciseIndex(targetDay, operation.old_exercise_name)
+        if (idx < 0) continue
+        const newEx = { ...operation.new_exercise, video_id: operation.new_exercise.video_id ?? null }
+        exercises[idx] = newEx
+        newExercises.push(newEx)
+        appliedCount++
+      }
+      continue
+    }
+
+    if (op === 'update_exercise_fields') {
+      if (!operation.fields || typeof operation.fields !== 'object') continue
+      for (const { day: targetDay } of targetEntries) {
+        const exercises: any[] = Array.isArray(targetDay.exercises) ? targetDay.exercises : []
+        targetDay.exercises = exercises
+        const idx = findExerciseIndex(targetDay, operation.exercise_name)
+        if (idx < 0) continue
+        exercises[idx] = { ...exercises[idx], ...operation.fields }
+        if ('name' in operation.fields || 'video_id' in operation.fields) exercises[idx].video_id = operation.fields.video_id ?? null
+        if (exercises[idx].video_id === null) newExercises.push(exercises[idx])
+        appliedCount++
+      }
+      continue
+    }
+
+    if (op === 'add_exercise' && operation.exercise) {
+      for (const { day: targetDay } of targetEntries) {
+        const exercises: any[] = Array.isArray(targetDay.exercises) ? targetDay.exercises : []
+        targetDay.exercises = exercises
+        const newEx = { ...operation.exercise, video_id: operation.exercise.video_id ?? null }
+        const afterIdx = operation.after_exercise_name ? findExerciseIndex(targetDay, operation.after_exercise_name) : -1
+        exercises.splice(afterIdx >= 0 ? afterIdx + 1 : exercises.length, 0, newEx)
+        newExercises.push(newEx)
+        appliedCount++
+      }
+      continue
+    }
+
+    if (op === 'remove_exercise') {
+      for (const { day: targetDay } of targetEntries) {
+        const exercises: any[] = Array.isArray(targetDay.exercises) ? targetDay.exercises : []
+        const idx = findExerciseIndex(targetDay, operation.exercise_name)
+        if (idx >= 0) {
+          exercises.splice(idx, 1)
+          appliedCount++
+        }
+      }
+      continue
+    }
+
+    if (op === 'move_exercise') {
+      for (const { day: targetDay } of targetEntries) {
+        const exercises: any[] = Array.isArray(targetDay.exercises) ? targetDay.exercises : []
+        targetDay.exercises = exercises
+        const fromIdx = findExerciseIndex(targetDay, operation.exercise_name)
+        if (fromIdx < 0) continue
+        const [exercise] = exercises.splice(fromIdx, 1)
+        const afterIdx = operation.after_exercise_name ? findExerciseIndex(targetDay, operation.after_exercise_name) : -1
+        exercises.splice(afterIdx >= 0 ? afterIdx + 1 : 0, 0, exercise)
+        appliedCount++
+      }
+      continue
+    }
+
+    if (op === 'reorder_exercises' && Array.isArray(operation.exercise_names)) {
+      const requestedNames = operation.exercise_names.map((name: any) => String(name || '').toLowerCase().trim()).filter(Boolean)
+      if (!requestedNames.length) continue
+      for (const { day: targetDay } of targetEntries) {
+        const exercises: any[] = Array.isArray(targetDay.exercises) ? targetDay.exercises : []
+        const requested: any[] = []
+        const remaining = [...exercises]
+        for (const name of requestedNames) {
+          const idx = remaining.findIndex((ex: any) => String(ex?.name || '').toLowerCase().trim() === name)
+          if (idx >= 0) requested.push(...remaining.splice(idx, 1))
+        }
+        if (requested.length) {
+          targetDay.exercises = [...requested, ...remaining]
+          appliedCount++
+        }
+      }
     }
   }
 
-  return { plan, newExercises }
+  return { plan, newExercises, appliedCount }
+}
+
+function getWorkoutDayEntries(plan: any): Array<{ day: any; days: any[] }> {
+  if (Array.isArray(plan?.days)) {
+    return plan.days.map((day: any) => ({ day, days: plan.days }))
+  }
+  if (Array.isArray(plan?.weeks)) {
+    return plan.weeks.flatMap((week: any) => {
+      const days = Array.isArray(week?.days) ? week.days : []
+      return days.map((day: any) => ({ day, days }))
+    })
+  }
+  return []
+}
+
+function getWorkoutDayContainers(plan: any): any[][] {
+  if (Array.isArray(plan?.days)) return [plan.days]
+  if (Array.isArray(plan?.weeks)) {
+    return plan.weeks.map((week: any) => {
+      if (!Array.isArray(week.days)) week.days = []
+      return week.days
+    })
+  }
+  return [ensureTopLevelWorkoutDays(plan)]
+}
+
+function ensureTopLevelWorkoutDays(plan: any): any[] {
+  if (!Array.isArray(plan.days)) plan.days = []
+  return plan.days
 }
 
 function parseJsonObject(raw: string): any | null {
