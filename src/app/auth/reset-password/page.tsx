@@ -38,11 +38,13 @@ function ResetPasswordForm() {
       const code = searchParams.get('code')
       if (code) {
         const { error: exchangeError } = await supabaseRef.current.auth.exchangeCodeForSession(code)
-        // If code exchange fails the link is expired or already used — do NOT
-        // fall back to the existing session, that would allow the form to appear.
-        if (exchangeError) return false
-        window.history.replaceState(null, '', window.location.pathname)
-        return true
+        if (!exchangeError) {
+          window.history.replaceState(null, '', window.location.pathname)
+          return true
+        }
+        // Client-side exchange failed (e.g. PKCE verifier missing because the link
+        // was opened in a different browser context). Fall through to getSession()
+        // in case /auth/callback already handled the exchange server-side.
       }
 
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
