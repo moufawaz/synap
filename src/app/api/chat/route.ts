@@ -368,7 +368,7 @@ async function maybeApplyPlanEdit({
       if (daySwap && workoutPlanRow?.plan_json) {
         try {
           const result = applyWorkoutDaySwap(workoutPlanRow.plan_json, daySwap, buildEffectivePlanEditRequest(message, recentContext))
-          const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
+          const finalPlan = prepareWorkoutPlanForSave(result.plan, 'confirmed day swap')
           await enrichWorkoutVideos(finalPlan)
           const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
           if (error) throw error
@@ -387,7 +387,7 @@ async function maybeApplyPlanEdit({
       if (dayMove && workoutPlanRow?.plan_json) {
         try {
           const result = applyWorkoutDayMove(workoutPlanRow.plan_json, dayMove, buildEffectivePlanEditRequest(message, recentContext), profile)
-          const finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(result.plan))
+          const finalPlan = prepareWorkoutPlanForSave(result.plan, 'confirmed day move')
           await enrichWorkoutVideos(finalPlan)
           const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
           if (error) throw error
@@ -408,7 +408,7 @@ async function maybeApplyPlanEdit({
       try {
         let finalPlan = pending_plan_json
         if (planType === 'workout') {
-          finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(finalPlan))
+          finalPlan = prepareWorkoutPlanForSave(finalPlan, 'pending proposal')
           // pending_plan_json was built by applyWorkoutChanges(), which preserves all
           // existing exercises and only sets video_id=null for newly swapped ones —
           // so no preserveExistingVideoIds() call is needed here.
@@ -554,7 +554,7 @@ async function maybeApplyPlanEdit({
         console.error('[plan-edit] workout operations produced no change', JSON.stringify(edit.operations)?.slice(0, 500))
         return { applied: false, proposed: false, shouldStop: true, reason: 'invalid_plan_edit_response' }
       }
-      pendingPlanJson = repairRestDayExerciseArtifacts(plan)
+      pendingPlanJson = prepareWorkoutPlanForSave(plan, 'generated operations')
     } else {
       pendingPlanJson = edit.updated_plan
     }
@@ -562,7 +562,7 @@ async function maybeApplyPlanEdit({
     if (detectConfirmation(message) && hasPlanEditContext(recentContext)) {
       let finalPlan = pendingPlanJson
       if (intent === 'workout') {
-        finalPlan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(finalPlan))
+        finalPlan = prepareWorkoutPlanForSave(finalPlan, 'inline confirmation')
         // Only the newly swapped exercises have video_id=null; enrich just those.
         await enrichWorkoutVideos(finalPlan)
         const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
@@ -1098,6 +1098,97 @@ function repairRestDayExerciseArtifacts(currentPlan: any) {
   return plan
 }
 
+function prepareWorkoutPlanForSave(currentPlan: any, source: string) {
+  const plan = normalizeWorkoutPlanDays(repairRestDayExerciseArtifacts(currentPlan))
+  const validation = validateWorkoutPlanStructure(plan)
+  if (!validation.valid) {
+    throw new Error(`Invalid workout plan from ${source}: ${validation.reason}`)
+  }
+  return plan
+}
+
+function validateWorkoutPlanStructure(plan: any): { valid: true } | { valid: false; reason: string } {
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) {
+    return { valid: false, reason: 'plan must be an object' }
+  }
+
+  if (Array.isArray(plan.weeks)) {
+    for (const [weekIndex, week] of plan.weeks.entries()) {
+      if (!week || typeof week !== 'object') {
+        return { valid: false, reason: `week ${weekIndex + 1} must be an object` }
+      }
+      if ('days' in week && !Array.isArray(week.days)) {
+        return { valid: false, reason: `week ${weekIndex + 1} days must be an array` }
+      }
+    }
+  }
+
+  const containers = getExistingWorkoutDayContainers(plan)
+  if (!containers.length) return { valid: false, reason: 'plan has no day container' }
+
+  let totalTrainingDays = 0
+  for (const [containerIndex, days] of containers.entries()) {
+    const seenDays = new Set<string>()
+    for (const [dayIndex, day] of days.entries()) {
+      if (!day || typeof day !== 'object' || Array.isArray(day)) {
+        return { valid: false, reason: `day ${dayIndex + 1} in container ${containerIndex + 1} must be an object` }
+      }
+
+      const canonical = canonicalDayName(dayNameOf(day))
+      if (!DAY_NAMES.includes(String(canonical))) {
+        return { valid: false, reason: `invalid day name "${dayNameOf(day)}"` }
+      }
+      if (seenDays.has(String(canonical))) {
+        return { valid: false, reason: `duplicate ${canonical} in the same workout cycle` }
+      }
+      seenDays.add(String(canonical))
+
+      const exercises = day.exercises
+      if (!Array.isArray(exercises) || exercises.length < 1) {
+        return { valid: false, reason: `${canonical} has no exercises` }
+      }
+      for (const [exerciseIndex, exercise] of exercises.entries()) {
+        if (!exercise || typeof exercise !== 'object' || Array.isArray(exercise)) {
+          return { valid: false, reason: `${canonical} exercise ${exerciseIndex + 1} must be an object` }
+        }
+        const name = String(exercise.name || '').trim()
+        if (!name) return { valid: false, reason: `${canonical} exercise ${exerciseIndex + 1} has no name` }
+        if (/^rest\s*day$/i.test(name)) {
+          return { valid: false, reason: `${canonical} contains a fake Rest Day exercise` }
+        }
+      }
+      totalTrainingDays++
+    }
+  }
+
+  if (totalTrainingDays < 1) return { valid: false, reason: 'plan has no training days' }
+  return { valid: true }
+}
+
+function getExistingWorkoutDayContainers(plan: any): any[][] {
+  const containers: any[][] = []
+  if (Array.isArray(plan?.days)) containers.push(plan.days)
+  if (Array.isArray(plan?.weeks)) {
+    for (const week of plan.weeks) {
+      if (Array.isArray(week?.days)) containers.push(week.days)
+    }
+  }
+  return containers
+}
+
+function isValidTrainingDayPayload(day: any) {
+  if (!day || typeof day !== 'object' || Array.isArray(day)) return false
+  if (!DAY_NAMES.includes(String(canonicalDayName(dayNameOf(day))))) return false
+  if (!Array.isArray(day.exercises) || day.exercises.length < 1) return false
+  return day.exercises.every((exercise: any) =>
+    exercise &&
+    typeof exercise === 'object' &&
+    !Array.isArray(exercise) &&
+    String(exercise.name || '').trim() &&
+    !/^rest\s*day$/i.test(String(exercise.name || '').trim())
+  )
+}
+
 function applyRestDayToday(currentPlan: any, request: string) {
   const plan = cloneJson(currentPlan)
   const today = DAY_NAMES[new Date().getDay()]
@@ -1346,6 +1437,7 @@ function applyWorkoutChanges(originalPlan: any, operations: any[]): { plan: any;
     const op = String(operation.op)
 
     if (op === 'add_training_day' && operation.day) {
+      if (!isValidTrainingDayPayload(operation.day)) continue
       const dayName = dayNameOf(operation.day)
       if (!dayName) continue
       for (const targetDays of getWorkoutDayContainers(plan)) {
