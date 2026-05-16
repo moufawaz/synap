@@ -359,9 +359,9 @@ async function maybeApplyPlanEdit({
         let finalPlan = pending_plan_json
         if (planType === 'workout') {
           finalPlan = normalizeWorkoutPlanDays(finalPlan)
-          // Restore video_ids for unchanged exercises before searching YouTube,
-          // so only truly new/swapped exercises trigger a network lookup.
-          preserveExistingVideoIds(workoutPlanRow.plan_json, finalPlan)
+          // pending_plan_json was built by applyWorkoutChanges(), which preserves all
+          // existing exercises and only sets video_id=null for newly swapped ones —
+          // so no preserveExistingVideoIds() call is needed here.
           await enrichWorkoutVideos(finalPlan)
           const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
           if (error) throw error
@@ -415,40 +415,50 @@ async function maybeApplyPlanEdit({
     const userRequest = buildEffectivePlanEditRequest(message, recentContext)
     const { system: editSystem, user: editUser } = buildPlanEditPrompt({ type: intent, profile, userRequest, currentPlan })
 
-    // Plan edits are structured JSON rewrites — Haiku handles them perfectly and
-    // costs ~10× less than Sonnet. Workout plans can be 5 000–7 000 tokens of JSON;
-    // 8 000 gives enough headroom to avoid mid-JSON truncation (the #1 source of
-    // invalid_plan_edit_response errors). Diet plans are smaller — 3 500 is safe.
+    // Workout edits use a diff-based prompt (returns only changed exercises — ~300 tokens).
+    // Diet edits return the full updated plan (~2 000–3 000 tokens). This avoids the
+    // ~10 000-token full-plan-rewrite that was hitting max_tokens and causing JSON truncation.
     const editResponse = await withAnthropicRetry(() => client.messages.create({
       model: process.env.ANTHROPIC_CRON_MODEL || 'claude-haiku-4-5',
-      max_tokens: intent === 'workout' ? 8000 : 3500,
-      // Static profile + rules cached; only the plan JSON + request changes per call
+      max_tokens: intent === 'workout' ? 1500 : 3500,
+      // Static profile + rules cached; only the exercise list / plan JSON changes per call
       system: [{ type: 'text', text: editSystem, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: editUser }],
     }))
 
     // If Claude hit the token ceiling mid-response the JSON will be malformed.
-    // Detect this explicitly so the log message is unambiguous.
     if (editResponse.stop_reason === 'max_tokens') {
-      console.error('[plan-edit] output truncated at max_tokens — plan JSON too large')
+      console.error('[plan-edit] output truncated at max_tokens')
       return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
     }
 
     const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
     const edit = parseJsonObject(raw)
-    if (!edit?.updated_plan || typeof edit.proposal_text !== 'string') {
+
+    // Validate: workout expects `changes[]`, diet expects `updated_plan`
+    const validWorkout = intent === 'workout' && Array.isArray(edit?.changes) && edit.changes.length > 0
+    const validDiet    = intent === 'diet'    && !!edit?.updated_plan
+    if (typeof edit?.proposal_text !== 'string' || (!validWorkout && !validDiet)) {
+      console.error('[plan-edit] invalid response shape', JSON.stringify(edit)?.slice(0, 200))
       return { applied: false, proposed: false, shouldStop: true, reason: 'invalid_plan_edit_response' }
     }
 
     await recordAiUsage({ userId, feature: `plan_proposal_${intent}`, model: editResponse.model, usage: editResponse.usage })
 
+    // Build the pending plan: for workout, patch original; for diet, use full replacement
+    let pendingPlanJson: any
+    if (intent === 'workout') {
+      const { plan } = applyWorkoutChanges(workoutPlanRow.plan_json, edit.changes)
+      pendingPlanJson = plan
+    } else {
+      pendingPlanJson = edit.updated_plan
+    }
+
     if (detectConfirmation(message) && hasPlanEditContext(recentContext)) {
-      let finalPlan = edit.updated_plan
+      let finalPlan = pendingPlanJson
       if (intent === 'workout') {
         finalPlan = normalizeWorkoutPlanDays(finalPlan)
-        // Restore video_ids for unchanged exercises before searching YouTube,
-        // so only truly new/swapped exercises trigger a network lookup.
-        preserveExistingVideoIds(workoutPlanRow.plan_json, finalPlan)
+        // Only the newly swapped exercises have video_id=null; enrich just those.
         await enrichWorkoutVideos(finalPlan)
         const { error } = await supabase.from('workout_plans').update({ plan_json: finalPlan }).eq('id', workoutPlanRow.id).eq('user_id', userId)
         if (error) throw error
@@ -477,7 +487,7 @@ async function maybeApplyPlanEdit({
       proposed: true,
       shouldStop: true,
       proposalText: edit.proposal_text.slice(0, 800),
-      pendingPlanJson: edit.updated_plan,
+      pendingPlanJson,
       pendingPlanType: intent,
       usage: {
         model: editResponse.model,
@@ -707,41 +717,86 @@ Exercises HATED (never program these): ${exHated}
 Cooking ability: ${cookingAbility} | Food budget: ${budget}
 Strength levels (current working weights): ${strengthLevels}${inbodyText ? `\nInBody scan data: ${inbodyText}` : ''}` : 'No profile loaded'
 
-  // ── System (static per-user — cached across edits in same session) ──────
-  const system = `You are Ion, an elite personal trainer and nutrition coach. The user wants to change their active ${type === 'workout' ? 'workout' : 'nutrition'} plan.
+  if (type === 'workout') {
+    // ── WORKOUT: diff-based prompt ─────────────────────────────────────────
+    // Returning the FULL plan JSON for large plans (30+ exercises) easily
+    // exceeds Haiku's output token limit and causes JSON truncation.
+    // Instead we ask only for the changed exercise(s) and patch server-side.
+    // Output shrinks from ~10 000 tokens → ~300 tokens per change.
+
+    // Build a compact exercise list so the model knows what's in the plan
+    const allDays = getWorkoutDays(currentPlan)
+    const exerciseIndex = allDays.map((day: any) => {
+      const name = dayNameOf(day)
+      const exList = (day.exercises || []).map((ex: any) => ex.name).join(', ')
+      return `${name}: ${exList}`
+    }).join('\n')
+
+    const system = `You are Ion, an elite personal trainer. The user wants to modify ONE exercise in their active workout plan.
 
 USER PROFILE:
 ${profileText}
 
-YOUR TASK:
-You must PROPOSE a personalised change — not apply it blindly. Think like a coach: interpret what the user actually needs, then build a specific updated plan using ONLY their personal preferences, foods, and constraints above.
+COACHING RULES (non-negotiable):
+- MUST NOT program any exercise from "Exercises HATED": ${exHated}
+- MUST use their available equipment: ${equipment}
+- MUST respect injuries: ${injuries}
+- Choose a substitute the user will enjoy and can actually do with their equipment
+
+OUTPUT RULES:
+${aiLanguageInstruction(language, 'proposal_text and all user-facing strings in new_exercise')}
+- day_name must be an exact English weekday (Sunday … Saturday).
+- Never combine multiple movements into one exercise name.
+- The new_exercise object must be COMPLETE: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group, category.
+
+proposal_text: 2–3 sentences in ${ar ? 'Arabic' : 'English'} — state WHAT you swapped, WHY it suits this user, invite confirm.
+
+Return ONLY valid JSON — no markdown, no extra text:
+{
+  "proposal_text": "...",
+  "changes": [
+    {
+      "day_name": "Monday",
+      "old_exercise_name": "exact name as it appears in the list below",
+      "new_exercise": {
+        "name": "...", "sets": 4, "reps": "8-12", "rest_sec": 60,
+        "weight_guidance": "...", "form_tip": "...", "muscle_group": "...", "category": "compound"
+      }
+    }
+  ]
+}`
+
+    const user = `USER REQUEST: "${userRequest}"
+
+CURRENT EXERCISES BY DAY:
+${exerciseIndex}`
+
+    return { system, user }
+  }
+
+  // ── DIET: full-plan approach (diet plans are small enough) ─────────────
+  const system = `You are Ion, an elite nutrition coach. The user wants to change their active nutrition plan.
+
+USER PROFILE:
+${profileText}
 
 PERSONALIZATION RULES (non-negotiable):
-${type === 'diet' ? `- MUST include foods from "Foods LOVED" list in meal suggestions
+- MUST include foods from "Foods LOVED" list in meal suggestions
 - MUST NOT include ANY food from "Foods HATED" list
 - MUST NOT include ANY food from "Allergies" list
 - MUST respect dietary restrictions: ${dietary}
-- Meals must match their cooking ability (${cookingAbility}) and food budget (${budget})` :
-`- MUST NOT program any exercise from "Exercises HATED" list
-- MUST use their available equipment: ${equipment}
-- MUST respect injuries: ${injuries}
-- If strength levels are provided, use them to calibrate weight_guidance and progression
-- Choose substitute exercises the user will enjoy and can actually do`}
+- Meals must match their cooking ability (${cookingAbility}) and food budget (${budget})
 
 OUTPUT RULES:
 ${aiLanguageInstruction(language, 'the proposal_text and all user-facing strings inside updated_plan')}
 - Return the full updated plan JSON preserving the same overall shape and all existing useful fields.
 - Make only the requested change plus directly necessary balancing adjustments.
-${type === 'workout' ? `- Keep exercise objects complete: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group, video_id.
-- IMPORTANT: preserve the existing video_id value on every exercise you did NOT change. Only omit video_id on brand-new or swapped-in exercises.
-- Never create one combined "finisher" or "circuit" exercise with multiple movements in one name. Split each finisher movement into its own exercise object so the tutorial video matches the actual movement.
-- day_name values must stay exact English weekdays (Sunday … Saturday). Translate coaching text but not day_name.` :
-`- Keep daily calories/macros coherent. Every meal must include: title, prep_time_min, cook_time_min, ingredients, steps, tips.`}
+- Keep daily calories/macros coherent. Every meal must include: title, prep_time_min, cook_time_min, ingredients, steps, tips.
 - If language is Arabic, all user-facing strings must be in Arabic. JSON keys must stay unchanged.
-- Preserve top-level "meals" for diet plans and "days" for workout plans.
+- Preserve top-level "meals" for diet plans.
 - Do NOT include markdown or any text outside the JSON wrapper.
 
-proposal_text must be 2–3 sentences in ${ar ? 'Arabic' : 'English'}: explain exactly WHAT you changed, WHY it suits this specific user (reference their foods/exercises/goals), and invite them to confirm. Be specific — mention the actual food or exercise names.
+proposal_text must be 2–3 sentences in ${ar ? 'Arabic' : 'English'}: explain exactly WHAT you changed, WHY it suits this specific user, and invite them to confirm.
 
 Return ONLY valid JSON in this exact wrapper:
 {
@@ -749,7 +804,6 @@ Return ONLY valid JSON in this exact wrapper:
   "updated_plan": { ...full updated plan... }
 }`
 
-  // ── User message (dynamic — plan JSON + request change each call) ────────
   const user = `USER REQUEST:
 "${userRequest}"
 
@@ -757,6 +811,41 @@ CURRENT ACTIVE PLAN JSON:
 ${JSON.stringify(currentPlan, null, 2)}`
 
   return { system, user }
+}
+
+/**
+ * Apply exercise changes returned by the diff-based workout prompt.
+ * Mutates a deep clone of originalPlan and returns it.
+ * Only the swapped-in exercises have video_id=null; everything else is untouched.
+ */
+function applyWorkoutChanges(originalPlan: any, changes: any[]): { plan: any; newExercises: any[] } {
+  const plan = cloneJson(originalPlan)
+  const allDays = getWorkoutDays(plan)
+  const newExercises: any[] = []
+
+  for (const change of changes) {
+    if (!change?.old_exercise_name || !change?.new_exercise) continue
+    const targetDay = String(change.day_name || '').trim()
+
+    for (const day of allDays) {
+      // Match by day_name (case-insensitive) or accept if no day_name specified
+      const dayName = dayNameOf(day)
+      if (targetDay && canonicalDayName(dayName) !== canonicalDayName(targetDay)) continue
+
+      const exercises: any[] = day.exercises || []
+      const idx = exercises.findIndex((ex: any) =>
+        ex.name?.toLowerCase().trim() === change.old_exercise_name.toLowerCase().trim()
+      )
+      if (idx < 0) continue
+
+      const newEx = { ...change.new_exercise, video_id: null }
+      exercises[idx] = newEx
+      newExercises.push(newEx)
+      break // stop after first match per change
+    }
+  }
+
+  return { plan, newExercises }
 }
 
 function parseJsonObject(raw: string): any | null {
