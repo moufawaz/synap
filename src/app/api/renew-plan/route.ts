@@ -309,15 +309,16 @@ async function rollbackPlan({
 
   const table = planType === 'diet' ? 'diet_plans' : 'workout_plans'
 
-  const [currentRes, targetBase, langRes] = await Promise.all([
+  const [currentRes, langRes] = await Promise.all([
     admin.from(table).select('id').eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    Promise.resolve(admin.from(table).select('*').eq('user_id', userId).eq('active', false)),
     admin.from('profiles').select('language').eq('user_id', userId).maybeSingle(),
   ])
 
   const language = normalizeAiLanguage(langRes.data?.language)
   const ar = language === 'ar'
 
+  // Keep targetBase as a query builder (not awaited) so we can conditionally chain .eq() or .order()
+  const targetBase = admin.from(table).select('*').eq('user_id', userId).eq('active', false)
   const targetRes = targetPlanId
     ? await targetBase.eq('id', targetPlanId).maybeSingle()
     : await targetBase.order('created_at', { ascending: false }).limit(1).maybeSingle()
