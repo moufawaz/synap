@@ -89,7 +89,7 @@ async function localizeJson(
   label: string,
 ) {
   const response = await withAnthropicRetry(() => client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
     max_tokens: 12000,
     system: [
       'You translate stored SYNAP coaching content to Arabic.',

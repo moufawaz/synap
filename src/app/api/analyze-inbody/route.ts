@@ -151,7 +151,7 @@ If this is NOT an InBody report, or the image/PDF is too blurry or unclear to re
     console.info('[analyze-inbody] Sending scan to vision model')
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
       max_tokens: 1024,
       messages: [{ role: 'user', content: messageContent }],
     })

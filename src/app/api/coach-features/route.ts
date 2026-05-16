@@ -438,7 +438,7 @@ export async function POST(req: Request) {
     user_id: user.id,
     role: 'assistant',
     content: message,
-    message_type: 'alert',
+    message_type: 'suggestion',
   })
 
   return NextResponse.json({ ok: true, message })

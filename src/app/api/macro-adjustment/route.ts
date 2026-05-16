@@ -85,7 +85,7 @@ If no adjustment is needed, return current values with rationale "On track — n
 
   const client = new Anthropic()
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
     max_tokens: 300,
     messages: [{ role: 'user', content: prompt }],
   })

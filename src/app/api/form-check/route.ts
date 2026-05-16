@@ -60,7 +60,7 @@ Return ONLY valid JSON:
 Do not diagnose medical conditions. If the image is unclear, say that clearly and give safe general cues.`
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
     max_tokens: 700,
     messages: [
       {

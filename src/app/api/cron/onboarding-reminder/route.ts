@@ -11,16 +11,17 @@ import { sendEmail } from '@/lib/resend'
  *   Stage 1 — 24h reminder
  *     Triggered: user created > 24h ago and not yet reminded
  *     Sends:     Ion chat message + email (type: onboarding_reminder)
- *     Marker:    message_type = 'onboarding_reminder_24h'
+ *     Marker:    role='system', message_type='text', metadata.marker='onboarding_reminder_24h'
  *
  *   Stage 2 — 7-day reminder
  *     Triggered: user created ≥ 7 days ago and 7d reminder not yet sent
  *     Sends:     Ion chat message + email (type: onboarding_reminder_7d)
- *     Marker:    message_type = 'onboarding_reminder_7d'
+ *     Marker:    role='system', message_type='text', metadata.marker='onboarding_reminder_7d'
  *
  * Onboarding completion = having an active workout_plan row.
- * Markers are stored as invisible system messages in chat_messages.
- * Per run, each user receives at most one reminder (7d takes priority).
+ * Markers are stored as invisible system messages (role='system') in chat_messages
+ * using message_type='text' (to satisfy the DB check constraint) with the
+ * marker identity in metadata.marker. Per run, each user gets at most one reminder.
  */
 
 const MARKER_24H   = 'onboarding_reminder_24h'
@@ -64,18 +65,21 @@ export async function GET(req: Request) {
   const plannedSet = new Set((plannedData || []).map((r: any) => r.user_id))
 
   // ── 3. Fetch all existing reminder markers in one query ───────
+  // Markers are stored as role='system', message_type='text' with metadata.marker to
+  // avoid violating the chat_messages_message_type_check DB constraint.
   const { data: markerData } = await admin
     .from('chat_messages')
-    .select('user_id, message_type')
+    .select('user_id, metadata')
     .in('user_id', userIds)
     .eq('role', 'system')
-    .in('message_type', [MARKER_24H, MARKER_7D])
+    .eq('message_type', 'text')
+    .not('metadata', 'is', null)
 
   const sent24hSet = new Set(
-    (markerData || []).filter((r: any) => r.message_type === MARKER_24H).map((r: any) => r.user_id)
+    (markerData || []).filter((r: any) => r.metadata?.marker === MARKER_24H).map((r: any) => r.user_id)
   )
   const sent7dSet = new Set(
-    (markerData || []).filter((r: any) => r.message_type === MARKER_7D).map((r: any) => r.user_id)
+    (markerData || []).filter((r: any) => r.metadata?.marker === MARKER_7D).map((r: any) => r.user_id)
   )
 
   // ── 4. Fetch profiles (name) in one batch ─────────────────────
@@ -114,12 +118,14 @@ export async function GET(req: Request) {
         })
 
         // Invisible system marker — prevents sending this stage again
+        // message_type must be 'text' to satisfy the DB check constraint;
+        // the marker identity is stored in metadata.marker instead.
         await admin.from('chat_messages').insert({
           user_id:      u.id,
           role:         'system',
           content:      '',
-          message_type: MARKER_7D,
-          metadata:     { sentAt: now.toISOString(), daysSince },
+          message_type: 'text',
+          metadata:     { marker: MARKER_7D, sentAt: now.toISOString(), daysSince },
         })
 
         // Email
@@ -146,12 +152,14 @@ export async function GET(req: Request) {
         })
 
         // Invisible system marker — prevents sending this stage again
+        // message_type must be 'text' to satisfy the DB check constraint;
+        // the marker identity is stored in metadata.marker instead.
         await admin.from('chat_messages').insert({
           user_id:      u.id,
           role:         'system',
           content:      '',
-          message_type: MARKER_24H,
-          metadata:     { sentAt: now.toISOString(), daysSince },
+          message_type: 'text',
+          metadata:     { marker: MARKER_24H, sentAt: now.toISOString(), daysSince },
         })
 
         // Email

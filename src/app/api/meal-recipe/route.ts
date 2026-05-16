@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
     const client = new Anthropic({ apiKey })
     const response = await withAnthropicRetry(() => client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
       max_tokens: 1200,
       messages: [
         {

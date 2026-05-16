@@ -3,8 +3,9 @@
  *
  * Lightweight cross-device sync for in-progress workout sessions.
  * Stores the session state (which exercises are done today) in the
- * existing chat_messages table using role='system' and
- * message_type='workout_session', so zero schema changes are needed.
+ * existing chat_messages table using role='system' and message_type='text'
+ * with metadata.session_type='workout_session', so zero schema changes are
+ * needed and the DB check constraint is satisfied.
  * The chat history query filters role IN ('user','assistant','ion'),
  * so these rows never appear in the Ion chat.
  */
@@ -29,7 +30,8 @@ export async function GET(req: Request) {
     .select('metadata, created_at')
     .eq('user_id', user.id)
     .eq('role', 'system')
-    .eq('message_type', SESSION_TYPE)
+    .eq('message_type', 'text')
+    .contains('metadata', { session_type: SESSION_TYPE })
     .gte('created_at', `${date}T00:00:00Z`)
     .lte('created_at', `${date}T23:59:59Z`)
     .order('created_at', { ascending: false })
@@ -55,7 +57,8 @@ export async function PUT(req: Request) {
     .delete()
     .eq('user_id', user.id)
     .eq('role', 'system')
-    .eq('message_type', SESSION_TYPE)
+    .eq('message_type', 'text')
+    .contains('metadata', { session_type: SESSION_TYPE })
     .gte('created_at', `${date}T00:00:00Z`)
     .lte('created_at', `${date}T23:59:59Z`)
 
@@ -63,8 +66,9 @@ export async function PUT(req: Request) {
     user_id:      user.id,
     role:         'system',
     content:      '',
-    message_type: SESSION_TYPE,
+    message_type: 'text',
     metadata: {
+      session_type: SESSION_TYPE,
       date,
       dayName,
       completedExercises,
@@ -89,7 +93,8 @@ export async function DELETE() {
     .delete()
     .eq('user_id', user.id)
     .eq('role', 'system')
-    .eq('message_type', SESSION_TYPE)
+    .eq('message_type', 'text')
+    .contains('metadata', { session_type: SESSION_TYPE })
     .gte('created_at', `${date}T00:00:00Z`)
     .lte('created_at', `${date}T23:59:59Z`)
 

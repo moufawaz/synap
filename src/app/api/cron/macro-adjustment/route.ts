@@ -70,7 +70,7 @@ Suggest small conservative adjustments (±50-150kcal, ±5-15g macros). Return JS
 {"adjusted_calories":number,"adjusted_protein_g":number,"adjusted_carbs_g":number,"adjusted_fat_g":number,"rationale":"short reason in ${isArabic ? 'Arabic' : 'English'}"}`
 
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: process.env.ANTHROPIC_CRON_MODEL || 'claude-haiku-4-5',
         max_tokens: 250,
         messages: [{ role: 'user', content: prompt }],
       })

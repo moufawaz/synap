@@ -139,7 +139,7 @@ User goal: ${profile.goal}
 Language: ${language}`
 
       const aiMsg = await client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
         max_tokens: 300,
         messages: [{ role: 'user', content: ionPrompt }],
       })
@@ -147,14 +147,11 @@ Language: ${language}`
 
       const ionContent = (aiMsg.content[0] as any).text
 
-      // Determine message type
-      const msgType = highPriority.length > 0 ? 'alert' : 'suggestion'
-
       await supabase.from('chat_messages').insert({
         user_id: user.id,
-        role: 'ion',
+        role: 'assistant',
         content: ionContent,
-        message_type: msgType,
+        message_type: 'suggestion',
         metadata: { checks, issues: issues.map(i => i.type) },
       })
 

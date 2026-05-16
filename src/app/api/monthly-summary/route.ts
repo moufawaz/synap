@@ -48,7 +48,7 @@ ${aiLanguageInstruction(language, 'the full monthly summary')}
 Write a monthly summary in ${aiLanguageName(language)} as Ion. Make it personal, data-driven, and motivating. Max 4 sentences. Include what went well, one honest observation, and one focus for next month. Do NOT use generic phrases.`
 
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
       max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     })
