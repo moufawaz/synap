@@ -521,12 +521,11 @@ async function maybeApplyPlanEdit({
     const userRequest = buildEffectivePlanEditRequest(message, recentContext)
     const { system: editSystem, user: editUser } = buildPlanEditPrompt({ type: intent, profile, userRequest, currentPlan })
 
-    // Workout edits use a diff-based prompt (returns only changed exercises — ~300 tokens).
-    // Diet edits return the full updated plan (~2 000–3 000 tokens). This avoids the
-    // ~10 000-token full-plan-rewrite that was hitting max_tokens and causing JSON truncation.
+    // Broad plan edits return a full updated plan so Ion can accept more than
+    // simple exercise swaps: volume, days, cardio, rest, timing, and split edits.
     const editResponse = await withAnthropicRetry(() => client.messages.create({
       model: process.env.ANTHROPIC_CRON_MODEL || 'claude-haiku-4-5',
-      max_tokens: intent === 'workout' ? 1500 : 3500,
+      max_tokens: intent === 'workout' ? 7000 : 3500,
       // Static profile + rules cached; only the exercise list / plan JSON changes per call
       system: [{ type: 'text', text: editSystem, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: editUser }],
@@ -541,8 +540,8 @@ async function maybeApplyPlanEdit({
     const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
     const edit = parseJsonObject(raw)
 
-    // Validate: workout expects `changes[]`, diet expects `updated_plan`
-    const validWorkout = intent === 'workout' && Array.isArray(edit?.changes) && edit.changes.length > 0
+    // Validate: both diet and workout plan edits now return a full updated_plan.
+    const validWorkout = intent === 'workout' && !!edit?.updated_plan && getWorkoutDays(edit.updated_plan).some((day: any) => Array.isArray(day?.exercises) && day.exercises.length > 0)
     const validDiet    = intent === 'diet'    && !!edit?.updated_plan
     if (typeof edit?.proposal_text !== 'string' || (!validWorkout && !validDiet)) {
       console.error('[plan-edit] invalid response shape', JSON.stringify(edit)?.slice(0, 200))
@@ -551,11 +550,10 @@ async function maybeApplyPlanEdit({
 
     await recordAiUsage({ userId, feature: `plan_proposal_${intent}`, model: editResponse.model, usage: editResponse.usage })
 
-    // Build the pending plan: for workout, patch original; for diet, use full replacement
+    // Build the pending plan: full replacement for broad user edits.
     let pendingPlanJson: any
     if (intent === 'workout') {
-      const { plan } = applyWorkoutChanges(workoutPlanRow.plan_json, edit.changes)
-      pendingPlanJson = repairRestDayExerciseArtifacts(plan)
+      pendingPlanJson = repairRestDayExerciseArtifacts(edit.updated_plan)
     } else {
       pendingPlanJson = edit.updated_plan
     }
@@ -1203,58 +1201,45 @@ Cooking ability: ${cookingAbility} | Food budget: ${budget}
 Strength levels (current working weights): ${strengthLevels}${inbodyText ? `\nInBody scan data: ${inbodyText}` : ''}` : 'No profile loaded'
 
   if (type === 'workout') {
-    // ── WORKOUT: diff-based prompt ─────────────────────────────────────────
-    // Returning the FULL plan JSON for large plans (30+ exercises) easily
-    // exceeds Haiku's output token limit and causes JSON truncation.
-    // Instead we ask only for the changed exercise(s) and patch server-side.
-    // Output shrinks from ~10 000 tokens → ~300 tokens per change.
-
-    // Build a compact exercise list so the model knows what's in the plan
-    const allDays = getWorkoutDays(currentPlan)
-    const exerciseIndex = allDays.map((day: any) => {
-      const name = dayNameOf(day)
-      const exList = (day.exercises || []).map((ex: any) => ex.name).join(', ')
-      return `${name}: ${exList}`
-    }).join('\n')
-
-    const system = `You are Ion, an elite personal trainer. The user wants to modify ONE exercise in their active workout plan.
+    const system = `You are Ion, an elite personal trainer. The user wants to edit their active workout plan.
 
 USER PROFILE:
 ${profileText}
 
-COACHING RULES (non-negotiable):
+SMART EDIT RULES:
+- Accept the user's requested workout edit whenever it is physically safe and compatible with their profile.
+- You may edit exercises, sets, reps, rest, weight guidance, cardio, finishers, training days, split, session duration, deload notes, exercise order, home/gym substitutions, and workout timing.
+- Use the user's data: goal, injuries, equipment, disliked exercises, schedule, training time, experience, recent compliance, and body-composition context.
+- If the user asks for something risky, do not refuse. Apply the closest safe version and explain the safety adjustment in proposal_text.
 - MUST NOT program any exercise from "Exercises HATED": ${exHated}
 - MUST use their available equipment: ${equipment}
 - MUST respect injuries: ${injuries}
-- Choose a substitute the user will enjoy and can actually do with their equipment
+- Preserve the same plan JSON shape and all useful fields. Do not delete unrelated weeks/days/metadata.
+- If moving or swapping days, preserve the same number of training days unless the user explicitly asks to reduce/increase days.
+- Do not add fake exercises named "Rest Day". A rest day means that day is absent from the workout days list.
 
 OUTPUT RULES:
-${aiLanguageInstruction(language, 'proposal_text and all user-facing strings in new_exercise')}
+${aiLanguageInstruction(language, 'proposal_text and all user-facing strings inside updated_plan')}
 - day_name must be an exact English weekday (Sunday … Saturday).
 - Never combine multiple movements into one exercise name.
-- The new_exercise object must be COMPLETE: name, sets, reps, rest_sec, weight_guidance, form_tip, muscle_group, category.
+- Every exercise object must remain complete enough for the UI: name, sets, reps, rest_sec or rest_seconds, weight guidance/suggestion, muscle_group, and category when possible.
+- New or changed exercises should have video_id null so the app can resolve the correct tutorial.
+- Return the full updated workout plan JSON preserving the current schema.
+- Do NOT include markdown or any text outside the JSON wrapper.
 
-proposal_text: 2–3 sentences in ${ar ? 'Arabic' : 'English'} — state WHAT you swapped, WHY it suits this user, invite confirm.
+proposal_text: 2–4 sentences in ${ar ? 'Arabic' : 'English'} — state exactly WHAT changed, WHY it fits this user's data, and invite confirm.
 
-Return ONLY valid JSON — no markdown, no extra text:
+Return ONLY valid JSON in this exact wrapper:
 {
-  "proposal_text": "...",
-  "changes": [
-    {
-      "day_name": "Monday",
-      "old_exercise_name": "exact name as it appears in the list below",
-      "new_exercise": {
-        "name": "...", "sets": 4, "reps": "8-12", "rest_sec": 60,
-        "weight_guidance": "...", "form_tip": "...", "muscle_group": "...", "category": "compound"
-      }
-    }
-  ]
+  "proposal_text": "2–4 sentence personalised proposal for the user to review",
+  "updated_plan": { ...full updated workout plan... }
 }`
 
-    const user = `USER REQUEST: "${userRequest}"
+    const user = `USER REQUEST:
+"${userRequest}"
 
-CURRENT EXERCISES BY DAY:
-${exerciseIndex}`
+CURRENT ACTIVE WORKOUT PLAN JSON:
+${JSON.stringify(currentPlan, null, 2)}`
 
     return { system, user }
   }
