@@ -40,8 +40,6 @@ export async function POST(req: Request) {
     protein_g:           body.protein_g ?? null,
     carbs_g:             body.carbs_g ?? null,
     fats_g:              body.fats_g ?? null,
-    fiber_g:             body.fiber_g ?? null,
-    source:              body.source ?? null,
   }).select().maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -76,7 +74,6 @@ export async function PUT(req: Request) {
   if (body.protein_g          !== undefined) update.protein_g          = body.protein_g
   if (body.carbs_g            !== undefined) update.carbs_g            = body.carbs_g
   if (body.fats_g             !== undefined) update.fats_g             = body.fats_g
-  if (body.fiber_g            !== undefined) update.fiber_g            = body.fiber_g
 
   const admin = createAdminClient()
   const { data, error } = await admin
