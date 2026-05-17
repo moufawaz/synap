@@ -39,13 +39,29 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
   const [logging, setLogging]         = useState(false)
   const [logError, setLogError]       = useState('')
 
-  // Convert File to base64 string (no data-URI prefix)
-  const toBase64 = (file: File): Promise<string> =>
+  // Resize + compress image to ≤1200px / 80% JPEG before base64-encoding.
+  // Phone photos can be 5–10 MB; this brings them to ~200–500 KB so the
+  // JSON body stays well under the 4 MB Next.js body-parser limit.
+  const compressImage = (file: File): Promise<{ base64: string; mimeType: string }> =>
     new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload  = () => resolve((reader.result as string).split(',')[1])
-      reader.onerror = reject
-      reader.readAsDataURL(file)
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const MAX = 1200
+        let { width, height } = img
+        if (width > MAX || height > MAX) {
+          if (width > height) { height = Math.round(height * MAX / width); width = MAX }
+          else                { width  = Math.round(width  * MAX / height); height = MAX }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+        resolve({ base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' })
+      }
+      img.onerror = reject
+      img.src = url
     })
 
   const handleFile = useCallback(async (file: File) => {
@@ -56,8 +72,7 @@ export default function FoodPhotoScanner({ onScan, onClose }: FoodPhotoScannerPr
     setError('')
 
     try {
-      const base64 = await toBase64(file)
-      const mimeType = file.type || 'image/jpeg'
+      const { base64, mimeType } = await compressImage(file)
 
       const res = await fetch('/api/barcode/photo', {
         method: 'POST',
