@@ -1323,8 +1323,9 @@ ${aiLanguageInstruction(language, 'proposal_text and all user-facing strings ins
 - Never combine multiple movements into one exercise name.
 - New or changed exercise objects must include enough fields for the UI: name, sets, reps, rest_sec or rest_seconds, weight guidance/suggestion, muscle_group, category.
 - New or changed exercises should set video_id to null.
-- For vague requests like "make it harder", prefer small progressive overload: add 1 set to 1-2 main lifts OR tighten rest by 15s OR add a short finisher. Do not change everything.
+- For vague requests like "make it harder" or "make it easier", use EXACTLY 1–2 operations max: add 1 set to 1 main lift OR tighten/loosen rest by 15s OR add/remove one short finisher. Do NOT change multiple days or many exercises.
 - For training-day count changes, use add_training_day/remove_training_day only when the user explicitly asks for a different number of days.
+- HARD LIMIT: output at most 6 operations total. If the request needs more, pick the 6 most impactful.
 - Do NOT include markdown or any text outside the JSON wrapper.
 
 proposal_text: 2–4 sentences in ${ar ? 'Arabic' : 'English'} — state exactly WHAT changed, WHY it fits this user's data, and invite confirm.
