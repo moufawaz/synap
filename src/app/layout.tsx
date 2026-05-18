@@ -40,9 +40,10 @@ export const metadata: Metadata = {
   authors: [{ name: 'Synap' }],
   manifest: '/manifest.json',
   icons: {
-    icon: '/icon.jpg',
-    shortcut: '/icon.jpg',
-    apple: '/icon.jpg',
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    // 180×180 PNG required — iOS silently ignores JPEG for home screen icons
+    apple: '/apple-touch-icon.png',
   },
   appleWebApp: {
     capable: true,
@@ -69,6 +70,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
+  // Required for env(safe-area-inset-*) to work on notched iPhones
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

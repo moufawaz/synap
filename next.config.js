@@ -9,15 +9,32 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // Apply to all routes
+        // Apple-App-Site-Association — must be served as JSON with no extension.
+        source: '/.well-known/apple-app-site-association',
+        headers: [
+          { key: 'Content-Type', value: 'application/json' },
+          { key: 'Cache-Control', value: 'public, max-age=3600' },
+        ],
+      },
+      {
+        // Android App Links verification file
+        source: '/.well-known/assetlinks.json',
+        headers: [
+          { key: 'Content-Type', value: 'application/json' },
+          { key: 'Cache-Control', value: 'public, max-age=3600' },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           {
-            // Explicitly allow YouTube iframes so no browser/proxy blocks them
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://www.youtube-nocookie.com https://www.youtube.com https://s.ytimg.com https://cdn.onesignal.com https://onesignal.com",
+              // unsafe-eval is required by Next.js hydration inside WKWebView
+              // (the native Capacitor shell).  For the web-only build the eval
+              // path is never reached, so this is safe to include globally.
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube-nocookie.com https://www.youtube.com https://s.ytimg.com https://cdn.onesignal.com https://onesignal.com",
               "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://onesignal.com",
               "img-src 'self' data: blob: https: http:",
               "style-src 'self' 'unsafe-inline'",

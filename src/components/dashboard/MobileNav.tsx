@@ -23,11 +23,13 @@ export default function MobileNav({ lang = 'en' }: { lang?: 'en' | 'ar' }) {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around px-2 py-2"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around px-2 pt-2"
       style={{
         background: 'rgba(8,8,16,0.97)',
         borderTop: '1px solid rgba(255,255,255,0.06)',
         backdropFilter: 'blur(20px)',
+        // Push content above the home indicator on iPhone X+
+        paddingBottom: 'calc(env(safe-area-inset-bottom) + 6px)',
       }}
     >
       {NAV.map(item => {

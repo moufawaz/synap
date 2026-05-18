@@ -1,0 +1,28 @@
+<!--
+  iOS Info.plist additions for SYNAP
+  ===================================
+  After running `npx cap add ios` on a Mac, merge these keys into:
+  ios/App/App/Info.plist
+
+  These are REQUIRED — without them iOS crashes on first camera access.
+-->
+
+<!-- Camera usage (BarcodeScanner, FoodPhotoScanner, FormCheck) -->
+<key>NSCameraUsageDescription</key>
+<string>SYNAP uses your camera to scan food barcodes and analyse exercise form photos for AI coaching.</string>
+
+<!-- Photo library read (user selects existing photo) -->
+<key>NSPhotoLibraryUsageDescription</key>
+<string>SYNAP accesses your photo library so you can select progress photos and exercise form images.</string>
+
+<!-- Photo library write (save progress share cards) -->
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>SYNAP saves your progress share card to your photo library.</string>
+
+<!-- Push notifications — set by Xcode automatically when you enable the
+     Push Notifications capability, but list here for reference -->
+<!-- No explicit plist key needed; handled by entitlements -->
+
+<!-- Face ID / Touch ID if you add biometric auth later -->
+<!-- <key>NSFaceIDUsageDescription</key> -->
+<!-- <string>SYNAP uses Face ID for faster, secure login.</string> -->

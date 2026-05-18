@@ -5,6 +5,7 @@ import MobileNav from '@/components/dashboard/MobileNav'
 import AdaptationChecker from '@/components/dashboard/AdaptationChecker'
 import TrialBanner from '@/components/dashboard/TrialBanner'
 import OneSignalInit from '@/components/OneSignalInit'
+import DeepLinkHandler from '@/components/DeepLinkHandler'
 import ArabicUiTranslator from '@/components/i18n/ArabicUiTranslator'
 import { getUserSubscription, getTrialDaysRemaining, isFreeTrial } from '@/lib/subscription'
 
@@ -58,6 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <ArabicUiTranslator lang={lang} />
       <AdaptationChecker />
       <OneSignalInit userId={user.id} />
+      <DeepLinkHandler />
     </div>
   )
 }

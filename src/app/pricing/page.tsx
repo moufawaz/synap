@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Shield, Star, Lock, Check, X, ChevronRight, Globe } from 'lucide-react'
+import { Shield, Star, Lock, Check, X, ChevronRight, Globe, ExternalLink } from 'lucide-react'
 import { useCurrency } from '@/lib/currency'
 import { useLanguage } from '@/lib/useLanguage'
+import { isNativePlatform } from '@/lib/platform'
 
 import { PRICING } from '@/lib/pricing'
 
@@ -58,10 +59,12 @@ export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null)
   const [checkoutError, setCheckoutError] = useState('')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isNative, setIsNative] = useState(false)
   const { fmt, loading: rateLoading } = useCurrency()
   const router = useRouter()
 
   useEffect(() => {
+    setIsNative(isNativePlatform())
     import('@/lib/supabase').then(({ createBrowserClient }) => {
       createBrowserClient().auth.getUser().then(({ data }) => {
         setIsLoggedIn(!!data.user)
@@ -338,12 +341,24 @@ export default function PricingPage() {
               <PlanFeatureMissing text={isRTL ? 'إرشادات الأكل خارجاً' : 'Eating out guidance'} />
             </div>
 
-            <Link href="/auth/signup">
-              <button className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
-                style={{ border: '1.5px solid rgba(255,255,255,0.22)', color: 'white', letterSpacing: '0.08em', background: 'rgba(255,255,255,0.06)' }}>
-                {copy.getStarted} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} />
-              </button>
-            </Link>
+            {isNative ? (
+              <a
+                href="https://synapfit.app/auth/signup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+                style={{ border: '1.5px solid rgba(255,255,255,0.22)', color: 'white', letterSpacing: '0.08em', background: 'rgba(255,255,255,0.06)' }}
+              >
+                {isRTL ? 'ابدأ على synapfit.app' : 'Start at synapfit.app'} <ExternalLink size={13} />
+              </a>
+            ) : (
+              <Link href="/auth/signup">
+                <button className="w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+                  style={{ border: '1.5px solid rgba(255,255,255,0.22)', color: 'white', letterSpacing: '0.08em', background: 'rgba(255,255,255,0.06)' }}>
+                  {copy.getStarted} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} />
+                </button>
+              </Link>
+            )}
           </div>
 
           {/* ── Pro — MOST POPULAR ── */}
@@ -408,25 +423,37 @@ export default function PricingPage() {
               <PlanFeatureMissing text={isRTL ? 'بروتوكول المكملات' : 'Supplement protocol'} />
             </div>
 
-            <button
-              onClick={() => handleCheckout(proPrice.variantId)}
-              disabled={!!loading || !proAvailable}
-              className="shimmer-btn w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
-              style={{
-                background: loading === proPrice.variantId ? 'rgba(187,92,246,0.5)' : '#BB5CF6',
-                color: 'white',
-                letterSpacing: '0.1em',
-                boxShadow: '0 0 25px rgba(187,92,246,0.35)',
-              }}
-            >
-              {!proAvailable ? (
-                <>{copy.comingSoon}</>
-              ) : loading === proPrice.variantId ? (
-                <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'white', borderTopColor: 'transparent' }} /> {copy.loading}</>
-              ) : (
-                <>{copy.startTrial} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} /></>
-              )}
-            </button>
+            {isNative ? (
+              <a
+                href="https://synapfit.app/pricing"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shimmer-btn w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+                style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.1em', boxShadow: '0 0 25px rgba(187,92,246,0.35)' }}
+              >
+                {isRTL ? 'اشترك على synapfit.app' : 'Subscribe at synapfit.app'} <ExternalLink size={13} />
+              </a>
+            ) : (
+              <button
+                onClick={() => handleCheckout(proPrice.variantId)}
+                disabled={!!loading || !proAvailable}
+                className="shimmer-btn w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+                style={{
+                  background: loading === proPrice.variantId ? 'rgba(187,92,246,0.5)' : '#BB5CF6',
+                  color: 'white',
+                  letterSpacing: '0.1em',
+                  boxShadow: '0 0 25px rgba(187,92,246,0.35)',
+                }}
+              >
+                {!proAvailable ? (
+                  <>{copy.comingSoon}</>
+                ) : loading === proPrice.variantId ? (
+                  <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'white', borderTopColor: 'transparent' }} /> {copy.loading}</>
+                ) : (
+                  <>{copy.startTrial} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} /></>
+                )}
+              </button>
+            )}
           </div>
 
           {/* ── BEST VALUE ── */}
@@ -487,25 +514,42 @@ export default function PricingPage() {
               <PlanFeature text={isRTL ? 'وصول مبكر للميزات الجديدة' : 'First access to new features'} />
             </div>
 
-            <button
-              onClick={() => handleCheckout(elitePrice.variantId)}
-              disabled={!!loading || !eliteAvailable}
-              className="shimmer-btn w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
-              style={{
-                background: loading === elitePrice.variantId ? 'rgba(187,92,246,0.5)' : 'linear-gradient(135deg, #BB5CF6, #8B5CF6)',
-                color: 'white',
-                letterSpacing: '0.1em',
-                boxShadow: loading === elitePrice.variantId ? 'none' : '0 0 30px rgba(139,92,246,0.5), 0 0 60px rgba(187,92,246,0.2)',
-              }}
-            >
-              {!eliteAvailable ? (
-                <>{copy.comingSoon}</>
-              ) : loading === elitePrice.variantId ? (
-                <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} /> {copy.loading}</>
-              ) : (
-                <>{copy.startTrial} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} /></>
-              )}
-            </button>
+            {isNative ? (
+              <a
+                href="https://synapfit.app/pricing"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shimmer-btn w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+                style={{
+                  background: 'linear-gradient(135deg, #BB5CF6, #8B5CF6)',
+                  color: 'white',
+                  letterSpacing: '0.1em',
+                  boxShadow: '0 0 30px rgba(139,92,246,0.5), 0 0 60px rgba(187,92,246,0.2)',
+                }}
+              >
+                {isRTL ? 'اشترك على synapfit.app' : 'Subscribe at synapfit.app'} <ExternalLink size={13} />
+              </a>
+            ) : (
+              <button
+                onClick={() => handleCheckout(elitePrice.variantId)}
+                disabled={!!loading || !eliteAvailable}
+                className="shimmer-btn w-full py-3.5 rounded-xl font-heading font-black text-sm tracking-wider transition-all flex items-center justify-center gap-2"
+                style={{
+                  background: loading === elitePrice.variantId ? 'rgba(187,92,246,0.5)' : 'linear-gradient(135deg, #BB5CF6, #8B5CF6)',
+                  color: 'white',
+                  letterSpacing: '0.1em',
+                  boxShadow: loading === elitePrice.variantId ? 'none' : '0 0 30px rgba(139,92,246,0.5), 0 0 60px rgba(187,92,246,0.2)',
+                }}
+              >
+                {!eliteAvailable ? (
+                  <>{copy.comingSoon}</>
+                ) : loading === elitePrice.variantId ? (
+                  <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} /> {copy.loading}</>
+                ) : (
+                  <>{copy.startTrial} <ChevronRight size={14} className={isRTL ? 'rotate-180' : ''} /></>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
