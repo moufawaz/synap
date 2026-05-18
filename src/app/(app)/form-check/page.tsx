@@ -31,6 +31,11 @@ export default function FormCheckPage() {
       setError(isRTL ? 'ارفع صورة واضحة أو لقطة شاشة من التمرين. اختيار إطار من الفيديو قادم لاحقاً.' : 'Upload a clear photo or screenshot frame from your lift. Video frame selection is coming next.')
       return
     }
+    const MAX_SIZE_MB = 10
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setError(isRTL ? `حجم الصورة كبير جداً. الحد الأقصى ${MAX_SIZE_MB} ميغابايت.` : `File too large. Maximum size is ${MAX_SIZE_MB} MB.`)
+      return
+    }
 
     const reader = new FileReader()
     reader.onload = () => {

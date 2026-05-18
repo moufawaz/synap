@@ -236,15 +236,23 @@ function buildTimeline(profile: any, measurements: Measurement[], workoutLogs: a
     })
   }
 
-  if (chats[0]) {
-    items.push({
-      date: chats[0].created_at,
-      type: 'chat',
-      title: isArabic(lang) ? 'آخر ملاحظة تدريبية من آيون' : 'Latest Ion coaching note',
-      body: isArabic(lang)
-        ? 'لديك ملاحظة تدريبية جديدة. افتح المحادثة لمراجعتها والرد على آيون.'
-        : String(chats[0].content ?? '').slice(0, 180),
-    })
+  // Only show a coaching note if the user has sent at least one message (role=user)
+  const userChats = chats.filter(c => c.role === 'user')
+  const assistantChats = chats.filter(c => c.role === 'assistant')
+  if (userChats.length > 0 && assistantChats[0]) {
+    const noteBody = String(assistantChats[0].content ?? '').slice(0, 180)
+    // Skip if it looks like the generic onboarding prompt
+    const isOnboardingText = noteBody.includes("need to know more about you") || noteBody.includes("complete your profile") || noteBody.length < 40
+    if (!isOnboardingText) {
+      items.push({
+        date: assistantChats[0].created_at,
+        type: 'chat',
+        title: isArabic(lang) ? 'آخر ملاحظة تدريبية من آيون' : 'Latest Ion coaching note',
+        body: isArabic(lang)
+          ? 'لديك ملاحظة تدريبية جديدة. افتح المحادثة لمراجعتها والرد على آيون.'
+          : noteBody,
+      })
+    }
   }
 
   return items

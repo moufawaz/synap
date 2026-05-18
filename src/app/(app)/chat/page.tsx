@@ -60,6 +60,7 @@ export default function ChatPage() {
   const [planDaysLeft, setPlanDaysLeft] = useState<number | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [msgUsage, setMsgUsage] = useState<{ used: number; limit: number; plan: string } | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const quickPrompts = isRTL ? QUICK_PROMPTS_AR : QUICK_PROMPTS
@@ -82,6 +83,7 @@ export default function ChatPage() {
     if (Array.isArray(data.messages)) {
       setMessages(data.messages.map((m: any, i: number) => ({ ...m, id: m.id || String(i) })))
     }
+    if (data.usage) setMsgUsage(data.usage)
     if (data.activeWorkoutPlan?.created_at) {
       const planAge = Math.floor((Date.now() - new Date(data.activeWorkoutPlan.created_at).getTime()) / 86400000)
       const remaining = PLAN_MODIFY_WINDOW_DAYS - planAge
@@ -98,6 +100,8 @@ export default function ChatPage() {
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setLoading(true)
+    // Optimistically increment the usage counter
+    setMsgUsage(prev => prev ? { ...prev, used: prev.used + 1 } : prev)
 
     const ionMsgId = (Date.now() + 1).toString()
 
@@ -338,6 +342,21 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="flex-shrink-0 px-4 pb-4 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: '#080808' }}>
+        {/* Message usage counter for starter plan */}
+        {msgUsage && msgUsage.plan === 'starter' && isFinite(msgUsage.limit) && (
+          <div className="flex items-center justify-end mb-1.5">
+            <span
+              className="font-heading text-[10px] tracking-wider"
+              style={{ color: msgUsage.used >= msgUsage.limit - 1 ? '#EF4444' : '#475569' }}
+            >
+              {msgUsage.limit - msgUsage.used} / {msgUsage.limit} messages left today
+              {msgUsage.used >= msgUsage.limit - 1 && ' — '}
+              {msgUsage.used >= msgUsage.limit - 1 && (
+                <a href="/pricing" style={{ color: '#BB5CF6' }}>Upgrade</a>
+              )}
+            </span>
+          </div>
+        )}
         <form onSubmit={e => { e.preventDefault(); sendMessage() }} className="flex items-center gap-2">
           <input
             ref={inputRef}

@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 120), 1), 300)
   const admin = createAdminClient()
 
-  const [profileRes, historyRes, planRes] = await Promise.all([
+  const [profileRes, historyRes, planRes, usageRes] = await Promise.all([
     admin.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
     admin.from('chat_messages')
       .select('id, role, content, message_type, metadata, created_at')
@@ -40,12 +40,14 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    isLaunchMode() ? Promise.resolve({ allowed: true, used: 0, limit: Infinity, plan: 'elite' }) : canSendMessage(user.id),
   ])
 
   return NextResponse.json({
     profile: profileRes.data ?? null,
     messages: (historyRes.data ?? []).reverse(),
     activeWorkoutPlan: planRes.data ?? null,
+    usage: { used: usageRes.used, limit: usageRes.limit, plan: usageRes.plan },
   })
 }
 
