@@ -478,7 +478,7 @@ export default function OnboardingPage() {
   return (
     <div
       className="flex flex-col h-screen overflow-hidden"
-      style={{ background: '#080808' }}
+      style={{ background: '#080808', maxWidth: '100vw', overflowX: 'hidden' }}
       dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* ── Header ── */}

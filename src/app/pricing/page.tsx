@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Shield, Star, Lock, Check, X, ChevronRight, Globe } from 'lucide-react'
@@ -57,8 +57,17 @@ export default function PricingPage() {
   const [billing, setBilling] = useState<'annual' | 'monthly'>('annual')
   const [loading, setLoading] = useState<string | null>(null)
   const [checkoutError, setCheckoutError] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const { fmt, loading: rateLoading } = useCurrency()
   const router = useRouter()
+
+  useEffect(() => {
+    import('@/lib/supabase').then(({ createBrowserClient }) => {
+      createBrowserClient().auth.getUser().then(({ data }) => {
+        setIsLoggedIn(!!data.user)
+      })
+    })
+  }, [])
 
   const proPrice    = billing === 'annual' ? PRICES.proAnnual    : PRICES.proMonthly
   const elitePrice  = billing === 'annual' ? PRICES.eliteAnnual  : PRICES.eliteMonthly
@@ -235,9 +244,11 @@ export default function PricingPage() {
           >
             <Globe size={12} /> {lang === 'ar' ? 'EN' : 'ع'}
           </button>
-          <Link href="/dashboard" className="font-heading text-xs tracking-widest" style={{ color: '#475569' }}>
-            {isRTL ? 'العودة للوحة التحكم' : 'Back to Dashboard'}
-          </Link>
+          {isLoggedIn && (
+            <Link href="/dashboard" className="font-heading text-xs tracking-widest" style={{ color: '#475569' }}>
+              {isRTL ? 'العودة للوحة التحكم' : 'Back to Dashboard'}
+            </Link>
+          )}
         </div>
       </nav>
 

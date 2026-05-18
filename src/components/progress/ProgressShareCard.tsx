@@ -146,11 +146,17 @@ export default function ProgressShareCard({ measurements, workoutLogs }: { measu
         <button
           onClick={generateCard}
           disabled={!hasData || busy}
+          title={!hasData ? 'Log at least one body measurement to generate your share card' : undefined}
           className="px-3 py-2 rounded-xl font-heading text-xs font-bold"
-          style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#10B981', opacity: hasData ? 1 : 0.5 }}
+          style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#10B981', opacity: hasData ? 1 : 0.5, cursor: hasData ? 'pointer' : 'not-allowed' }}
         >
           {busy ? 'Generating...' : 'Generate'}
         </button>
+        {!hasData && (
+          <p className="font-heading text-[10px] mt-2 text-center" style={{ color: '#475569' }}>
+            Log at least one body measurement to generate your share card
+          </p>
+        )}
       </div>
 
       {previewUrl && (

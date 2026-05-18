@@ -166,7 +166,7 @@ function LoginForm() {
         {/* Email */}
         <div className="flex flex-col gap-2">
           <label className="font-heading text-xs font-semibold tracking-widest uppercase" style={{ color: '#64748B' }}>Email Address</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+          <input type="email" name="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required
             placeholder="you@example.com"
             className="w-full rounded-xl px-4 py-3 text-sm font-heading outline-none transition-all duration-200"
             style={inputBase} onFocus={inputFocus} onBlur={inputBlur} />
@@ -183,7 +183,7 @@ function LoginForm() {
             </Link>
           </div>
           <div className="relative">
-            <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+            <input type={showPassword ? 'text' : 'password'} name="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
               required placeholder="Your password"
               className="w-full rounded-xl px-4 py-3 pr-12 text-sm font-heading outline-none transition-all duration-200"
               style={inputBase} onFocus={inputFocus} onBlur={inputBlur} />

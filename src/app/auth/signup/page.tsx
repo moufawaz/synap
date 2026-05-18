@@ -115,6 +115,9 @@ function SignupForm() {
     e.preventDefault()
     setError(null)
 
+    if (!email.trim()) { setError('Please enter your email address.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Please enter a valid email address.'); return }
+    if (!password) { setError('Please enter a password.'); return }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
 
@@ -234,7 +237,7 @@ function SignupForm() {
         {/* Email */}
         <div className="flex flex-col gap-2">
           <label className="font-heading text-xs font-semibold tracking-widest uppercase" style={{ color: '#64748B' }}>Email Address</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+          <input type="email" name="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required
             placeholder="you@example.com"
             className="w-full rounded-xl px-4 py-3 text-sm font-heading outline-none transition-all duration-200"
             style={inputBase} onFocus={inputFocus} onBlur={inputBlur} />
@@ -244,7 +247,7 @@ function SignupForm() {
         <div className="flex flex-col gap-2">
           <label className="font-heading text-xs font-semibold tracking-widest uppercase" style={{ color: '#64748B' }}>Password</label>
           <div className="relative">
-            <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+            <input type={showPassword ? 'text' : 'password'} name="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}
               required placeholder="Min. 8 characters"
               className="w-full rounded-xl px-4 py-3 pr-12 text-sm font-heading outline-none transition-all duration-200"
               style={inputBase} onFocus={inputFocus} onBlur={inputBlur} />
@@ -258,7 +261,7 @@ function SignupForm() {
         {/* Confirm Password */}
         <div className="flex flex-col gap-2">
           <label className="font-heading text-xs font-semibold tracking-widest uppercase" style={{ color: '#64748B' }}>Confirm Password</label>
-          <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+          <input type={showPassword ? 'text' : 'password'} name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
             required placeholder="Repeat password"
             className="w-full rounded-xl px-4 py-3 text-sm font-heading outline-none transition-all duration-200"
             style={inputBase} onFocus={inputFocus} onBlur={inputBlur} />

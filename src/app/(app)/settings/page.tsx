@@ -280,7 +280,7 @@ export default function SettingsPage() {
           <div className="glass-card p-5">
             <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>{t(lang, 'settings_personal_info')}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label={t(lang, 'settings_name')} value={profile.name || ''} onChange={v => updateProfile('name', v)} />
+              <Field label={t(lang, 'settings_name')} value={profile.name || ''} onChange={v => updateProfile('name', v)} maxLength={50} />
               <Field label={t(lang, 'settings_age')} value={String(profile.age || '')} onChange={v => updateProfile('age', parseInt(v) || v)} type="number" />
               <Field label={t(lang, 'settings_weight')} value={String(profile.weight_kg || '')} onChange={v => updateProfile('weight_kg', parseFloat(v) || v)} type="number" />
               <Field label={t(lang, 'settings_height')} value={String(profile.height_cm || '')} onChange={v => updateProfile('height_cm', parseFloat(v) || v)} type="number" />
@@ -490,6 +490,7 @@ export default function SettingsPage() {
                 onChange={v => updateProfile('foods_loved', v)}
                 placeholder={lang === 'ar' ? 'مثل: دجاج، أرز، تفاح، بيض، حليب...' : 'e.g. Chicken, rice, eggs, oats, apples...'}
                 rows={2}
+                maxLength={500}
               />
               <TextareaField
                 label={lang === 'ar' ? '🔴 أطعمة أكرهها — Ion لن يضعها أبداً' : '🔴 Foods I hate — Ion will never include these'}
@@ -497,6 +498,7 @@ export default function SettingsPage() {
                 onChange={v => updateProfile('foods_hated', v)}
                 placeholder={lang === 'ar' ? 'مثل: الكزبرة، السمك، الفطر...' : 'e.g. Coriander, fish, mushrooms...'}
                 rows={2}
+                maxLength={500}
               />
               <TextareaField
                 label={lang === 'ar' ? '⚠️ حساسية غذائية / حساسيات' : '⚠️ Allergies & intolerances'}
@@ -504,6 +506,7 @@ export default function SettingsPage() {
                 onChange={v => updateProfile('allergies', v)}
                 placeholder={lang === 'ar' ? 'مثل: فول السوداني، الغلوتين، اللاكتوز...' : 'e.g. Peanuts, gluten, lactose, shellfish...'}
                 rows={2}
+                maxLength={300}
               />
             </div>
           </div>
@@ -578,6 +581,7 @@ export default function SettingsPage() {
               onChange={v => updateProfile('injuries', v)}
               placeholder={lang === 'ar' ? 'مثل: ألم في الركبة اليسرى، مشكلة في الظهر السفلي...' : 'e.g. Left knee pain, lower back disc, shoulder impingement...'}
               rows={3}
+              maxLength={500}
             />
           </div>
           <div className="glass-card p-5">
@@ -593,6 +597,7 @@ export default function SettingsPage() {
               onChange={v => updateProfile('medical_conditions', v)}
               placeholder={lang === 'ar' ? 'مثل: ارتفاع ضغط الدم، السكري، الربو...' : 'e.g. Hypertension, diabetes, asthma, PCOS...'}
               rows={3}
+              maxLength={500}
             />
             <div className="mt-3 p-3 rounded-xl flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
               <span className="text-base flex-shrink-0">⚕️</span>
@@ -684,8 +689,9 @@ export default function SettingsPage() {
                 <button
                   key={l}
                   onClick={() => setAppLang(l)}
-                  className="flex-1 py-3 rounded-xl font-heading font-bold text-sm tracking-widest transition-all"
+                  className="flex-1 rounded-xl font-heading font-bold text-sm tracking-widest transition-all"
                   style={{
+                    minHeight: '44px',
                     background: lang === l ? '#BB5CF6' : 'rgba(255,255,255,0.04)',
                     color: lang === l ? 'white' : '#475569',
                     border: `1px solid ${lang === l ? '#BB5CF6' : 'rgba(255,255,255,0.06)'}`,
@@ -1141,7 +1147,7 @@ function MessageUsage({ userId, plan, status }: { userId?: string; plan: string;
 
 // ── Form components ───────────────────────────────────────────
 
-function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function Field({ label, value, onChange, type = 'text', maxLength }: { label: string; value: string; onChange: (v: string) => void; type?: string; maxLength?: number }) {
   return (
     <div>
       <label className="font-heading text-[10px] tracking-wider block mb-1.5" style={{ color: '#475569' }}>{label}</label>
@@ -1149,6 +1155,7 @@ function Field({ label, value, onChange, type = 'text' }: { label: string; value
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
+        maxLength={maxLength}
         className="w-full rounded-xl px-3 py-2.5 font-heading text-sm outline-none"
         style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
         onFocus={e => e.target.style.borderColor = 'rgba(187,92,246,0.4)'}
@@ -1214,9 +1221,9 @@ function SelectField({ label, value, onChange, options }: {
   )
 }
 
-function TextareaField({ label, value, onChange, placeholder, rows = 2 }: {
+function TextareaField({ label, value, onChange, placeholder, rows = 2, maxLength }: {
   label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; rows?: number
+  placeholder?: string; rows?: number; maxLength?: number
 }) {
   return (
     <div>
@@ -1226,6 +1233,7 @@ function TextareaField({ label, value, onChange, placeholder, rows = 2 }: {
         onChange={e => onChange(e.target.value)}
         rows={rows}
         placeholder={placeholder}
+        maxLength={maxLength}
         className="w-full rounded-xl px-3 py-2.5 font-heading text-sm outline-none resize-none"
         style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
         onFocus={e => e.target.style.borderColor = 'rgba(187,92,246,0.4)'}

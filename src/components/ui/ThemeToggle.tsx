@@ -146,7 +146,7 @@ export default function ThemeToggle() {
       onPointerCancel={handlePointerUp}
       aria-label={`Switch to ${nextTheme} mode`}
       title={`Switch to ${nextTheme} mode. Drag to move.`}
-      className="fixed z-[70] h-11 w-11 rounded-full border transition-colors duration-200 flex items-center justify-center touch-none select-none"
+      className="fixed z-[40] h-11 w-11 rounded-full border transition-colors duration-200 flex items-center justify-center touch-none select-none"
       style={{
         left: position?.x ?? -999,
         top: position?.y ?? -999,
