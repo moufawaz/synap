@@ -34,6 +34,24 @@ Thumbs.db
 
 .vercel
 
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+*.ipa
+
+# Android signing — NEVER commit keystores
+*.jks
+*.keystore
+
+# iOS build output
+ios/App/Pods/          # handled by CocoaPods; large
+build/
+
+# Capacitor generated files that CI rebuilds from source
+# (keep android/ and ios/ committed — CI needs them)
+
 # Local workspace artifacts
 *.zip
 *.docx

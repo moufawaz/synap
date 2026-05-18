@@ -1,0 +1,134 @@
+# Fastlane Fastfile — SYNAP
+# ─────────────────────────────────────────────────────────────────────────────
+# Lanes:
+#   android beta   → build signed AAB → upload to Play Internal Track
+#   ios beta       → build IPA → upload to TestFlight
+#   ios certs      → sync/create App Store Distribution certs via match
+#
+# Run locally:
+#   bundle exec fastlane android beta
+#   bundle exec fastlane ios beta
+#
+# In CI the same commands are run — secrets come from env vars.
+# ─────────────────────────────────────────────────────────────────────────────
+
+default_platform(:android)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ANDROID
+# ─────────────────────────────────────────────────────────────────────────────
+platform :android do
+
+  desc "Build a signed AAB and upload to Play Internal Track"
+  lane :beta do
+    # 1. Bump versionCode using the GITHUB_RUN_NUMBER env var if present,
+    #    otherwise fall back to timestamp.
+    version_code = (ENV['GITHUB_RUN_NUMBER'] || Time.now.to_i.to_s).to_i
+
+    android_set_version_code(
+      version_code: version_code,
+      gradle_file: 'android/app/build.gradle',
+    )
+
+    # 2. Build signed release AAB
+    gradle(
+      task:            'bundle',
+      build_type:      'Release',
+      project_dir:     'android/',
+      print_command:   false,
+      properties: {
+        'android.injected.signing.store.file'     => ENV['ANDROID_KEYSTORE_PATH'],
+        'android.injected.signing.store.password' => ENV['ANDROID_KEYSTORE_PASSWORD'],
+        'android.injected.signing.key.alias'      => ENV['ANDROID_KEY_ALIAS'],
+        'android.injected.signing.key.password'   => ENV['ANDROID_KEY_PASSWORD'],
+      },
+    )
+
+    # 3. Upload to Play Internal Track
+    supply(
+      aab:             lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH],
+      track:           'internal',
+      package_name:    'app.synap.fit',
+      json_key_data:   ENV['GOOGLE_PLAY_JSON_KEY'],
+      skip_upload_apk: true,
+      release_status:  'draft',  # change to 'completed' when ready to promote
+    )
+
+    # 4. Notify (optional — remove if not using Slack)
+    if ENV['SLACK_WEBHOOK_URL']
+      slack(
+        message:     "✅ SYNAP Android #{version_code} uploaded to Play Internal Track",
+        webhook_url: ENV['SLACK_WEBHOOK_URL'],
+        success:     true,
+      )
+    end
+  end
+
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# iOS  (requires macOS runner)
+# ─────────────────────────────────────────────────────────────────────────────
+platform :ios do
+
+  desc "Sync App Store Distribution certificates using match"
+  lane :certs do
+    # match stores certs + provisioning profiles in a private git repo.
+    # On first run it creates them; on subsequent runs it fetches + installs.
+    match(
+      type:               'appstore',
+      app_identifier:     'app.synap.fit',
+      git_url:            ENV['MATCH_GIT_URL'],         # private repo URL
+      git_basic_authorization: ENV['MATCH_GIT_TOKEN'],  # base64(user:PAT)
+      readonly:           is_ci,
+      keychain_password:  ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
+    )
+  end
+
+  desc "Build IPA and upload to TestFlight"
+  lane :beta do
+    # 1. Sync certs first
+    certs
+
+    # 2. Bump build number
+    build_number = (ENV['GITHUB_RUN_NUMBER'] || Time.now.to_i.to_s).to_i
+    increment_build_number(
+      build_number: build_number,
+      xcodeproj:    'ios/App/App.xcodeproj',
+    )
+
+    # 3. Build IPA
+    build_app(
+      workspace:    'ios/App/App.xcworkspace',
+      scheme:       'App',
+      configuration: 'Release',
+      export_method: 'app-store',
+      output_directory: './build',
+      output_name:  'SYNAP.ipa',
+      export_options: {
+        provisioningProfiles: {
+          'app.synap.fit' => "match AppStore app.synap.fit",
+        },
+      },
+      xcargs: '-allowProvisioningUpdates',
+    )
+
+    # 4. Upload to TestFlight
+    upload_to_testflight(
+      api_key_path:              ENV['APP_STORE_CONNECT_API_KEY_PATH'],
+      ipa:                       './build/SYNAP.ipa',
+      skip_waiting_for_build_processing: true,
+      distribute_external:       false,  # internal testers only until approved
+    )
+
+    # 5. Notify
+    if ENV['SLACK_WEBHOOK_URL']
+      slack(
+        message:     "✅ SYNAP iOS build #{build_number} uploaded to TestFlight",
+        webhook_url: ENV['SLACK_WEBHOOK_URL'],
+        success:     true,
+      )
+    end
+  end
+
+end

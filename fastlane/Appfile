@@ -1,0 +1,15 @@
+# Fastlane Appfile — SYNAP
+# ─────────────────────────────────────────────────────────────────────────────
+# These values are used by both iOS and Android lanes.
+# Secrets (API keys, passwords) are NOT stored here — they come from GitHub
+# Actions secrets injected as environment variables at build time.
+
+# ── iOS ───────────────────────────────────────────────────────────────────────
+# Your App Store Connect team / bundle ID
+app_identifier('app.synap.fit')
+apple_id(ENV['APPLE_ID'] || '')           # e.g. you@example.com
+itc_team_id(ENV['ITC_TEAM_ID'] || '')     # App Store Connect team numeric ID
+team_id(ENV['APPLE_TEAM_ID'] || '')       # Apple Developer Portal team ID
+
+# ── Android ───────────────────────────────────────────────────────────────────
+# package_name is read from the android lane directly via ENV

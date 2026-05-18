@@ -1,0 +1,113 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SYNAP — iOS CI/CD
+# ─────────────────────────────────────────────────────────────────────────────
+# Triggers:
+#   • Push to main → build IPA + upload to TestFlight
+#   • Manual dispatch → same
+#
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#   APPLE_ID                      your@appleid.com
+#   APPLE_TEAM_ID                 10-char Apple Developer team ID (e.g. AB12CD34EF)
+#   ITC_TEAM_ID                   numeric App Store Connect team ID
+#   APP_STORE_CONNECT_API_KEY_ID  key ID from App Store Connect → Users & Access
+#   APP_STORE_CONNECT_ISSUER_ID   issuer ID from the same page
+#   APP_STORE_CONNECT_API_KEY_P8  contents of the .p8 private key file
+#   MATCH_GIT_URL                 https://github.com/your-org/synap-certificates
+#   MATCH_GIT_TOKEN               base64(username:personal_access_token)
+#   MATCH_PASSWORD                encryption password for match repo
+#   MATCH_KEYCHAIN_PASSWORD       temp keychain password (any random string)
+#
+# Optional:
+#   SLACK_WEBHOOK_URL             build notifications
+#
+# Prerequisites (one-time, run on your Mac before first CI run):
+#   1. bundle exec fastlane ios certs   → creates certs + profiles in match repo
+#   2. Commit the ios/ project to the repo  (npx cap add ios on Mac)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: iOS — Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'android/**'
+      - 'store-metadata.md'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build IPA → TestFlight
+    runs-on: macos-14          # Apple Silicon runner (Xcode 15+)
+    timeout-minutes: 60
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Node / npm ────────────────────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      # ── Capacitor sync ────────────────────────────────────────────────────────
+      - name: Capacitor sync (ios)
+        run: npx cap sync ios
+
+      # ── Xcode selection ───────────────────────────────────────────────────────
+      - name: Select Xcode 15
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      # ── Ruby / Fastlane ───────────────────────────────────────────────────────
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      # ── App Store Connect API key (for match + upload) ────────────────────────
+      - name: Write App Store Connect API key
+        run: |
+          mkdir -p $RUNNER_TEMP/asc
+          echo "${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}" > $RUNNER_TEMP/asc/AuthKey.p8
+          echo "APP_STORE_CONNECT_API_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> $GITHUB_ENV
+
+      # ── Build + Upload ────────────────────────────────────────────────────────
+      - name: Fastlane — ios beta
+        env:
+          APPLE_ID:                        ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID:                   ${{ secrets.APPLE_TEAM_ID }}
+          ITC_TEAM_ID:                     ${{ secrets.ITC_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_ID:    ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID:     ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_PATH:  ${{ env.APP_STORE_CONNECT_API_KEY_PATH }}
+          MATCH_GIT_URL:                   ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_TOKEN:                 ${{ secrets.MATCH_GIT_TOKEN }}
+          MATCH_PASSWORD:                  ${{ secrets.MATCH_PASSWORD }}
+          MATCH_KEYCHAIN_PASSWORD:         ${{ secrets.MATCH_KEYCHAIN_PASSWORD }}
+          SLACK_WEBHOOK_URL:               ${{ secrets.SLACK_WEBHOOK_URL }}
+          GITHUB_RUN_NUMBER:               ${{ github.run_number }}
+        run: bundle exec fastlane ios beta
+
+      # ── Upload IPA as artifact ────────────────────────────────────────────────
+      - name: Upload IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synap-ios-${{ github.run_number }}.ipa
+          path: build/SYNAP.ipa
+          retention-days: 14

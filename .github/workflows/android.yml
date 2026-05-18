@@ -1,0 +1,110 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SYNAP — Android CI/CD
+# ─────────────────────────────────────────────────────────────────────────────
+# Triggers:
+#   • Push to main → build AAB + upload to Play Internal Track
+#   • Manual dispatch → same, with optional version override
+#
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#   ANDROID_KEYSTORE_BASE64    base64-encoded .jks / .keystore file
+#   ANDROID_KEYSTORE_PASSWORD  store password
+#   ANDROID_KEY_ALIAS          key alias inside the keystore
+#   ANDROID_KEY_PASSWORD       key password
+#   GOOGLE_PLAY_JSON_KEY       contents of the Play service-account JSON
+#
+# Optional secrets:
+#   SLACK_WEBHOOK_URL          for build notifications
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Android — Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'ios/**'
+      - 'ios-setup/**'
+      - 'store-metadata.md'
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Play Store track (internal / alpha / beta / production)'
+        required: false
+        default: 'internal'
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build AAB → Play Internal Track
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Node / npm ────────────────────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      # ── Java (Android build toolchain) ────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      # ── Capacitor sync ────────────────────────────────────────────────────────
+      # Syncs capacitor.config.ts changes into the android/ native project.
+      # No Next.js build needed — the app loads synapfit.app at runtime.
+      - name: Capacitor sync (android)
+        run: npx cap sync android
+
+      # ── Keystore ──────────────────────────────────────────────────────────────
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > $RUNNER_TEMP/synap.jks
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/synap.jks" >> $GITHUB_ENV
+
+      # ── Ruby / Fastlane ───────────────────────────────────────────────────────
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true   # runs bundle install automatically
+
+      # ── Build + Upload ────────────────────────────────────────────────────────
+      - name: Fastlane — android beta
+        env:
+          ANDROID_KEYSTORE_PATH:     ${{ env.ANDROID_KEYSTORE_PATH }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS:         ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD:      ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_PLAY_JSON_KEY:      ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+          SLACK_WEBHOOK_URL:         ${{ secrets.SLACK_WEBHOOK_URL }}
+          GITHUB_RUN_NUMBER:         ${{ github.run_number }}
+        run: bundle exec fastlane android beta
+
+      # ── Upload AAB as artifact (always, for debugging) ────────────────────────
+      - name: Upload AAB artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synap-release-${{ github.run_number }}.aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          retention-days: 14

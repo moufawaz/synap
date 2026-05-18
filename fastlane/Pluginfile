@@ -1,0 +1,5 @@
+# Fastlane Pluginfile — SYNAP
+# Add fastlane plugins here. Run `bundle exec fastlane add_plugin <name>` to add more.
+
+# Bump Android versionCode in build.gradle
+gem 'fastlane-plugin-android_version_manager'
