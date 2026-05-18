@@ -76,6 +76,7 @@ export default function MeasurementsPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const [savedOk, setSavedOk] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState<'stats' | 'symmetry' | 'photos' | 'inbody'>('stats')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -216,6 +217,8 @@ export default function MeasurementsPage() {
     setForm({})
     setShowForm(false)
     setSaving(false)
+    setSavedOk(true)
+    setTimeout(() => setSavedOk(false), 3000)
     loadMeasurements()
   }
 
@@ -280,6 +283,14 @@ export default function MeasurementsPage() {
 
   return (
     <div className="min-h-screen px-4 sm:px-6 py-6 max-w-3xl mx-auto">
+
+      {/* Save confirmation banner */}
+      {savedOk && (
+        <div className="mb-4 px-4 py-3 rounded-2xl flex items-center gap-2" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)' }}>
+          <div className="w-2 h-2 rounded-full" style={{ background: '#10B981' }} />
+          <p className="font-heading text-xs font-semibold" style={{ color: '#10B981' }}>Measurements logged successfully!</p>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
