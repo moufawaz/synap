@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Script from 'next/script'
 import { isNativePlatform } from '@/lib/platform'
 
@@ -17,44 +17,50 @@ interface Props {
 /**
  * OneSignalInit — dual-mode push initialisation.
  *
- * Web (browser / PWA):
- *   Loads the OneSignal Web SDK v16 via CDN and links the Supabase user ID
- *   so push segments work per-user.
+ * Web / PWA:
+ *   Loads the OneSignal Web SDK v16 via CDN and links the Supabase user ID.
+ *   This is the existing production path — zero change for web users.
  *
- * Native (Capacitor iOS / Android):
- *   The Web SDK is NOT loaded — it would fight with the native APNs/FCM
- *   channel.  Instead we import @onesignal/onesignal-capacitor dynamically
- *   and initialise it with the same App ID.  The service worker is irrelevant
- *   in native context (APNs / FCM handles delivery).
+ * Native Capacitor (iOS / Android):
+ *   Initialises @onesignal/capacitor-plugin instead of the Web SDK.
+ *   The CDN <Script> tag is NOT rendered — it would conflict with APNs/FCM.
  *
- *   Before this works in the native build, also:
- *   1. `npm install @onesignal/onesignal-capacitor`
- *   2. Add push entitlements in Xcode (iOS) and google-services.json (Android)
+ * SSR safety:
+ *   `isNativePlatform()` must NOT be called during render because the server
+ *   always returns false (no window.Capacitor) while the Capacitor client may
+ *   return true → React hydration mismatch.  We resolve it in useEffect and
+ *   use a `native` state that starts false (matching server) and updates on
+ *   the client after hydration.
  */
 export default function OneSignalInit({ userId }: Props) {
-  useEffect(() => {
-    if (!userId || typeof window === 'undefined') return
+  // Starts false so server and client first render both agree on <Script>
+  const [native, setNative] = useState(false)
 
-    if (isNativePlatform()) {
-      // ── Native Capacitor path ────────────────────────────────────────────────
-      // Dynamically import so the web bundle is never affected.
+  useEffect(() => {
+    const isNative = isNativePlatform()
+    setNative(isNative)
+
+    if (!userId) return
+
+    if (isNative) {
+      // ── Native Capacitor path ──────────────────────────────────────────────
+      // Dynamic import keeps the Capacitor SDK out of the web bundle entirely.
       import('@onesignal/capacitor-plugin')
         .then((mod) => {
-          // The plugin uses a default export
-          const OneSignal = mod.default ?? (mod as any).OneSignal
-          OneSignal.initialize(process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!)
-          OneSignal.login(userId).catch(() => {})
-          // Request permission on first launch (iOS shows the native prompt)
-          OneSignal.Notifications.requestPermission(true).catch(() => {})
+          // The plugin uses a default export: OneSignalPlugin
+          const OS: any = mod.default ?? (mod as any).OneSignal
+          OS.initialize(process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!)
+          OS.login(userId).catch(() => {})
+          // requestPermission API for @onesignal/capacitor-plugin v1.x
+          OS.requestPermission({ fallbackToSettings: true }).catch(() => {})
         })
         .catch(() => {
-          // Package not yet installed — silently ignore in dev.
-          console.warn('[OneSignal] @onesignal/capacitor-plugin not installed. Run: npm install @onesignal/capacitor-plugin')
+          console.warn('[OneSignal] @onesignal/capacitor-plugin not installed.')
         })
       return
     }
 
-    // ── Web / PWA path ─────────────────────────────────────────────────────────
+    // ── Web / PWA path ─────────────────────────────────────────────────────
     const init = async (OneSignal: any) => {
       try {
         await OneSignal.init({
@@ -65,7 +71,7 @@ export default function OneSignalInit({ userId }: Props) {
         })
         await OneSignal.login(userId)
       } catch {
-        // Silently ignore — already initialised or blocked.
+        // Already initialised or permission blocked — ignore
       }
     }
 
@@ -73,8 +79,10 @@ export default function OneSignalInit({ userId }: Props) {
     window.OneSignalDeferred.push(init)
   }, [userId])
 
-  // Only inject the CDN script tag on web — native handles its own SDK
-  if (isNativePlatform()) return null
+  // native starts false → server renders <Script> → client first render
+  // also renders <Script> (hydration match) → useEffect sets native=true if
+  // in Capacitor → re-render suppresses <Script>.  Safe for web users.
+  if (native) return null
 
   return (
     <Script

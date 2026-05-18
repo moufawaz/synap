@@ -245,7 +245,11 @@ export async function applyNotificationSchedule(
   // 4. Ensure Android channels exist
   await setupNotificationChannels()
 
-  const notifications: Parameters<typeof plugin.schedule>[0]['notifications'] = []
+  // Typed as any[] to avoid complex conditional Capacitor type resolution on the
+  // web build (Vercel TypeScript check).  All fields are validated at runtime
+  // by the Capacitor plugin anyway.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const notifications: any[] = []
 
   // ── Workout ────────────────────────────────────────────────────────────────
   if (prefs.workout) {
