@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
-import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown, Utensils, Heart, Upload, Activity, RefreshCw, CheckCircle } from 'lucide-react'
+import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown, Utensils, Heart, Upload, Activity, RefreshCw, CheckCircle, Bell } from 'lucide-react'
+import { loadNotifPrefs, saveNotifPrefs, type NotificationPrefs } from '@/lib/notification-prefs'
+import { applyNotificationSchedule, requestNotificationPermission, checkNotificationPermission } from '@/lib/notifications'
+import { isNativePlatform } from '@/lib/platform'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/lib/useLanguage'
@@ -32,10 +35,17 @@ export default function SettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [inbodySuccess, setInbodySuccess] = useState<string | null>(null)
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs | null>(null)
+  const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'prompt' | null>(null)
+  const [notifApplying, setNotifApplying] = useState(false)
+  const [isNative, setIsNative] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('tab') === 'billing') setActiveSection('billing')
+    if (params.get('tab') === 'notifications') setActiveSection('notifications')
+    setIsNative(isNativePlatform())
+    setNotifPrefs(loadNotifPrefs())
     loadData()
   }, [])
 
@@ -186,14 +196,50 @@ export default function SettingsPage() {
   const isLaunchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE === 'true'
 
   const SECTIONS = [
-    { id: 'profile',     label: t(lang, 'settings_profile'),     icon: User },
-    { id: 'training',    label: t(lang, 'settings_training'),    icon: Dumbbell },
-    { id: 'nutrition',   label: lang === 'ar' ? 'التغذية'       : 'Nutrition',  icon: Utensils },
-    { id: 'health',      label: lang === 'ar' ? 'الصحة'          : 'Health',     icon: Heart },
-    { id: 'preferences', label: t(lang, 'settings_preferences'), icon: Globe },
-    { id: 'billing',     label: t(lang, 'settings_billing'),     icon: CreditCard },
-    { id: 'integrations',label: 'Integrations',                  icon: Zap },
+    { id: 'profile',       label: t(lang, 'settings_profile'),     icon: User },
+    { id: 'training',      label: t(lang, 'settings_training'),    icon: Dumbbell },
+    { id: 'nutrition',     label: lang === 'ar' ? 'التغذية'       : 'Nutrition',      icon: Utensils },
+    { id: 'health',        label: lang === 'ar' ? 'الصحة'          : 'Health',         icon: Heart },
+    { id: 'preferences',   label: t(lang, 'settings_preferences'), icon: Globe },
+    { id: 'notifications', label: lang === 'ar' ? 'الإشعارات'     : 'Notifications',  icon: Bell },
+    { id: 'billing',       label: t(lang, 'settings_billing'),     icon: CreditCard },
+    { id: 'integrations',  label: 'Integrations',                  icon: Zap },
   ]
+
+  // ── Notification preference helpers ───────────────────────────────────────
+  async function updateNotifPref<K extends keyof NotificationPrefs>(
+    key: K,
+    value: NotificationPrefs[K],
+  ) {
+    if (!notifPrefs) return
+    const updated = { ...notifPrefs, [key]: value }
+    setNotifPrefs(updated)
+    saveNotifPrefs(updated)
+    if (isNative) {
+      setNotifApplying(true)
+      await applyNotificationSchedule(updated).catch(() => {})
+      setNotifApplying(false)
+    }
+  }
+
+  async function handleRequestNotifPermission() {
+    const granted = await requestNotificationPermission()
+    setNotifPermission(granted ? 'granted' : 'denied')
+    if (granted && notifPrefs) {
+      setNotifApplying(true)
+      await applyNotificationSchedule(notifPrefs).catch(() => {})
+      setNotifApplying(false)
+    }
+  }
+
+  // Check permission whenever notifications tab is opened
+  async function onNotifTabOpen() {
+    setActiveSection('notifications')
+    if (isNative) {
+      const status = await checkNotificationPermission()
+      setNotifPermission(status)
+    }
+  }
 
   if (!profile) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -258,7 +304,7 @@ export default function SettingsPage() {
         {SECTIONS.map(s => (
           <button
             key={s.id}
-            onClick={() => setActiveSection(s.id)}
+            onClick={() => s.id === 'notifications' ? onNotifTabOpen() : setActiveSection(s.id)}
             className="flex items-center gap-2 px-4 rounded-xl font-heading text-xs font-semibold tracking-wider transition-all"
             style={{
               minHeight: '44px',
@@ -741,6 +787,230 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ── Notifications ───────────────────────────────────── */}
+      {activeSection === 'notifications' && notifPrefs && (
+        <div className="flex flex-col gap-4">
+
+          {/* Web / non-native notice */}
+          {!isNative && (
+            <div className="glass-card p-5 flex items-start gap-3" style={{ borderColor: 'rgba(187,92,246,0.2)' }}>
+              <Bell size={15} style={{ color: '#BB5CF6', flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <p className="font-heading font-bold text-sm text-white mb-1">
+                  {lang === 'ar' ? 'متاح في التطبيق الأصلي' : 'Available in the native app'}
+                </p>
+                <p className="font-heading text-xs leading-relaxed" style={{ color: '#64748B' }}>
+                  {lang === 'ar'
+                    ? 'الإشعارات المحلية تعمل عند تثبيت التطبيق من App Store أو Google Play. يمكنك ضبط التفضيلات الآن وستُطبَّق عند التثبيت.'
+                    : 'Local notifications work once the app is installed from the App Store or Google Play. You can set your preferences now — they apply automatically on install.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Permission denied warning */}
+          {isNative && notifPermission === 'denied' && (
+            <div className="glass-card p-4 flex items-start gap-3" style={{ borderColor: 'rgba(239,68,68,0.25)' }}>
+              <AlertTriangle size={14} style={{ color: '#EF4444', flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <p className="font-heading font-bold text-xs text-white mb-1">
+                  {lang === 'ar' ? 'الإشعارات محظورة' : 'Notifications blocked'}
+                </p>
+                <p className="font-heading text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
+                  {lang === 'ar'
+                    ? 'افتح إعدادات الجهاز ← الإشعارات ← SYNAP وفعّل الإشعارات يدوياً.'
+                    : 'Go to Device Settings → Notifications → SYNAP and enable notifications manually.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Request permission button */}
+          {isNative && notifPermission === 'prompt' && (
+            <div className="glass-card p-5">
+              <p className="font-heading font-bold text-sm text-white mb-2">
+                {lang === 'ar' ? 'تفعيل الإشعارات' : 'Enable notifications'}
+              </p>
+              <p className="font-heading text-xs mb-4" style={{ color: '#64748B' }}>
+                {lang === 'ar'
+                  ? 'امنح SYNAP إذن الإشعارات لتفعيل التذكيرات.'
+                  : 'Grant SYNAP notification permission to activate reminders.'}
+              </p>
+              <button
+                onClick={handleRequestNotifPermission}
+                className="w-full py-3 rounded-xl font-heading font-bold text-xs tracking-wider"
+                style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.1em' }}
+              >
+                {lang === 'ar' ? 'تفعيل الإشعارات' : 'ENABLE NOTIFICATIONS'}
+              </button>
+            </div>
+          )}
+
+          {/* Master toggle */}
+          <div className="glass-card p-5">
+            <NotifToggleRow
+              label={lang === 'ar' ? 'تفعيل كل الإشعارات' : 'All notifications'}
+              sublabel={lang === 'ar' ? 'مفتاح رئيسي لجميع تذكيرات SYNAP' : 'Master switch for all SYNAP reminders'}
+              value={notifPrefs.enabled}
+              onChange={v => updateNotifPref('enabled', v)}
+              accent
+            />
+          </div>
+
+          {notifPrefs.enabled && (
+            <>
+              {/* Workout */}
+              <div className="glass-card p-5">
+                <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+                  {lang === 'ar' ? '💪 تذكير التمرين' : '💪 WORKOUT REMINDER'}
+                </p>
+                <NotifToggleRow
+                  label={lang === 'ar' ? 'تذكير يومي بالتمرين' : 'Daily training reminder'}
+                  sublabel={lang === 'ar' ? 'يفتح تمرين اليوم عند النقر' : 'Tapping opens today\'s workout'}
+                  value={notifPrefs.workout}
+                  onChange={v => updateNotifPref('workout', v)}
+                />
+                {notifPrefs.workout && (
+                  <div className="mt-4">
+                    <label className="font-heading text-[10px] tracking-wider block mb-1.5" style={{ color: '#475569' }}>
+                      {lang === 'ar' ? 'وقت التذكير' : 'Reminder time'}
+                    </label>
+                    <input
+                      type="time"
+                      value={notifPrefs.workoutTime}
+                      onChange={e => updateNotifPref('workoutTime', e.target.value)}
+                      className="rounded-xl px-3 py-2.5 font-heading text-sm outline-none"
+                      style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Meal */}
+              <div className="glass-card p-5">
+                <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+                  {lang === 'ar' ? '🥗 تذكيرات الوجبات' : '🥗 MEAL REMINDERS'}
+                </p>
+                <div className="flex flex-col gap-3">
+                  <NotifToggleRow
+                    label={lang === 'ar' ? 'تذكيرات تسجيل الوجبات' : 'Meal logging reminders'}
+                    sublabel={lang === 'ar' ? 'فطور وغداء وعشاء' : 'Breakfast, lunch & dinner'}
+                    value={notifPrefs.meal}
+                    onChange={v => updateNotifPref('meal', v)}
+                  />
+                  {notifPrefs.meal && (
+                    <div className="mt-1 flex flex-col gap-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                      {[
+                        { key: 'mealBreakfast', timeKey: 'mealBreakfastTime', emoji: '🌅', label: lang === 'ar' ? 'الفطور' : 'Breakfast' } as const,
+                        { key: 'mealLunch',     timeKey: 'mealLunchTime',     emoji: '☀️', label: lang === 'ar' ? 'الغداء'  : 'Lunch' } as const,
+                        { key: 'mealDinner',    timeKey: 'mealDinnerTime',    emoji: '🌙', label: lang === 'ar' ? 'العشاء'  : 'Dinner' } as const,
+                      ].map(({ key, timeKey, emoji, label }) => (
+                        <div key={key} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            <span>{emoji}</span>
+                            <span className="font-heading text-xs text-white">{label}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {notifPrefs[key] && (
+                              <input
+                                type="time"
+                                value={notifPrefs[timeKey]}
+                                onChange={e => updateNotifPref(timeKey, e.target.value)}
+                                className="rounded-lg px-2 py-1.5 font-heading text-xs outline-none"
+                                style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
+                              />
+                            )}
+                            <ToggleSwitch
+                              value={notifPrefs[key]}
+                              onChange={v => updateNotifPref(key, v)}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Hydration */}
+              <div className="glass-card p-5">
+                <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+                  {lang === 'ar' ? '💧 تذكيرات الترطيب' : '💧 HYDRATION REMINDERS'}
+                </p>
+                <NotifToggleRow
+                  label={lang === 'ar' ? 'تذكير كل ساعتين (8ص–10م)' : 'Every 2 hours (8am – 10pm)'}
+                  sublabel={lang === 'ar' ? '8 تذكيرات يومية. مفيد لإبقاء التركيز.' : '8 reminders per day. Keeps energy and focus up.'}
+                  value={notifPrefs.hydration}
+                  onChange={v => updateNotifPref('hydration', v)}
+                />
+              </div>
+
+              {/* Ion coaching */}
+              <div className="glass-card p-5">
+                <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+                  {lang === 'ar' ? '⚡ رسائل آيون التحفيزية' : '⚡ ION COACHING NUDGES'}
+                </p>
+                <NotifToggleRow
+                  label={lang === 'ar' ? 'تحديثات يومية من آيون' : 'Daily updates from Ion'}
+                  sublabel={lang === 'ar' ? 'يفتح المحادثة عند النقر' : 'Tapping opens the Ion chat'}
+                  value={notifPrefs.coaching}
+                  onChange={v => updateNotifPref('coaching', v)}
+                />
+                {notifPrefs.coaching && (
+                  <div className="mt-4">
+                    <label className="font-heading text-[10px] tracking-wider block mb-1.5" style={{ color: '#475569' }}>
+                      {lang === 'ar' ? 'وقت الرسالة الصباحية' : 'Morning message time'}
+                    </label>
+                    <input
+                      type="time"
+                      value={notifPrefs.coachingTime}
+                      onChange={e => updateNotifPref('coachingTime', e.target.value)}
+                      className="rounded-xl px-3 py-2.5 font-heading text-sm outline-none"
+                      style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Streak protection */}
+              <div className="glass-card p-5">
+                <p className="font-heading font-black text-xs tracking-widest uppercase mb-4" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+                  {lang === 'ar' ? '🔥 حماية السلسلة اليومية' : '🔥 STREAK PROTECTION'}
+                </p>
+                <NotifToggleRow
+                  label={lang === 'ar' ? 'تذكير ختام اليوم' : 'End-of-day reminder'}
+                  sublabel={lang === 'ar' ? 'يُرسَل إذا لم تسجّل أي نشاط اليوم' : "Fires if you haven't logged activity today"}
+                  value={notifPrefs.streak}
+                  onChange={v => updateNotifPref('streak', v)}
+                />
+                {notifPrefs.streak && (
+                  <div className="mt-4">
+                    <label className="font-heading text-[10px] tracking-wider block mb-1.5" style={{ color: '#475569' }}>
+                      {lang === 'ar' ? 'وقت التذكير' : 'Reminder time'}
+                    </label>
+                    <input
+                      type="time"
+                      value={notifPrefs.streakTime}
+                      onChange={e => updateNotifPref('streakTime', e.target.value)}
+                      className="rounded-xl px-3 py-2.5 font-heading text-sm outline-none"
+                      style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', color: '#E2E8F0' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Applying indicator */}
+              {notifApplying && (
+                <div className="flex items-center gap-2 px-1" style={{ color: '#BB5CF6' }}>
+                  <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: '#BB5CF6', borderTopColor: 'transparent' }} />
+                  <span className="font-heading text-xs">{lang === 'ar' ? 'جار تطبيق الإعدادات...' : 'Applying schedule...'}</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Billing ─────────────────────────────────────────── */}
       {activeSection === 'billing' && (
         <div className="flex flex-col gap-4">
@@ -1042,8 +1312,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Save button (all editable sections) */}
-      {activeSection !== 'billing' && activeSection !== 'integrations' && (
+      {/* Save button (profile-type sections only — notifications auto-saves) */}
+      {activeSection !== 'billing' && activeSection !== 'integrations' && activeSection !== 'notifications' && (
         <div className="mt-6 flex flex-col gap-3">
           <button
             onClick={saveProfile}
@@ -1070,7 +1340,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {(activeSection === 'billing' || activeSection === 'integrations') && (
+      {(activeSection === 'billing' || activeSection === 'integrations' || activeSection === 'notifications') && (
 
         <div className="mt-4 flex flex-col gap-3">
           <button
@@ -1274,6 +1544,64 @@ function CheckboxGroup({ options, selected, onChange }: {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+// ── Notification UI helpers ───────────────────────────────────────────────────
+
+function ToggleSwitch({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={value}
+      onClick={() => onChange(!value)}
+      className="relative flex-shrink-0 transition-all"
+      style={{
+        width: 44,
+        height: 24,
+        borderRadius: 12,
+        background: value ? '#BB5CF6' : 'rgba(255,255,255,0.08)',
+        border: `1px solid ${value ? 'rgba(187,92,246,0.5)' : 'rgba(255,255,255,0.1)'}`,
+        boxShadow: value ? '0 0 12px rgba(187,92,246,0.3)' : 'none',
+      }}
+    >
+      <span
+        className="absolute top-0.5 transition-all"
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          background: 'white',
+          left: value ? 22 : 2,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        }}
+      />
+    </button>
+  )
+}
+
+function NotifToggleRow({
+  label,
+  sublabel,
+  value,
+  onChange,
+  accent = false,
+}: {
+  label: string
+  sublabel?: string
+  value: boolean
+  onChange: (v: boolean) => void
+  accent?: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex-1 min-w-0">
+        <p className="font-heading text-sm font-semibold" style={{ color: accent ? '#E2E8F0' : '#CBD5E1' }}>{label}</p>
+        {sublabel && <p className="font-heading text-[11px] mt-0.5" style={{ color: '#475569' }}>{sublabel}</p>}
+      </div>
+      <ToggleSwitch value={value} onChange={onChange} />
     </div>
   )
 }

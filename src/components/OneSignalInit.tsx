@@ -39,7 +39,9 @@ export default function OneSignalInit({ userId }: Props) {
       // ── Native Capacitor path ────────────────────────────────────────────────
       // Dynamically import so the web bundle is never affected.
       import('@onesignal/capacitor-plugin')
-        .then(({ OneSignal }) => {
+        .then((mod) => {
+          // The plugin uses a default export
+          const OneSignal = mod.default ?? (mod as any).OneSignal
           OneSignal.initialize(process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID!)
           OneSignal.login(userId).catch(() => {})
           // Request permission on first launch (iOS shows the native prompt)

@@ -1,18 +1,16 @@
 'use client'
 
 /**
- * DeepLinkHandler — listens for incoming Universal Links / App Links
- * inside the Capacitor native shell and forwards them to Next.js router.
+ * DeepLinkHandler — two-in-one:
  *
- * On web this component is a no-op (Capacitor.App is not available).
+ * 1. Universal / App Links — incoming URLs from the OS when the user taps
+ *    a synapfit.app link in Safari, email, etc.  Forwarded to Next.js router.
  *
- * Handles:
- *  • synapfit.app/auth/callback  → Supabase magic-link / OAuth redirect
- *  • synapfit.app/auth/reset-password → password reset
- *  • synapfit.app/*              → any deep-linked page
+ * 2. Local Notification taps — when the user taps a local notification, the
+ *    `localNotificationActionPerformed` event fires.  We read `notification.extra.url`
+ *    (set by the NotificationScheduler) and route to that screen.
  *
- * Place <DeepLinkHandler /> once in a layout that wraps authenticated pages
- * (e.g. the (app) group layout, or root layout after auth).
+ * On web both listeners are no-ops.
  */
 
 import { useEffect } from 'react'
@@ -25,24 +23,44 @@ export default function DeepLinkHandler() {
   useEffect(() => {
     if (!isNativePlatform()) return
 
-    let cleanup: (() => void) | undefined
+    const cleanups: (() => void)[] = []
 
+    // ── 1. Universal Links (synapfit.app URLs tapped outside the app) ────────
     import('@capacitor/app').then(({ App }) => {
       const handler = App.addListener('appUrlOpen', (event: { url: string }) => {
         try {
           const url = new URL(event.url)
-          // Strip origin, keep pathname + search + hash
           const path = url.pathname + url.search + url.hash
           router.push(path)
         } catch {
           // Malformed URL — ignore
         }
       })
-
-      cleanup = () => { handler.then(h => h.remove()).catch(() => {}) }
+      cleanups.push(() => { handler.then(h => h.remove()).catch(() => {}) })
     }).catch(() => {})
 
-    return () => { cleanup?.() }
+    // ── 2. Local notification taps ───────────────────────────────────────────
+    import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
+      const handler = LocalNotifications.addListener(
+        'localNotificationActionPerformed',
+        (action) => {
+          try {
+            // The scheduler stores the deep-link path in `extra.url`
+            const url: string | undefined = action.notification?.extra?.url
+            if (url && url.startsWith('/')) {
+              router.push(url)
+            }
+          } catch {
+            // Ignore
+          }
+        },
+      )
+      cleanups.push(() => { handler.then(h => h.remove()).catch(() => {}) })
+    }).catch(() => {})
+
+    return () => {
+      cleanups.forEach(fn => fn())
+    }
   }, [router])
 
   return null
