@@ -28,6 +28,9 @@ export default function SettingsPage() {
   const [localizeResult, setLocalizeResult] = useState<string | null>(null)
   const [inbodyAnalyzing, setInbodyAnalyzing] = useState(false)
   const [inbodyError, setInbodyError] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [inbodySuccess, setInbodySuccess] = useState<string | null>(null)
 
   useEffect(() => {
@@ -69,6 +72,27 @@ export default function SettingsPage() {
     await supabase.auth.signOut()
     clearSessionPersistenceFlags()
     router.push('/')
+    router.refresh()
+  }
+
+  async function handleDeleteAccount() {
+    if (!deleteConfirm) { setDeleteConfirm(true); return }
+    setDeleteLoading(true)
+    setDeleteError(null)
+    try {
+      const res = await fetch('/api/delete-account', { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) { setDeleteError(json.error || 'Failed to delete account.'); setDeleteLoading(false); return }
+      // Account deleted — sign out locally and redirect
+      const supabase = createBrowserClient()
+      await supabase.auth.signOut()
+      clearSessionPersistenceFlags()
+      router.push('/?account_deleted=1')
+      router.refresh()
+    } catch {
+      setDeleteError('Unexpected error. Please try again.')
+      setDeleteLoading(false)
+    }
   }
 
   async function handleCancel() {
@@ -235,8 +259,9 @@ export default function SettingsPage() {
           <button
             key={s.id}
             onClick={() => setActiveSection(s.id)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl font-heading text-xs font-semibold tracking-wider transition-all"
+            className="flex items-center gap-2 px-4 rounded-xl font-heading text-xs font-semibold tracking-wider transition-all"
             style={{
+              minHeight: '44px',
               background: activeSection === s.id ? 'rgba(187,92,246,0.15)' : 'rgba(255,255,255,0.04)',
               border: `1px solid ${activeSection === s.id ? 'rgba(187,92,246,0.3)' : 'rgba(255,255,255,0.06)'}`,
               color: activeSection === s.id ? '#BB5CF6' : '#475569',
@@ -835,6 +860,59 @@ export default function SettingsPage() {
           {!isStarter && !isLaunchMode && (
             <BillingHistory />
           )}
+
+          {/* Delete Account (GDPR) */}
+          <div className="glass-card p-5">
+            <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#EF4444', letterSpacing: '0.14em' }}>DANGER ZONE</p>
+            <p className="font-heading text-xs mb-4 leading-relaxed" style={{ color: '#64748B' }}>
+              Permanently delete your account and all associated data. This action cannot be undone.
+            </p>
+
+            {deleteError && (
+              <div className="p-3 rounded-xl mb-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <p className="font-heading text-xs" style={{ color: '#FCA5A5' }}>{deleteError}</p>
+              </div>
+            )}
+
+            {deleteConfirm && (
+              <div className="p-3 rounded-xl mb-4 flex items-start gap-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                <AlertTriangle size={13} style={{ color: '#EF4444', marginTop: 2 }} />
+                <p className="font-heading text-xs leading-relaxed" style={{ color: '#FCA5A5' }}>
+                  Are you absolutely sure? All your data, workouts, meals and progress will be erased forever.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading}
+                className="flex-1 py-3 rounded-xl font-heading font-semibold text-xs tracking-wider transition-all flex items-center justify-center gap-2"
+                style={{
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  color: '#FCA5A5',
+                  background: deleteConfirm ? 'rgba(239,68,68,0.1)' : 'transparent',
+                }}
+              >
+                {deleteLoading ? (
+                  <div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: '#EF4444', borderTopColor: 'transparent' }} />
+                ) : deleteConfirm ? (
+                  'Yes, delete my account'
+                ) : (
+                  'Delete Account'
+                )}
+              </button>
+              {deleteConfirm && (
+                <button
+                  onClick={() => { setDeleteConfirm(false); setDeleteError(null) }}
+                  className="px-4 py-3 rounded-xl font-heading text-xs tracking-wider"
+                  style={{ color: '#475569', border: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* Cancel section */}
           {canCancel && !isLaunchMode && (

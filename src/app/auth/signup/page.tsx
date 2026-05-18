@@ -230,7 +230,7 @@ function SignupForm() {
         </p>
       }
     >
-      <form onSubmit={handleSignup} className="flex flex-col gap-5">
+      <form onSubmit={handleSignup} method="post" className="flex flex-col gap-5">
         {/* Email */}
         <div className="flex flex-col gap-2">
           <label className="font-heading text-xs font-semibold tracking-widest uppercase" style={{ color: '#64748B' }}>Email Address</label>

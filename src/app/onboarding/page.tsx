@@ -270,6 +270,11 @@ export default function OnboardingPage() {
       return
     }
 
+    // Validate name length (greeting step)
+    if (currentStep.id === 'greeting' && textInput.trim().length > 40) {
+      return // maxLength attribute already prevents this, but guard here too
+    }
+
     // ── Smart weight + height parsing ──────────────────────
     if (currentStep.id === 'weight_height') {
       const text = textInput.trim()
@@ -669,8 +674,9 @@ export default function OnboardingPage() {
                           handleQuickReply(reply.value, label)
                         }
                       }}
-                      className="px-4 py-2 rounded-full text-sm font-heading font-semibold tracking-wider transition-all duration-150"
+                      className="px-4 rounded-full text-sm font-heading font-semibold tracking-wider transition-all duration-150"
                       style={{
+                        minHeight: '44px',
                         border: `1px solid ${isSelected ? '#BB5CF6' : 'rgba(187,92,246,0.25)'}`,
                         background: isSelected ? 'rgba(187,92,246,0.2)' : 'rgba(187,92,246,0.06)',
                         color: isSelected ? '#CC80FF' : '#94A3B8',
@@ -686,8 +692,8 @@ export default function OnboardingPage() {
                 {currentStep.responseType === 'multiselect' && selectedMulti.length > 0 && (
                   <button
                     onClick={handleMultiConfirm}
-                    className="px-4 py-2 rounded-full text-sm font-heading font-black tracking-wider flex items-center gap-1.5 transition-all"
-                    style={{ background: '#BB5CF6', color: 'white', letterSpacing: '0.08em', boxShadow: '0 0 16px rgba(187,92,246,0.4)' }}
+                    className="px-4 rounded-full text-sm font-heading font-black tracking-wider flex items-center gap-1.5 transition-all"
+                    style={{ minHeight: '44px', background: '#BB5CF6', color: 'white', letterSpacing: '0.08em', boxShadow: '0 0 16px rgba(187,92,246,0.4)' }}
                   >
                     {isRTL ? 'تأكيد' : 'CONFIRM'}
                     <ChevronRight size={14} />
@@ -734,6 +740,7 @@ export default function OnboardingPage() {
                 type="text"
                 value={textInput}
                 onChange={e => setTextInput(e.target.value)}
+                maxLength={currentStep.id === 'greeting' ? 40 : undefined}
                 placeholder={
                   currentStep.id === 'weight_height'
                     ? (isRTL ? 'مثلاً: 80 كيلو، 175 سم' : 'e.g. 80 kg, 175 cm')

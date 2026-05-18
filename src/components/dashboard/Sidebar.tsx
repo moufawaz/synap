@@ -63,6 +63,7 @@ export default function Sidebar({ user, lang = 'en' }: SidebarProps) {
     await supabase.auth.signOut()
     clearSessionPersistenceFlags()
     router.push('/')
+    router.refresh()
   }
 
   function isActive(href: string) {
