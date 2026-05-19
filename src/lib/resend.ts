@@ -27,13 +27,14 @@ export type EmailType =
   | 'onboarding_reminder'
   | 'onboarding_reminder_7d'
   | 'onboarding_error'
+  | 'plan_error_resolved'
 
 export const VALID_EMAIL_TYPES: EmailType[] = [
   'welcome', 'weekly_summary', 'weekly_report', 'plan_renewal_warning', 'new_plan',
   'milestone', 'trial_started', 'trial_ending_day5', 'trial_ending_day6',
   'trial_cancelled', 'subscription_cancelled', 'subscription_renewed',
   'payment_failed', 'upgrade_confirmation', 'onboarding_reminder', 'onboarding_reminder_7d',
-  'onboarding_error',
+  'onboarding_error', 'plan_error_resolved',
 ]
 
 interface SendEmailOptions {
@@ -381,6 +382,75 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
         <h1 style="color:#D88BFF;font-size:24px;font-weight:900;margin:0 0 8px">🏆 ${data.milestone}</h1>
         <p style="color:#94A3B8;line-height:1.6">${data.message || 'You hit a new milestone. Ion is tracking every win.'}</p>
         ${btn('View Progress', `${APP_URL}/progress`)}
+      `),
+    },
+
+    plan_error_resolved: {
+      subject: `Good news — your SYNAP plan is ready, ${data.name}`,
+      html: layout(`
+        <!-- Hero -->
+        <div style="background:linear-gradient(135deg,#0A0D0A 0%,#0D1A0F 50%,#0A0A0F 100%);border-radius:16px;padding:36px 28px;margin-bottom:28px;border:1px solid rgba(16,185,129,0.2);position:relative;overflow:hidden">
+          <div style="position:absolute;top:-30px;right:-30px;width:160px;height:160px;background:radial-gradient(circle,rgba(16,185,129,0.12) 0%,transparent 70%);border-radius:50%"></div>
+          <p style="font-size:11px;font-weight:900;letter-spacing:0.22em;color:#065F46;margin:0 0 20px;text-transform:uppercase">SYNAP · UPDATE FROM ION</p>
+          <h1 style="font-size:28px;font-weight:900;margin:0 0 12px;line-height:1.2;letter-spacing:-0.01em">
+            <span style="color:#FFFFFF">${data.name}, </span>
+            <span style="background:linear-gradient(90deg,#10B981,#34D399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">your plan is live.</span>
+          </h1>
+          <p style="color:#94A3B8;font-size:15px;line-height:1.6;margin:0">
+            The issue that blocked your plan last time has been fixed. Your personalised training and nutrition plan was just generated successfully and is waiting for you in the app.
+          </p>
+        </div>
+
+        <!-- What's ready -->
+        <div style="margin-bottom:24px">
+          <p style="font-size:11px;font-weight:800;letter-spacing:0.15em;color:#065F46;margin:0 0 14px;text-transform:uppercase">What's ready for you</p>
+          <div style="display:grid;gap:10px">
+
+            <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:#0E0E14;border-radius:12px;border:1px solid rgba(255,255,255,0.05)">
+              <div style="width:36px;height:36px;background:rgba(187,92,246,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;line-height:36px;text-align:center">🏋️</div>
+              <div>
+                <p style="font-weight:700;font-size:14px;color:#FFFFFF;margin:0 0 3px">Your 12-Week Workout Programme</p>
+                <p style="color:#64748B;font-size:13px;margin:0;line-height:1.5">Built around your schedule, goal, and equipment. Ready to start today.</p>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:#0E0E14;border-radius:12px;border:1px solid rgba(255,255,255,0.05)">
+              <div style="width:36px;height:36px;background:rgba(249,115,22,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;line-height:36px;text-align:center">🥗</div>
+              <div>
+                <p style="font-weight:700;font-size:14px;color:#FFFFFF;margin:0 0 3px">Your Personalised Nutrition Plan</p>
+                <p style="color:#64748B;font-size:13px;margin:0;line-height:1.5">Daily meals, macros, and recipes matched to your food preferences.</p>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:#0E0E14;border-radius:12px;border:1px solid rgba(255,255,255,0.05)">
+              <div style="width:36px;height:36px;background:rgba(16,185,129,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;line-height:36px;text-align:center">🧠</div>
+              <div>
+                <p style="font-weight:700;font-size:14px;color:#FFFFFF;margin:0 0 3px">Ion — Ready to Coach You</p>
+                <p style="color:#64748B;font-size:13px;margin:0;line-height:1.5">Ask anything, track progress, adjust your plan. Ion is online and waiting.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div style="text-align:center;margin-top:28px">
+          <a href="${APP_URL}/dashboard" style="display:inline-block;padding:16px 48px;background:linear-gradient(135deg,#059669,#10B981);color:white;border-radius:12px;text-decoration:none;font-weight:800;font-size:15px;letter-spacing:0.06em;box-shadow:0 8px 32px rgba(16,185,129,0.28)">
+            OPEN MY PLAN →
+          </a>
+          <p style="color:#334155;font-size:12px;margin:14px 0 0">Your dashboard is live — start today</p>
+        </div>
+
+        <!-- Separator -->
+        <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(16,185,129,0.2),transparent);margin:32px 0"></div>
+
+        <!-- Ion sign-off -->
+        <div style="padding:0 4px">
+          <p style="color:#475569;font-size:13px;font-style:italic;line-height:1.7;margin:0">
+            "Sorry for the delay — that was on us, not you. Your plan is built, it's personalised to you, and I'm here. Let's get to work."
+          </p>
+          <p style="color:#065F46;font-size:12px;font-weight:700;margin:10px 0 0;letter-spacing:0.08em">— ION · YOUR AI COACH</p>
+        </div>
       `),
     },
 

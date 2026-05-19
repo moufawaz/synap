@@ -8,6 +8,7 @@ import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { recordAppEvent } from '@/lib/app-events'
+import { sendPlanErrorEmailIfNeeded, sendPlanResolvedEmailIfNeeded } from '@/lib/plan-error-emails'
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
 import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntelligenceRule } from '@/lib/plan-builder'
@@ -129,6 +130,9 @@ export async function POST(req: Request) {
         message: 'Invalid JSON returned from plan generation',
         metadata: { finishReason, responseLength: rawContent.length },
       })
+      if (user.email) {
+        sendPlanErrorEmailIfNeeded(user.id, user.email, profileData?.name || 'Athlete').catch(() => {})
+      }
       return NextResponse.json({ error: 'Ion returned an invalid plan format. Please try again.' }, { status: 500 })
     }
 
@@ -168,6 +172,9 @@ export async function POST(req: Request) {
         source: 'api/generate-plan',
         message: `Workout plan save failed: ${wpError.message}`,
       })
+      if (user.email) {
+        sendPlanErrorEmailIfNeeded(user.id, user.email, profileData?.name || 'Athlete').catch(() => {})
+      }
       return NextResponse.json({ error: `Failed to save workout plan: ${wpError.message}` }, { status: 500 })
     }
 
@@ -186,6 +193,9 @@ export async function POST(req: Request) {
         source: 'api/generate-plan',
         message: `Diet plan save failed: ${dpError.message}`,
       })
+      if (user.email) {
+        sendPlanErrorEmailIfNeeded(user.id, user.email, profileData?.name || 'Athlete').catch(() => {})
+      }
       return NextResponse.json({ error: `Failed to save diet plan: ${dpError.message}` }, { status: 500 })
     }
 
@@ -240,13 +250,21 @@ export async function POST(req: Request) {
       normalizeAiLanguage(profileForPlan.language),
     ).catch(e => console.error('[generate-plan] supplement gen failed:', e))
 
-    // Send welcome email (fire-and-forget; do not block response)
+    // Send post-generation email (fire-and-forget; do not block response).
+    // If the user previously had a failed attempt, send the resolution email.
+    // Otherwise send the standard welcome email.
     if (user.email) {
-      sendEmail({
-        to: user.email,
-        type: 'welcome',
-        data: { name: profileData.name || 'Athlete' },
-      }).catch(() => {}) // silently ignore email errors
+      sendPlanResolvedEmailIfNeeded(user.id, user.email, profileData.name || 'Athlete')
+        .then((resolvedSent) => {
+          if (!resolvedSent) {
+            sendEmail({
+              to: user.email!,
+              type: 'welcome',
+              data: { name: profileData.name || 'Athlete' },
+            }).catch(() => {})
+          }
+        })
+        .catch(() => {})
     }
 
     return NextResponse.json({
@@ -266,6 +284,9 @@ export async function POST(req: Request) {
         source: 'api/generate-plan',
         message: err?.message || 'Unknown generate-plan error',
       })
+      if (user?.id && user?.email) {
+        sendPlanErrorEmailIfNeeded(user.id, user.email, 'Athlete').catch(() => {})
+      }
     } catch {}
     const raw = err?.message || ''
     let friendly = "Ion couldn't build your plan right now. Please try again."

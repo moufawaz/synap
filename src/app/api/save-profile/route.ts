@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { recordAppEvent } from '@/lib/app-events'
+import { sendPlanErrorEmailIfNeeded } from '@/lib/plan-error-emails'
 
 export async function POST(req: Request) {
   let userId: string | undefined
@@ -71,6 +72,9 @@ export async function POST(req: Request) {
         source: 'api/save-profile',
         message: profileError.message,
       })
+      if (user.email) {
+        sendPlanErrorEmailIfNeeded(user.id, user.email, profileData?.name || 'Athlete').catch(() => {})
+      }
       return NextResponse.json({ error: profileError.message }, { status: 500 })
     }
 
