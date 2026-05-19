@@ -26,12 +26,14 @@ export type EmailType =
   | 'upgrade_confirmation'
   | 'onboarding_reminder'
   | 'onboarding_reminder_7d'
+  | 'onboarding_error'
 
 export const VALID_EMAIL_TYPES: EmailType[] = [
   'welcome', 'weekly_summary', 'weekly_report', 'plan_renewal_warning', 'new_plan',
   'milestone', 'trial_started', 'trial_ending_day5', 'trial_ending_day6',
   'trial_cancelled', 'subscription_cancelled', 'subscription_renewed',
   'payment_failed', 'upgrade_confirmation', 'onboarding_reminder', 'onboarding_reminder_7d',
+  'onboarding_error',
 ]
 
 interface SendEmailOptions {
@@ -379,6 +381,59 @@ export async function sendEmail({ to, type, data }: SendEmailOptions) {
         <h1 style="color:#D88BFF;font-size:24px;font-weight:900;margin:0 0 8px">🏆 ${data.milestone}</h1>
         <p style="color:#94A3B8;line-height:1.6">${data.message || 'You hit a new milestone. Ion is tracking every win.'}</p>
         ${btn('View Progress', `${APP_URL}/progress`)}
+      `),
+    },
+
+    onboarding_error: {
+      subject: `Sorry about that — let's build your plan properly`,
+      html: layout(`
+        <!-- Hero -->
+        <div style="background:linear-gradient(135deg,#0D0D1A 0%,#130D1F 50%,#0A0A14 100%);border-radius:16px;padding:36px 28px;margin-bottom:28px;border:1px solid rgba(187,92,246,0.18);position:relative;overflow:hidden">
+          <div style="position:absolute;top:-30px;right:-30px;width:160px;height:160px;background:radial-gradient(circle,rgba(187,92,246,0.15) 0%,transparent 70%);border-radius:50%"></div>
+          <p style="font-size:11px;font-weight:900;letter-spacing:0.22em;color:#6D28D9;margin:0 0 20px;text-transform:uppercase">SYNAP · A NOTE FROM ION</p>
+          <h1 style="font-size:28px;font-weight:900;margin:0 0 12px;line-height:1.2;letter-spacing:-0.01em;color:#FFFFFF">
+            My fault — your plan didn't generate.
+          </h1>
+          <p style="color:#94A3B8;font-size:15px;line-height:1.6;margin:0">
+            When you went through setup, a technical issue on our side meant I couldn't save your profile and generate your plan. You didn't do anything wrong — this was a bug we've since fixed.
+          </p>
+        </div>
+
+        <!-- What happened -->
+        <div style="padding:20px;background:#0E0E14;border-radius:12px;border:1px solid rgba(255,255,255,0.06);margin-bottom:24px">
+          <p style="font-size:11px;font-weight:800;letter-spacing:0.15em;color:#6D28D9;margin:0 0 10px;text-transform:uppercase">What happened</p>
+          <p style="color:#94A3B8;font-size:14px;line-height:1.7;margin:0">
+            During onboarding, one of the questions didn't capture your answer correctly before sending it to our database. Our system rejected it and your plan couldn't be generated. We've patched the issue — it won't happen again.
+          </p>
+        </div>
+
+        <!-- What to do -->
+        <div style="padding:20px;background:rgba(187,92,246,0.06);border-radius:12px;border:1px solid rgba(187,92,246,0.2);margin-bottom:8px">
+          <p style="font-size:11px;font-weight:800;letter-spacing:0.15em;color:#BB5CF6;margin:0 0 10px;text-transform:uppercase">What to do now</p>
+          <p style="color:#94A3B8;font-size:14px;line-height:1.7;margin:0 0 6px">
+            Just click the button below and go through setup one more time — it takes around 8 minutes. Everything is working correctly now, and Ion will generate your personalised training and nutrition plan the moment you finish.
+          </p>
+          <p style="color:#64748B;font-size:13px;margin:0">Your previous answers were not saved, so you'll start fresh.</p>
+        </div>
+
+        <!-- CTA -->
+        <div style="text-align:center;margin-top:28px">
+          <a href="${APP_URL}/onboarding" style="display:inline-block;padding:16px 48px;background:linear-gradient(135deg,#9B3CD6,#BB5CF6);color:white;border-radius:12px;text-decoration:none;font-weight:800;font-size:15px;letter-spacing:0.06em;box-shadow:0 8px 32px rgba(187,92,246,0.35)">
+            BUILD MY PLAN →
+          </a>
+          <p style="color:#334155;font-size:12px;margin:14px 0 0">Takes 8 minutes · your full plan is generated at the end</p>
+        </div>
+
+        <!-- Separator -->
+        <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(187,92,246,0.2),transparent);margin:32px 0"></div>
+
+        <!-- Ion sign-off -->
+        <div style="padding:0 4px">
+          <p style="color:#475569;font-size:13px;font-style:italic;line-height:1.7;margin:0">
+            "This one was on us, not you. The bug is fixed. Come back and give me 8 minutes — I'll build you something that actually works for your body and your life. I'm ready when you are."
+          </p>
+          <p style="color:#6D28D9;font-size:12px;font-weight:700;margin:10px 0 0;letter-spacing:0.08em">— ION · YOUR AI COACH</p>
+        </div>
       `),
     },
   }
