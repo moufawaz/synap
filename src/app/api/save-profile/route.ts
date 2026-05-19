@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       user_id: user.id,
       name: profileData.name || '',
       age: parseInt(profileData.age) || 25,
-      gender: profileData.gender || 'male',
+      gender: (['male', 'female'].includes(profileData.gender) ? profileData.gender : 'male') as 'male' | 'female',
       weight_kg: parseFloat(profileData.weight_kg) || 70,
       height_cm: parseFloat(profileData.height_cm) || 170,
       goal: profileData.goal || 'be_healthier',

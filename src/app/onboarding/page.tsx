@@ -702,7 +702,8 @@ export default function OnboardingPage() {
               </div>
 
               {/* Custom text input for quick reply steps — lets user type their own answer */}
-              {currentStep.responseType === 'quickreply' && (
+              {/* Excluded for gender/ion_gender: those are strict enum values, free text breaks the DB constraint */}
+              {currentStep.responseType === 'quickreply' && !['gender', 'ion_gender'].includes(currentStep.id) && (
                 <form onSubmit={handleTextSubmit} className="flex items-center gap-2">
                   <input
                     type="text"
