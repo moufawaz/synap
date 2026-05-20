@@ -79,20 +79,19 @@ jobs:
       - name: Configure iOS project (plist + entitlements + Xcode settings)
         run: node scripts/setup-ios.mjs
 
-      # ── Debug: show generated iOS structure ──────────────────────────────────
-      - name: Debug — list ios/App contents
-        run: ls -la ios/App/ && echo "---" && ls -la ios/App/App/ 2>/dev/null || true
-
-      # ── CocoaPods ─────────────────────────────────────────────────────────────
-      - name: Install CocoaPods dependencies
-        working-directory: ios/App
-        run: pod install --repo-update
-        env:
-          LANG: en_US.UTF-8
-
       # ── Select Xcode ──────────────────────────────────────────────────────────
+      # Capacitor 8 uses Swift Package Manager (no CocoaPods/Podfile needed).
+      # SPM packages are resolved automatically by Xcode during the build.
       - name: Select Xcode 15
         run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      # ── Resolve SPM packages ──────────────────────────────────────────────────
+      - name: Resolve Swift Package Manager dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -clonedSourcePackagesDirPath ios/App/SourcePackages
 
       # ── Ruby / Fastlane ───────────────────────────────────────────────────────
       - name: Set up Ruby

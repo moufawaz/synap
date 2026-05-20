@@ -128,13 +128,16 @@ platform :ios do
     )
 
     # 3. Build IPA
+    # Capacitor 8 uses Swift Package Manager — no .xcworkspace at top level,
+    # build directly from the .xcodeproj.
     build_app(
-      workspace:         'ios/App/App.xcworkspace',
+      project:           'ios/App/App.xcodeproj',
       scheme:            'App',
       configuration:     'Release',
       export_method:     'app-store',
       output_directory:  './build',
       output_name:       'SYNAP.ipa',
+      cloned_source_packages_path: 'ios/App/SourcePackages',
       export_options: {
         provisioningProfiles: {
           'app.synap.fit' => 'match AppStore app.synap.fit',
