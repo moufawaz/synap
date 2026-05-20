@@ -1,0 +1,83 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SYNAP — Bootstrap match certificates  (run ONCE, then disable this workflow)
+# ─────────────────────────────────────────────────────────────────────────────
+# This workflow creates the Distribution certificate + App Store provisioning
+# profile and stores them encrypted in the moufawaz/synap-certs private repo.
+#
+# WHY THIS EXISTS
+#   The normal ios.yml runs `match` with readonly: true (is_ci).
+#   Before the first CI build, synap-certs is empty, so readonly mode fails.
+#   This workflow runs match with readonly: false to CREATE the certs first.
+#
+# HOW TO USE  (one-time only)
+#   1. Go to: GitHub → moufawaz/synap → Actions → "iOS — Bootstrap match certs"
+#   2. Click "Run workflow" → Run
+#   3. Wait ~3 min. Check synap-certs repo — it should now have cert files.
+#   4. After it succeeds: disable this workflow (Actions → … → Disable)
+#      or simply never trigger it again — it won't run automatically.
+#
+# REQUIRED SECRETS  (already set in ios.yml — same secrets)
+#   APPLE_TEAM_ID, APP_STORE_CONNECT_API_KEY_ID,
+#   APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_API_KEY_P8,
+#   MATCH_GIT_URL, MATCH_GIT_TOKEN, MATCH_PASSWORD, MATCH_KEYCHAIN_PASSWORD
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: iOS — Bootstrap match certs
+
+on:
+  workflow_dispatch:   # manual trigger only — never runs automatically
+
+jobs:
+  bootstrap:
+    name: Create Distribution cert + profile → synap-certs
+    runs-on: macos-14
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Select Xcode 15
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      # Write the App Store Connect API key so Fastlane can authenticate
+      - name: Write App Store Connect API key
+        run: |
+          mkdir -p $RUNNER_TEMP/asc
+          echo "${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}" > $RUNNER_TEMP/asc/AuthKey.p8
+          echo "APP_STORE_CONNECT_API_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> $GITHUB_ENV
+
+      # Create a temporary keychain (match needs one even in create mode)
+      - name: Create temporary keychain
+        run: |
+          security create-keychain -p "${{ secrets.MATCH_KEYCHAIN_PASSWORD }}" fastlane_match.keychain
+          security set-keychain-settings -lut 3600 fastlane_match.keychain
+          security unlock-keychain -p "${{ secrets.MATCH_KEYCHAIN_PASSWORD }}" fastlane_match.keychain
+          security list-keychains -d user -s fastlane_match.keychain $(security list-keychains -d user | sed s/\"//g)
+
+      # Run match in CREATE mode (readonly: false)
+      # This generates the Distribution certificate + App Store profile,
+      # encrypts them, and pushes to moufawaz/synap-certs.
+      - name: Fastlane — ios certs_create  (readonly: false)
+        env:
+          APPLE_TEAM_ID:                   ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_ID:    ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID:     ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_PATH:  ${{ env.APP_STORE_CONNECT_API_KEY_PATH }}
+          MATCH_GIT_URL:                   ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_TOKEN:                 ${{ secrets.MATCH_GIT_TOKEN }}
+          MATCH_PASSWORD:                  ${{ secrets.MATCH_PASSWORD }}
+          MATCH_KEYCHAIN_PASSWORD:         ${{ secrets.MATCH_KEYCHAIN_PASSWORD }}
+        run: bundle exec fastlane ios certs_create
+
+      - name: Done
+        run: |
+          echo "✅  Certificates created and pushed to synap-certs."
+          echo "    You can now run the normal ios.yml beta workflow."
+          echo "    Disable this workflow so it is never re-run accidentally."
