@@ -1,0 +1,9 @@
+# Force LF line endings for all CI/config files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.sh text eol=lf
