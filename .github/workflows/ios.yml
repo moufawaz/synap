@@ -79,11 +79,14 @@ jobs:
       - name: Configure iOS project (plist + entitlements + Xcode settings)
         run: node scripts/setup-ios.mjs
 
+      # ── Debug: show generated iOS structure ──────────────────────────────────
+      - name: Debug — list ios/App contents
+        run: ls -la ios/App/ && echo "---" && ls -la ios/App/App/ 2>/dev/null || true
+
       # ── CocoaPods ─────────────────────────────────────────────────────────────
       - name: Install CocoaPods dependencies
-        run: |
-          cd ios/App
-          pod install --repo-update
+        working-directory: ios/App
+        run: pod install --repo-update
         env:
           LANG: en_US.UTF-8
 
