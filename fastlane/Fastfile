@@ -55,7 +55,7 @@ platform :android do
     )
 
     # 4. Notify (optional — remove if not using Slack)
-    if ENV['SLACK_WEBHOOK_URL']
+    if ENV['SLACK_WEBHOOK_URL']&.start_with?('https://')
       slack(
         message:     "✅ SYNAP Android #{version_code} uploaded to Play Internal Track",
         slack_url:   ENV['SLACK_WEBHOOK_URL'],
@@ -176,7 +176,7 @@ platform :ios do
     )
 
     # 5. Notify
-    if ENV['SLACK_WEBHOOK_URL']
+    if ENV['SLACK_WEBHOOK_URL']&.start_with?('https://')
       slack(
         message:     "✅ SYNAP iOS build #{build_number} uploaded to TestFlight",
         slack_url:   ENV['SLACK_WEBHOOK_URL'],
