@@ -58,7 +58,7 @@ platform :android do
     if ENV['SLACK_WEBHOOK_URL']
       slack(
         message:     "✅ SYNAP Android #{version_code} uploaded to Play Internal Track",
-        webhook_url: ENV['SLACK_WEBHOOK_URL'],
+        slack_url:   ENV['SLACK_WEBHOOK_URL'],
         success:     true,
       )
     end
@@ -179,7 +179,7 @@ platform :ios do
     if ENV['SLACK_WEBHOOK_URL']
       slack(
         message:     "✅ SYNAP iOS build #{build_number} uploaded to TestFlight",
-        webhook_url: ENV['SLACK_WEBHOOK_URL'],
+        slack_url:   ENV['SLACK_WEBHOOK_URL'],
         success:     true,
       )
     end
