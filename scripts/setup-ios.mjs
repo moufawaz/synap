@@ -113,6 +113,8 @@ const plistKeys = [
     'SYNAP accesses your photo library so you can select progress photos and exercise form images.'],
   ['NSPhotoLibraryAddUsageDescription',
     'SYNAP saves your progress share card to your photo library.'],
+  ['NSLocationWhenInUseUsageDescription',
+    'SYNAP uses your location to tailor workout recommendations and find nearby gyms.'],
   ['NSUserNotificationUsageDescription',
     'SYNAP sends workout reminders, meal logging nudges, hydration checks, and motivational messages from Ion to keep you on track with your training and nutrition goals.'],
   ['NSHealthShareUsageDescription',
