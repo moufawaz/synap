@@ -45,7 +45,7 @@ concurrency:
 jobs:
   build-and-deploy:
     name: Build IPA → TestFlight
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
 
     steps:
@@ -74,16 +74,31 @@ jobs:
         run: npx cap sync ios
 
       # ── Apply iOS configuration ───────────────────────────────────────────────
-      # Adds Info.plist permission strings, Associated Domains entitlement,
+      # Patches plugin Package.swift files for NonescapableTypes,
+      # adds Info.plist permission strings, Associated Domains entitlement,
       # Push Notifications entitlement, and wires entitlements into Xcode.
       - name: Configure iOS project (plist + entitlements + Xcode settings)
         run: node scripts/setup-ios.mjs
 
+      # ── Verify Package.swift patches ─────────────────────────────────────────
+      # Print the patched section of each plugin Package.swift so we can confirm
+      # the NonescapableTypes flag was inserted correctly in the CI log.
+      - name: Verify NonescapableTypes patches
+        run: |
+          for pkg in \
+            node_modules/@capacitor/status-bar/Package.swift \
+            node_modules/@capacitor/splash-screen/Package.swift \
+            node_modules/@capacitor/push-notifications/Package.swift; do
+            echo "=== $pkg ==="
+            grep -A2 "swiftSettings\|NonescapableTypes\|ios/Sources" "$pkg" || echo "(pattern not found)"
+          done
+
       # ── Select Xcode ──────────────────────────────────────────────────────────
-      # Capacitor 8 uses Swift Package Manager (no CocoaPods/Podfile needed).
+      # Capacitor 8 core binary is compiled with Xcode 16 / Swift 6 features.
+      # Must use Xcode 16 to correctly parse the binary's module interface.
       # SPM packages are resolved automatically by Xcode during the build.
-      - name: Select Xcode 15
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
       # ── Resolve SPM packages ──────────────────────────────────────────────────
       - name: Resolve Swift Package Manager dependencies
@@ -124,7 +139,7 @@ jobs:
           GITHUB_RUN_NUMBER:               ${{ github.run_number }}
         run: bundle exec fastlane ios beta
 
-      # ── Upload IPA as artifact ────────────────────────────────────────────────
+      # ── Upload build artifacts (always, including on failure) ─────────────────
       - name: Upload IPA artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -132,3 +147,12 @@ jobs:
           name: synap-ios-${{ github.run_number }}.ipa
           path: build/SYNAP.ipa
           retention-days: 14
+
+      # ── Upload Xcode build log on failure for debugging ───────────────────────
+      - name: Upload Xcode build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-build-log-${{ github.run_number }}
+          path: ~/Library/Logs/gym/App-App.log
+          retention-days: 7
