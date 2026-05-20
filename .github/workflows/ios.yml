@@ -1,28 +1,29 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# SYNAP — iOS CI/CD
+# SYNAP — iOS CI/CD  (no Mac required — everything runs on the CI runner)
 # ─────────────────────────────────────────────────────────────────────────────
+# The ios/ folder is NOT committed to the repo.
+# This workflow generates it fresh on every run using npx cap add ios,
+# applies all required configuration (Info.plist, entitlements, Xcode settings),
+# then signs and uploads to TestFlight — all on a GitHub-hosted macOS runner.
+#
 # Triggers:
 #   • Push to main → build IPA + upload to TestFlight
 #   • Manual dispatch → same
 #
 # Required GitHub Secrets (Settings → Secrets → Actions):
-#   APPLE_ID                      your@appleid.com
-#   APPLE_TEAM_ID                 10-char Apple Developer team ID (e.g. AB12CD34EF)
-#   ITC_TEAM_ID                   numeric App Store Connect team ID
-#   APP_STORE_CONNECT_API_KEY_ID  key ID from App Store Connect → Users & Access
-#   APP_STORE_CONNECT_ISSUER_ID   issuer ID from the same page
-#   APP_STORE_CONNECT_API_KEY_P8  contents of the .p8 private key file
-#   MATCH_GIT_URL                 https://github.com/your-org/synap-certificates
-#   MATCH_GIT_TOKEN               base64(username:personal_access_token)
-#   MATCH_PASSWORD                encryption password for match repo
-#   MATCH_KEYCHAIN_PASSWORD       temp keychain password (any random string)
+#   APPLE_ID                          your@appleid.com
+#   APPLE_TEAM_ID                     82KX629P83
+#   ITC_TEAM_ID                       numeric App Store Connect team ID
+#   APP_STORE_CONNECT_API_KEY_ID      key ID  (e.g. ABCD1234EF)
+#   APP_STORE_CONNECT_ISSUER_ID       issuer ID (UUID)
+#   APP_STORE_CONNECT_API_KEY_P8      full contents of the .p8 file
+#   MATCH_GIT_URL                     https://github.com/moufawaz/synap-certs
+#   MATCH_GIT_TOKEN                   base64(username:personal_access_token)
+#   MATCH_PASSWORD                    encryption password for the certs repo
+#   MATCH_KEYCHAIN_PASSWORD           any random string (temp CI keychain)
 #
 # Optional:
-#   SLACK_WEBHOOK_URL             build notifications
-#
-# Prerequisites (one-time, run on your Mac before first CI run):
-#   1. bundle exec fastlane ios certs   → creates certs + profiles in match repo
-#   2. Commit the ios/ project to the repo  (npx cap add ios on Mac)
+#   SLACK_WEBHOOK_URL                 build notifications
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: iOS — Build & Deploy
@@ -44,7 +45,7 @@ concurrency:
 jobs:
   build-and-deploy:
     name: Build IPA → TestFlight
-    runs-on: macos-14          # Apple Silicon runner (Xcode 15+)
+    runs-on: macos-14
     timeout-minutes: 60
 
     steps:
@@ -64,11 +65,29 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      # ── Capacitor sync ────────────────────────────────────────────────────────
-      - name: Capacitor sync (ios)
+      # ── Generate iOS project on the CI runner ─────────────────────────────────
+      # The ios/ folder is not committed — we generate it fresh every run.
+      - name: Generate iOS project (npx cap add ios)
+        run: npx cap add ios
+
+      - name: Sync Capacitor config and assets into iOS project
         run: npx cap sync ios
 
-      # ── Xcode selection ───────────────────────────────────────────────────────
+      # ── Apply iOS configuration ───────────────────────────────────────────────
+      # Adds Info.plist permission strings, Associated Domains entitlement,
+      # Push Notifications entitlement, and wires entitlements into Xcode.
+      - name: Configure iOS project (plist + entitlements + Xcode settings)
+        run: node scripts/setup-ios.mjs
+
+      # ── CocoaPods ─────────────────────────────────────────────────────────────
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios/App
+          pod install --repo-update
+        env:
+          LANG: en_US.UTF-8
+
+      # ── Select Xcode ──────────────────────────────────────────────────────────
       - name: Select Xcode 15
         run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
 
@@ -79,7 +98,7 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
 
-      # ── App Store Connect API key (for match + upload) ────────────────────────
+      # ── App Store Connect API key ─────────────────────────────────────────────
       - name: Write App Store Connect API key
         run: |
           mkdir -p $RUNNER_TEMP/asc
