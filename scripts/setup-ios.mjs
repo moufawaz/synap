@@ -2,10 +2,13 @@
 /**
  * setup-ios.mjs — runs on the CI macOS runner after `npx cap add ios`
  * ─────────────────────────────────────────────────────────────────────────────
- * 1. Applies all Info.plist permission keys (camera, photos, notifications)
- * 2. Adds Associated Domains entitlement (Universal Links)
- * 3. Adds Push Notifications entitlement (APNs)
- * 4. Confirms the entitlements file is wired into the Xcode build settings
+ * 1. Patches Capacitor plugin Package.swift to enable NonescapableTypes
+ *    (required because the Capacitor 8 binary XCFramework uses this Swift
+ *     experimental feature; plugin source code needs it enabled to compile)
+ * 2. Applies all Info.plist permission keys (camera, photos, notifications)
+ * 3. Adds Associated Domains entitlement (Universal Links)
+ * 4. Adds Push Notifications entitlement (APNs)
+ * 5. Confirms the entitlements file is wired into the Xcode build settings
  *
  * Uses /usr/libexec/PlistBuddy — always present on macOS CI runners.
  * Safe to run multiple times (PlistBuddy Set overwrites existing keys).
@@ -15,9 +18,69 @@ import { execSync } from 'child_process'
 import { existsSync, writeFileSync, readFileSync } from 'fs'
 import path from 'path'
 
-const PLIST   = 'ios/App/App/Info.plist'
+const PLIST        = 'ios/App/App/Info.plist'
 const ENTITLEMENTS = 'ios/App/App/App.entitlements'
-const PBXPROJ = 'ios/App/App.xcodeproj/project.pbxproj'
+const PBXPROJ      = 'ios/App/App.xcodeproj/project.pbxproj'
+
+// ── 1. Patch Capacitor plugin Package.swift for NonescapableTypes ─────────────
+// Capacitor 8 core ships as a binary XCFramework compiled with the experimental
+// Swift feature $NonescapableTypes (SE-0418).  Plugin source packages don't
+// enable it by default, causing compile errors like:
+//   'any CAPBridgeProtocol' has no member 'webView'
+//   'PluginConfig' has no member 'getString'
+//   'CAPPluginCall' has no member 'reject'
+// Fix: add swiftSettings: [.enableExperimentalFeature("NonescapableTypes")]
+// to the main .target() in each affected plugin's Package.swift.
+console.log('🔧  Patching Capacitor plugin Package.swift for NonescapableTypes...')
+
+const CAPACITOR_PLUGINS = [
+  'node_modules/@capacitor/status-bar/Package.swift',
+  'node_modules/@capacitor/splash-screen/Package.swift',
+  'node_modules/@capacitor/push-notifications/Package.swift',
+  'node_modules/@capacitor/local-notifications/Package.swift',
+  'node_modules/@capacitor/app/Package.swift',
+  'node_modules/@capacitor/camera/Package.swift',
+]
+
+for (const pkgPath of CAPACITOR_PLUGINS) {
+  if (!existsSync(pkgPath)) {
+    console.log(`   ⏭  ${pkgPath} not found — skipped`)
+    continue
+  }
+  let content = readFileSync(pkgPath, 'utf8')
+  if (content.includes('enableExperimentalFeature("NonescapableTypes")')) {
+    console.log(`   ✓  ${pkgPath} already patched`)
+    continue
+  }
+  // Two layouts appear in practice:
+  //   Layout A — path on its own line, ) on the next line:
+  //       <indent>path: "ios/Sources/PluginName"
+  //       <smaller-indent>)
+  //   Layout B — path and ) on the same line:
+  //       <indent>path: "ios/Sources/PluginName"),
+  // We handle both, inserting swiftSettings with the same indentation as path:.
+  const FLAG = '.enableExperimentalFeature("NonescapableTypes")'
+  // Layout A: path line ends with " before a newline + indent + )
+  let patched = content.replace(
+    /([ \t]+)(path: "ios\/Sources\/[^"]+")([ \t]*\n[ \t]*\))/,
+    (_, indent, pathVal, closingPart) =>
+      `${indent}${pathVal},\n${indent}swiftSettings: [${FLAG}]${closingPart}`
+  )
+  // Layout B: path ends with ") on the same line
+  if (patched === content) {
+    patched = content.replace(
+      /([ \t]+)(path: "ios\/Sources\/[^"]+")\)/,
+      (_, indent, pathVal) =>
+        `${indent}${pathVal},\n${indent}swiftSettings: [${FLAG}])`
+    )
+  }
+  if (patched !== content) {
+    writeFileSync(pkgPath, patched, 'utf8')
+    console.log(`   ✓  Patched ${pkgPath}`)
+  } else {
+    console.warn(`   ⚠  Could not patch ${pkgPath} — pattern not matched`)
+  }
+}
 
 // ── Validate the iOS project was generated ───────────────────────────────────
 if (!existsSync(PLIST)) {
@@ -83,7 +146,6 @@ const entitlementsXml = `<?xml version="1.0" encoding="UTF-8"?>
 \t<string>production</string>
 \t<!-- HealthKit — read steps, calories, heart rate, weight -->
 \t<key>com.apple.developer.healthkit</key>
-\t<true/>
 \t<true/>
 </dict>
 </plist>
