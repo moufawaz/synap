@@ -101,12 +101,16 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
       # ── Resolve SPM packages ──────────────────────────────────────────────────
+      # Verify scheme exists, then resolve.  Print project info so CI logs
+      # immediately show if the project or scheme is missing/broken.
       - name: Resolve Swift Package Manager dependencies
         run: |
+          echo "=== Xcode project info ==="
+          xcodebuild -list -project ios/App/App.xcodeproj
+          echo "=== Resolving packages ==="
           xcodebuild -resolvePackageDependencies \
             -project ios/App/App.xcodeproj \
-            -scheme App \
-            -clonedSourcePackagesDirPath ios/App/SourcePackages
+            -scheme App
 
       # ── Ruby / Fastlane ───────────────────────────────────────────────────────
       - name: Set up Ruby
@@ -148,8 +152,26 @@ jobs:
           path: build/SYNAP.ipa
           retention-days: 14
 
-      # ── Upload Xcode build log on failure for debugging ───────────────────────
-      - name: Upload Xcode build log
+      # ── Print Xcode build log inline on failure ───────────────────────────────
+      # Prints the last 300 lines of the gym/xcodebuild log directly into the
+      # CI output so the actual Swift/signing error is visible without downloading
+      # an artifact.  Also uploads the full log as a downloadable artifact.
+      - name: Print Xcode build log (last 300 lines)
+        if: failure()
+        run: |
+          LOG=~/Library/Logs/gym/App-App.log
+          if [ -f "$LOG" ]; then
+            echo "============================================================"
+            echo " XCODE BUILD LOG — last 300 lines"
+            echo "============================================================"
+            tail -300 "$LOG"
+          else
+            echo "Gym log not found at $LOG"
+            echo "Checking alternative locations:"
+            ls ~/Library/Logs/gym/ 2>/dev/null || echo "(no gym logs directory)"
+          fi
+
+      - name: Upload full Xcode build log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
