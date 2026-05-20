@@ -27,6 +27,14 @@
 <key>NSUserNotificationUsageDescription</key>
 <string>SYNAP sends workout reminders, meal logging nudges, hydration checks, and motivational messages from Ion to keep you on track with your training and nutrition goals.</string>
 
+<!-- HealthKit — read health data (steps, calories, heart rate, weight) -->
+<key>NSHealthShareUsageDescription</key>
+<string>SYNAP reads your steps, active calories, heart rate, and weight from Apple Health so Ion can give you more accurate coaching without you having to log everything manually.</string>
+
+<!-- HealthKit — write workouts and body weight back to Apple Health -->
+<key>NSHealthUpdateUsageDescription</key>
+<string>SYNAP writes your logged workouts and body weight to Apple Health to keep your health data in sync.</string>
+
 <!-- Face ID / Touch ID if you add biometric auth later -->
 <!-- <key>NSFaceIDUsageDescription</key> -->
 <!-- <string>SYNAP uses Face ID for faster, secure login.</string> -->

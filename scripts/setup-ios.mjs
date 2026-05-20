@@ -52,6 +52,10 @@ const plistKeys = [
     'SYNAP saves your progress share card to your photo library.'],
   ['NSUserNotificationUsageDescription',
     'SYNAP sends workout reminders, meal logging nudges, hydration checks, and motivational messages from Ion to keep you on track with your training and nutrition goals.'],
+  ['NSHealthShareUsageDescription',
+    'SYNAP reads your steps, active calories, heart rate, and weight from Apple Health so Ion can give you more accurate coaching without you having to log everything manually.'],
+  ['NSHealthUpdateUsageDescription',
+    'SYNAP writes your logged workouts and body weight to Apple Health to keep your health data in sync.'],
 ]
 
 for (const [key, value] of plistKeys) {
@@ -77,6 +81,12 @@ const entitlementsXml = `<?xml version="1.0" encoding="UTF-8"?>
 \t<!-- Push Notifications (APNs) -->
 \t<key>aps-environment</key>
 \t<string>production</string>
+\t<!-- HealthKit — read steps, calories, heart rate, weight -->
+\t<key>com.apple.developer.healthkit</key>
+\t<true/>
+\t<!-- HealthKit Estimate Recalibration — improve calorie burn accuracy -->
+\t<key>com.apple.developer.healthkit.recalibrate-estimates</key>
+\t<true/>
 </dict>
 </plist>
 `
