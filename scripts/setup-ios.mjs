@@ -84,8 +84,6 @@ const entitlementsXml = `<?xml version="1.0" encoding="UTF-8"?>
 \t<!-- HealthKit — read steps, calories, heart rate, weight -->
 \t<key>com.apple.developer.healthkit</key>
 \t<true/>
-\t<!-- HealthKit Estimate Recalibration — improve calorie burn accuracy -->
-\t<key>com.apple.developer.healthkit.recalibrate-estimates</key>
 \t<true/>
 </dict>
 </plist>

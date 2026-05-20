@@ -131,9 +131,19 @@ platform :ios do
       xcodeproj:    'ios/App/App.xcodeproj',
     )
 
-    # 3. Build IPA
-    # Capacitor 8 uses Swift Package Manager — no .xcworkspace at top level,
-    # build directly from the .xcodeproj.
+    # 3. Explicitly configure code signing in the Xcode project.
+    # match with readonly:true installs certs but does NOT update project settings.
+    # update_code_signing_settings forces the project to use the match profile.
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path:                  'ios/App/App.xcodeproj',
+      bundle_identifier:     'app.synap.fit',
+      profile_name:          'match AppStore app.synap.fit',
+      code_sign_identity:    'iPhone Distribution',
+      team_id:               ENV['APPLE_TEAM_ID'],
+    )
+
+    # 5. Build IPA
     build_app(
       project:           'ios/App/App.xcodeproj',
       scheme:            'App',
@@ -142,7 +152,7 @@ platform :ios do
       output_directory:  './build',
       output_name:       'SYNAP.ipa',
       cloned_source_packages_path: 'ios/App/SourcePackages',
-      xcargs:            "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual",
+      xcargs:            "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='match AppStore app.synap.fit'",
       export_options: {
         provisioningProfiles: {
           'app.synap.fit' => 'match AppStore app.synap.fit',
@@ -153,7 +163,7 @@ platform :ios do
       clean:             true,
     )
 
-    # 4. Upload to TestFlight via App Store Connect API key (no password needed)
+    # 6. Upload to TestFlight via App Store Connect API key (no password needed)
     upload_to_testflight(
       api_key:                           asc_api_key,
       ipa:                               './build/SYNAP.ipa',
