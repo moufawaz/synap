@@ -144,14 +144,14 @@ platform :ios do
     )
 
     # 5. Build IPA
-    # destination: 'generic/platform=iOS' is required in Xcode 16 for archive.
-    # cloned_source_packages_path is omitted so Xcode resolves SPM packages
-    # fresh — avoids ambiguous relative-path issues between runner environments.
+    # cloned_source_packages_path is omitted — Xcode resolves SPM packages
+    # fresh to avoid path ambiguity between runner environments.
+    # destination is NOT set — gym sets generic/platform=iOS automatically
+    # for app-store export_method; passing it explicitly breaks the command.
     build_app(
       project:           'ios/App/App.xcodeproj',
       scheme:            'App',
       configuration:     'Release',
-      destination:       'generic/platform=iOS',
       export_method:     'app-store',
       output_directory:  './build',
       output_name:       'SYNAP.ipa',
