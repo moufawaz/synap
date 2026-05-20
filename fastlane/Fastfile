@@ -142,6 +142,7 @@ platform :ios do
       output_directory:  './build',
       output_name:       'SYNAP.ipa',
       cloned_source_packages_path: 'ios/App/SourcePackages',
+      xcargs:            "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual",
       export_options: {
         provisioningProfiles: {
           'app.synap.fit' => 'match AppStore app.synap.fit',
