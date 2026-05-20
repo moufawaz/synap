@@ -170,14 +170,9 @@ platform :ios do
     # 6. Upload to TestFlight via App Store Connect API key (no password needed)
     upload_to_testflight(
       api_key:                           asc_api_key,
-      app_identifier:                    'app.synap.fit',
-      apple_id:                          ENV['APPLE_ID'],
-      team_id:                           ENV['ITC_TEAM_ID'],
-      itc_provider:                      ENV['ITC_PROVIDER'] || ENV['ITC_TEAM_ID'],
       ipa:                               './build/SYNAP.ipa',
       skip_waiting_for_build_processing: true,
       distribute_external:               false,
-      uses_non_exempt_encryption:         false,
     )
 
     # 5. Notify
