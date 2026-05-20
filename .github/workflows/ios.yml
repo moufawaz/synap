@@ -45,7 +45,7 @@ concurrency:
 jobs:
   build-and-deploy:
     name: Build IPA → TestFlight
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
 
     steps:
@@ -94,10 +94,9 @@ jobs:
           done
 
       # ── Confirm Xcode version ─────────────────────────────────────────────────
-      # macos-15 default Xcode (Xcode.app) is 16.2 and has iOS SDK properly
-      # installed.  Do NOT override xcode-select — pointing to
-      # Xcode_16.2.app instead of Xcode.app picks a secondary installation
-      # that has iOS 18.2 listed as "not installed", breaking generic/platform=iOS.
+      # macos-26 default Xcode (Xcode.app) ships with Xcode 26 and the iOS 26 SDK
+      # (required by App Store Connect as of 2026).  Do NOT override xcode-select —
+      # pointing to a secondary Xcode installation may lack the iOS platform files.
       - name: Show active Xcode version
         run: |
           xcode-select -p
