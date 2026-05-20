@@ -29,7 +29,7 @@ jobs:
         run: |
           mkdir -p $RUNNER_TEMP/asc
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}" > $RUNNER_TEMP/asc/AuthKey.p8
-          echo "APP_STORE_CONNECT_API_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> $GITHUB_ENV
+          echo "ASC_P8_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> $GITHUB_ENV
 
       - name: Create keychain
         run: |
@@ -43,7 +43,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_API_KEY_PATH: ${{ env.APP_STORE_CONNECT_API_KEY_PATH }}
+          ASC_P8_KEY_PATH: ${{ env.ASC_P8_KEY_PATH }}
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_GIT_TOKEN: ${{ secrets.MATCH_GIT_TOKEN }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
