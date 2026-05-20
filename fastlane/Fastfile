@@ -144,14 +144,15 @@ platform :ios do
     )
 
     # 5. Build IPA
-    # cloned_source_packages_path is omitted — Xcode resolves SPM packages
-    # fresh to avoid path ambiguity between runner environments.
-    # destination is NOT set — gym sets generic/platform=iOS automatically
-    # for app-store export_method; passing it explicitly breaks the command.
+    # sdk: 'iphoneos' tells xcodebuild to use the iOS device SDK directly.
+    # This bypasses gym's automatic destination='generic/platform=iOS' which
+    # fails on GitHub Actions macos-15 when Xcode 16 platform components are
+    # listed as "not installed" (even though the SDK itself is available).
     build_app(
       project:           'ios/App/App.xcodeproj',
       scheme:            'App',
       configuration:     'Release',
+      sdk:               'iphoneos',
       export_method:     'app-store',
       output_directory:  './build',
       output_name:       'SYNAP.ipa',

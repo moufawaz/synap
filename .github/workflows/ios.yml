@@ -93,12 +93,16 @@ jobs:
             grep -A2 "swiftSettings\|NonescapableTypes\|ios/Sources" "$pkg" || echo "(pattern not found)"
           done
 
-      # ── Select Xcode ──────────────────────────────────────────────────────────
-      # Capacitor 8 core binary is compiled with Xcode 16 / Swift 6 features.
-      # Must use Xcode 16 to correctly parse the binary's module interface.
-      # SPM packages are resolved automatically by Xcode during the build.
-      - name: Select Xcode 16
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+      # ── Confirm Xcode version ─────────────────────────────────────────────────
+      # macos-15 default Xcode (Xcode.app) is 16.2 and has iOS SDK properly
+      # installed.  Do NOT override xcode-select — pointing to
+      # Xcode_16.2.app instead of Xcode.app picks a secondary installation
+      # that has iOS 18.2 listed as "not installed", breaking generic/platform=iOS.
+      - name: Show active Xcode version
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path 2>/dev/null && echo "iOS SDK: OK" || echo "iOS SDK: NOT FOUND"
 
       # ── Resolve SPM packages ──────────────────────────────────────────────────
       # Verify scheme exists, then resolve.  Print project info so CI logs

@@ -23,7 +23,7 @@ jobs:
           ruby-version: 3.2
           bundler-cache: true
 
-      - run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+      - run: xcode-select -p && xcodebuild -version  # use runner default Xcode (16.2)
 
       - name: Write ASC API key
         run: |
