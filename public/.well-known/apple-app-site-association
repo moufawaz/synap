@@ -6,12 +6,7 @@
         "appID": "82KX629P83.app.synap.fit",
         "paths": [
           "/auth/callback",
-          "/auth/reset-password",
-          "/dashboard",
-          "/chat",
-          "/plan",
-          "/progress",
-          "/*"
+          "/auth/reset-password"
         ]
       }
     ]
