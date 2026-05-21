@@ -171,8 +171,18 @@ const healthKitSwift = `import Foundation
 import Capacitor
 import HealthKit
 
+// Capacitor 8: plugin must conform to CAPBridgedPlugin and declare its JS methods.
+// Registration happens in ViewController.capacitorDidLoad() via bridge?.registerPluginInstance().
+// The old CAP_PLUGIN ObjC macro and instancePlugins approaches are NOT used in Capacitor 8.
 @objc(SynapHealthKitPlugin)
-public class SynapHealthKitPlugin: CAPPlugin {
+public class SynapHealthKitPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "SynapHealthKitPlugin"
+    public let jsName = "SynapHealthKit"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestAuthorization", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readSummary", returnType: CAPPluginReturnPromise),
+    ]
     private let healthStore = HKHealthStore()
 
     @objc func isAvailable(_ call: CAPPluginCall) {
@@ -305,39 +315,41 @@ public class SynapHealthKitPlugin: CAPPlugin {
 writeFileSync(HEALTHKIT_PLUGIN, healthKitSwift, 'utf8')
 console.log('   ✓  SynapHealthKitPlugin.swift')
 
-const healthKitRegistration = `#import <Capacitor/Capacitor.h>
-
-CAP_PLUGIN(SynapHealthKitPlugin, "SynapHealthKit",
-  CAP_PLUGIN_METHOD(isAvailable, CAPPluginReturnPromise);
-  CAP_PLUGIN_METHOD(requestAuthorization, CAPPluginReturnPromise);
-  CAP_PLUGIN_METHOD(readSummary, CAPPluginReturnPromise);
-)
+// Capacitor 8: the CAP_PLUGIN macro is NOT used.
+// Plugin registration is handled in Swift via CAPBridgedPlugin conformance
+// and bridge?.registerPluginInstance() in capacitorDidLoad().
+// We still write an empty .m file so any stale pbxproj references compile cleanly.
+const healthKitRegistration = `// SynapHealthKitPlugin.m
+// Capacitor 8: plugin is registered via CAPBridgedPlugin in Swift.
+// This file intentionally left empty.
 `
 
 writeFileSync(HEALTHKIT_REGISTRATION, healthKitRegistration, 'utf8')
-console.log('   ✓  SynapHealthKitPlugin.m')
+console.log('   ✓  SynapHealthKitPlugin.m (stub — registration is Swift-only in Capacitor 8)')
 
-// ── Register plugin via ViewController.instancePlugins (Capacitor 8 API) ─────
-// The CAP_PLUGIN macro relies on ObjC runtime scanning which is unreliable
-// in Capacitor 8. Overriding instancePlugins in ViewController is the
-// official explicit registration API and guarantees the plugin is loaded.
+// ── Register plugin via ViewController.capacitorDidLoad() ────────────────────
+// Capacitor 8 registration approach:
+//   1. Plugin conforms to CAPBridgedPlugin (declares jsName, identifier, pluginMethods)
+//   2. ViewController overrides capacitorDidLoad() and calls bridge?.registerPluginInstance()
+//      which is the only supported manual registration path in Capacitor 8.
 //
-// Capacitor 8 may or may not generate ViewController.swift; we handle both:
-//   • If it exists → patch it by injecting the instancePlugins override
-//   • If it does not exist → create a minimal one from scratch AND add it
-//     to the Xcode project (otherwise Xcode won't compile it)
-console.log('\n📱  Registering SynapHealthKitPlugin via ViewController...')
+// instancePlugins does NOT exist in CAPBridgeViewController.
+// CAP_PLUGIN ObjC macro does NOT register in Capacitor 8 (bridge reads from capacitor.config.json).
+//
+// Capacitor 8 may or may not generate ViewController.swift:
+//   • If it exists → patch it (inject capacitorDidLoad override if missing)
+//   • If it does not exist → create a minimal one and register it in pbxproj
+console.log('\n📱  Registering SynapHealthKitPlugin via ViewController.capacitorDidLoad()...')
 
 const viewControllerContent = `import UIKit
 import Capacitor
 
 class ViewController: CAPBridgeViewController {
 
-    /// Register custom bundled plugins — Capacitor 8 explicit API.
-    /// The CAP_PLUGIN ObjC macro is unreliable in Swift-first projects;
-    /// returning the instance here guarantees the plugin loads at runtime.
-    override open var instancePlugins: [CAPPlugin] {
-        return [SynapHealthKitPlugin()]
+    /// Capacitor 8: register custom bundled plugins here.
+    /// bridge is available at this point (set before capacitorDidLoad fires).
+    override func capacitorDidLoad() {
+        bridge?.registerPluginInstance(SynapHealthKitPlugin())
     }
 
     override func viewDidLoad() {
@@ -347,24 +359,27 @@ class ViewController: CAPBridgeViewController {
 }
 `
 
+const capacitorDidLoadPatch = `\n    /// Capacitor 8: register custom bundled plugins here.\n    override func capacitorDidLoad() {\n        bridge?.registerPluginInstance(SynapHealthKitPlugin())\n    }\n`
+
 let vcCreated = false
 if (existsSync(VIEWCONTROLLER)) {
   let vc = readFileSync(VIEWCONTROLLER, 'utf8')
-  if (!vc.includes('instancePlugins')) {
+  if (!vc.includes('capacitorDidLoad')) {
+    // Inject capacitorDidLoad() into the existing class body, after the opening brace
     vc = vc.replace(
       /class ViewController\s*:\s*CAPBridgeViewController\s*\{/,
-      `class ViewController: CAPBridgeViewController {\n\n    /// Register custom bundled plugins (Capacitor 8 explicit API)\n    override open var instancePlugins: [CAPPlugin] {\n        return [SynapHealthKitPlugin()]\n    }\n`,
+      `class ViewController: CAPBridgeViewController {${capacitorDidLoadPatch}`,
     )
     writeFileSync(VIEWCONTROLLER, vc, 'utf8')
-    console.log('   ✓  instancePlugins override added to existing ViewController.swift')
+    console.log('   ✓  capacitorDidLoad() override added to existing ViewController.swift')
   } else {
-    console.log('   ✓  instancePlugins already present — skipped')
+    console.log('   ✓  capacitorDidLoad already present in ViewController.swift — skipped')
   }
 } else {
   // Capacitor 8 did not generate ViewController.swift — create it from scratch.
   writeFileSync(VIEWCONTROLLER, viewControllerContent, 'utf8')
   vcCreated = true
-  console.log('   ✓  ViewController.swift created (was missing from Capacitor template)')
+  console.log('   ✓  ViewController.swift created from scratch (was absent from Capacitor template)')
 }
 
 if (existsSync(PBXPROJ)) {
