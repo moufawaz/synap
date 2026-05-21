@@ -321,7 +321,33 @@ console.log('   ✓  SynapHealthKitPlugin.m')
 // The CAP_PLUGIN macro relies on ObjC runtime scanning which is unreliable
 // in Capacitor 8. Overriding instancePlugins in ViewController is the
 // official explicit registration API and guarantees the plugin is loaded.
+//
+// Capacitor 8 may or may not generate ViewController.swift; we handle both:
+//   • If it exists → patch it by injecting the instancePlugins override
+//   • If it does not exist → create a minimal one from scratch AND add it
+//     to the Xcode project (otherwise Xcode won't compile it)
 console.log('\n📱  Registering SynapHealthKitPlugin via ViewController...')
+
+const viewControllerContent = `import UIKit
+import Capacitor
+
+class ViewController: CAPBridgeViewController {
+
+    /// Register custom bundled plugins — Capacitor 8 explicit API.
+    /// The CAP_PLUGIN ObjC macro is unreliable in Swift-first projects;
+    /// returning the instance here guarantees the plugin loads at runtime.
+    override open var instancePlugins: [CAPPlugin] {
+        return [SynapHealthKitPlugin()]
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // Override point for customisation after application load.
+    }
+}
+`
+
+let vcCreated = false
 if (existsSync(VIEWCONTROLLER)) {
   let vc = readFileSync(VIEWCONTROLLER, 'utf8')
   if (!vc.includes('instancePlugins')) {
@@ -330,58 +356,75 @@ if (existsSync(VIEWCONTROLLER)) {
       `class ViewController: CAPBridgeViewController {\n\n    /// Register custom bundled plugins (Capacitor 8 explicit API)\n    override open var instancePlugins: [CAPPlugin] {\n        return [SynapHealthKitPlugin()]\n    }\n`,
     )
     writeFileSync(VIEWCONTROLLER, vc, 'utf8')
-    console.log('   ✓  instancePlugins override added to ViewController.swift')
+    console.log('   ✓  instancePlugins override added to existing ViewController.swift')
   } else {
     console.log('   ✓  instancePlugins already present — skipped')
   }
 } else {
-  console.warn('   ⚠  ViewController.swift not found — plugin may not load at runtime')
+  // Capacitor 8 did not generate ViewController.swift — create it from scratch.
+  writeFileSync(VIEWCONTROLLER, viewControllerContent, 'utf8')
+  vcCreated = true
+  console.log('   ✓  ViewController.swift created (was missing from Capacitor template)')
 }
 
 if (existsSync(PBXPROJ)) {
   let pbx = readFileSync(PBXPROJ, 'utf8')
   if (!pbx.includes('SynapHealthKitPlugin.swift')) {
-    const swiftFileRef  = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '0')
+    const swiftFileRef   = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '0')
     const swiftBuildFile = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '1')
-    const objcFileRef   = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '2')
+    const objcFileRef    = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '2')
     const objcBuildFile  = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '3')
     // Fixed IDs for HealthKit.framework (stable across runs)
-    const hkFwRef       = 'SYNAPHEALTH0000000000FWREF'
-    const hkFwBuildFile = 'SYNAPHEALTH0000000000FWBLD'
+    const hkFwRef        = 'SYNAPHEALTH0000000000FWREF'
+    const hkFwBuildFile  = 'SYNAPHEALTH0000000000FWBLD'
+    // Fixed IDs for ViewController.swift (only used when vcCreated === true)
+    const vcFileRef      = 'SYNAPVC00000000000000FREF0'
+    const vcBuildFile    = 'SYNAPVC00000000000000FBLD0'
 
     // ── PBXBuildFile ──────────────────────────────────────────────────────────
-    pbx = pbx.replace(
-      '/* End PBXBuildFile section */',
+    let newBuildFiles =
       `\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${swiftFileRef} /* SynapHealthKitPlugin.swift */; };\n` +
       `\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = ${objcFileRef} /* SynapHealthKitPlugin.m */; };\n` +
-      `\t\t${hkFwBuildFile} /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${hkFwRef} /* HealthKit.framework */; settings = {ATTRIBUTES = (Required, ); }; };\n` +
-      `/* End PBXBuildFile section */`,
-    )
+      `\t\t${hkFwBuildFile} /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${hkFwRef} /* HealthKit.framework */; settings = {ATTRIBUTES = (Required, ); }; };\n`
+    if (vcCreated) {
+      newBuildFiles +=
+        `\t\t${vcBuildFile} /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${vcFileRef} /* ViewController.swift */; };\n`
+    }
+    pbx = pbx.replace('/* End PBXBuildFile section */', newBuildFiles + `/* End PBXBuildFile section */`)
 
     // ── PBXFileReference ─────────────────────────────────────────────────────
     // Use SOURCE_ROOT-relative paths so Xcode always resolves correctly
     // regardless of which group the file ends up in.
     // SOURCE_ROOT = ios/App/ (the dir containing App.xcodeproj)
-    // Source files live in ios/App/App/ → path = App/SynapHealthKitPlugin.swift
-    pbx = pbx.replace(
-      '/* End PBXFileReference section */',
+    // Source files live in ios/App/App/ → path = App/<filename>
+    let newFileRefs =
       `\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SynapHealthKitPlugin.swift; path = App/SynapHealthKitPlugin.swift; sourceTree = SOURCE_ROOT; };\n` +
       `\t\t${objcFileRef} /* SynapHealthKitPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SynapHealthKitPlugin.m; path = App/SynapHealthKitPlugin.m; sourceTree = SOURCE_ROOT; };\n` +
-      `\t\t${hkFwRef} /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };\n` +
-      `/* End PBXFileReference section */`,
-    )
+      `\t\t${hkFwRef} /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };\n`
+    if (vcCreated) {
+      newFileRefs +=
+        `\t\t${vcFileRef} /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ViewController.swift; path = App/ViewController.swift; sourceTree = SOURCE_ROOT; };\n`
+    }
+    pbx = pbx.replace('/* End PBXFileReference section */', newFileRefs + `/* End PBXFileReference section */`)
 
     // ── Group children (cosmetic — for Xcode navigator) ───────────────────────
     pbx = pbx.replace(
       /(\s+children = \(\n\s+[A-Z0-9]+ \/\* AppDelegate\.swift \*\/,)/,
-      `$1\n\t\t\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */,\n\t\t\t\t${objcFileRef} /* SynapHealthKitPlugin.m */,`,
+      `$1\n\t\t\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */,\n\t\t\t\t${objcFileRef} /* SynapHealthKitPlugin.m */,` +
+      (vcCreated ? `\n\t\t\t\t${vcFileRef} /* ViewController.swift */,` : ''),
     )
 
-    // ── PBXSourcesBuildPhase — add plugin files to compile ───────────────────
+    // ── PBXSourcesBuildPhase — add plugin files (+ ViewController if new) ────
     // isa = PBXSourcesBuildPhase comes BEFORE files = ( in pbxproj format
+    let newSources =
+      `\t\t\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */,\n` +
+      `\t\t\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */,\n`
+    if (vcCreated) {
+      newSources += `\t\t\t\t${vcBuildFile} /* ViewController.swift in Sources */,\n`
+    }
     pbx = pbx.replace(
       /(isa = PBXSourcesBuildPhase;[\s\S]*?files = \(\n)/,
-      `$1\t\t\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */,\n\t\t\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */,\n`,
+      `$1${newSources}`,
     )
 
     // ── PBXFrameworksBuildPhase — link HealthKit.framework ───────────────────
@@ -393,6 +436,7 @@ if (existsSync(PBXPROJ)) {
     writeFileSync(PBXPROJ, pbx, 'utf8')
     console.log('   ✓  Added SynapHealthKitPlugin.swift + .m to Xcode sources')
     console.log('   ✓  Linked HealthKit.framework')
+    if (vcCreated) console.log('   ✓  Added ViewController.swift to Xcode sources')
   } else {
     console.log('   ✓  SynapHealthKitPlugin files already in Xcode project')
   }

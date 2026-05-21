@@ -112,7 +112,8 @@ export async function checkNotificationPermission(): Promise<'granted' | 'denied
   const plugin = await getPlugin()
   if (!plugin) return 'prompt'
   try {
-    const result = await withTimeout(plugin.checkPermissions(), 3000, { display: 'prompt' as const })
+    // 1 500 ms is ample — OS permission cache lookup is synchronous on iOS/Android
+    const result = await withTimeout(plugin.checkPermissions(), 1500, { display: 'prompt' as const })
     return result.display as 'granted' | 'denied' | 'prompt'
   } catch {
     return 'prompt'
@@ -218,7 +219,8 @@ export async function cancelAllNotifications(): Promise<void> {
       { id: NOTIF_IDS.COACHING },
       { id: NOTIF_IDS.STREAK },
     ]
-    await withTimeout(plugin.cancel({ notifications: all }), 3000, undefined)
+    // 1 500 ms — cancel is a single batch call; should be instant on iOS/Android
+    await withTimeout(plugin.cancel({ notifications: all }), 1500, undefined)
   } catch {/* ignore */}
 }
 
@@ -233,13 +235,22 @@ export async function cancelAllNotifications(): Promise<void> {
 export async function applyNotificationSchedule(
   prefs: NotificationPrefs,
 ): Promise<void> {
+  // Resolve the plugin ONCE and pass it through — avoids 3 separate dynamic
+  // imports that each add latency on the UI thread.
   const plugin = await getPlugin()
   if (!plugin) return
 
   // 1. Check permission FIRST — bail immediately if denied so we don't
-  //    burn through the cancel + schedule timeouts for nothing
+  //    burn through the cancel + schedule timeouts for nothing.
+  //    Re-use the already-loaded plugin ref instead of calling getPlugin() again.
   if (prefs.enabled) {
-    const status = await checkNotificationPermission()
+    let status: 'granted' | 'denied' | 'prompt'
+    try {
+      const result = await withTimeout(plugin.checkPermissions(), 1500, { display: 'prompt' as const })
+      status = result.display as 'granted' | 'denied' | 'prompt'
+    } catch {
+      status = 'prompt'
+    }
     if (status === 'denied') return
     if (status === 'prompt') {
       const granted = await requestNotificationPermission()
@@ -247,8 +258,19 @@ export async function applyNotificationSchedule(
     }
   }
 
-  // 2. Always cancel everything first — clean slate
-  await cancelAllNotifications()
+  // 2. Always cancel everything first — clean slate (inline, same plugin ref)
+  try {
+    const all = [
+      { id: NOTIF_IDS.WORKOUT },
+      { id: NOTIF_IDS.MEAL_BREAKFAST },
+      { id: NOTIF_IDS.MEAL_LUNCH },
+      { id: NOTIF_IDS.MEAL_DINNER },
+      ...NOTIF_IDS.HYDRATION.map(id => ({ id })),
+      { id: NOTIF_IDS.COACHING },
+      { id: NOTIF_IDS.STREAK },
+    ]
+    await withTimeout(plugin.cancel({ notifications: all }), 1500, undefined)
+  } catch {/* ignore */}
 
   // 3. Master switch off → done
   if (!prefs.enabled) return
@@ -376,10 +398,10 @@ export async function applyNotificationSchedule(
     })
   }
 
-  // 5. Schedule everything in one batch call (3 s timeout — never hang the UI)
+  // 5. Schedule everything in one batch call (2 s timeout — never hang the UI)
   if (notifications.length === 0) return
   try {
-    await withTimeout(plugin.schedule({ notifications }), 5000, undefined)
+    await withTimeout(plugin.schedule({ notifications }), 2000, undefined)
   } catch (e) {
     console.warn('[Notifications] Schedule failed:', e)
   }

@@ -99,6 +99,27 @@ jobs:
             grep -A2 "swiftSettings\|NonescapableTypes\|ios/Sources" "$pkg" || echo "(pattern not found)"
           done
 
+      # ── Diagnostic: iOS project structure ────────────────────────────────────
+      # Print the files written by setup-ios.mjs so we can confirm the HealthKit
+      # bridge and ViewController.swift were created and are non-empty.
+      - name: Diagnose iOS project files
+        run: |
+          echo "=== ios/App/App/ contents ==="
+          ls -la ios/App/App/ || echo "(directory not found)"
+          echo ""
+          echo "=== ViewController.swift ==="
+          cat ios/App/App/ViewController.swift 2>/dev/null || echo "(file not found)"
+          echo ""
+          echo "=== SynapHealthKitPlugin.swift (first 20 lines) ==="
+          head -20 ios/App/App/SynapHealthKitPlugin.swift 2>/dev/null || echo "(file not found)"
+          echo ""
+          echo "=== SynapHealthKitPlugin.m ==="
+          cat ios/App/App/SynapHealthKitPlugin.m 2>/dev/null || echo "(file not found)"
+          echo ""
+          echo "=== pbxproj SynapHealthKit entries ==="
+          grep -n "SynapHealthKit\|ViewController\|instancePlugins\|HealthKit.framework" \
+            ios/App/App.xcodeproj/project.pbxproj 2>/dev/null | head -40 || echo "(not found)"
+
       # ── Confirm Xcode version ─────────────────────────────────────────────────
       # macos-26 default Xcode (Xcode.app) ships with Xcode 26 and the iOS 26 SDK
       # (required by App Store Connect as of 2026).  Do NOT override xcode-select —
