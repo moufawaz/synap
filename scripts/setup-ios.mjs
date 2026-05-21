@@ -342,25 +342,193 @@ console.log('   ✓  SynapHealthKitPlugin.m (stub — registration is Swift-only
 //   • If it does not exist → create a minimal one and register it in pbxproj
 console.log('\n📱  Registering SynapHealthKitPlugin via ViewController.capacitorDidLoad()...')
 
+// ── ViewController.swift template ───────────────────────────────────────────
+// Full hardened version:
+//   • Registers HealthKit plugin via capacitorDidLoad()
+//   • Shows a branded loading overlay (dark bg + purple spinner) while the
+//     remote URL is loading — eliminates the black-screen appearance
+//   • Overrides WKNavigationDelegate methods with NSLog for TestFlight diagnosis
+//   • Auto-retries up to 3× on navigation failure (with exponential back-off)
+//   • Shows a user-facing "Try Again" screen if all retries are exhausted
+//   • Ignores NSURLErrorCancelled (-999) which fires on every redirect chain
 const viewControllerContent = `import UIKit
 import Capacitor
+import WebKit
 
+/// SYNAP root view controller.
+///
+/// Subclasses CAPBridgeViewController to:
+///   1. Register bundled native plugins (HealthKit) via capacitorDidLoad()
+///   2. Show a branded loading overlay while the remote URL initialises
+///   3. Log WebView navigation events to NSLog for TestFlight diagnosis
+///   4. Auto-retry (up to 3×) and show a user-facing retry screen on failure
 class ViewController: CAPBridgeViewController {
 
-    /// Capacitor 8: register custom bundled plugins here.
-    /// bridge is available at this point (set before capacitorDidLoad fires).
+    // MARK: - State
+    private var loadingOverlay: UIView?
+    private var retryCount = 0
+    private let maxRetries = 3
+
+    // MARK: - Capacitor lifecycle
+
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(SynapHealthKitPlugin())
+        NSLog("[SYNAP] capacitorDidLoad — bridge ready, HealthKit plugin registered")
+        showLoadingOverlay()
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Override point for customisation after application load.
+    }
+
+    // MARK: - Loading overlay
+
+    private func showLoadingOverlay() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.loadingOverlay == nil else { return }
+            let overlay = UIView(frame: self.view.bounds)
+            overlay.backgroundColor = UIColor(red: 0.039, green: 0.039, blue: 0.059, alpha: 1.0)
+            overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+            let spinner = UIActivityIndicatorView(style: .large)
+            spinner.color = UIColor(red: 0.733, green: 0.361, blue: 0.965, alpha: 1.0)
+            spinner.translatesAutoresizingMaskIntoConstraints = false
+            spinner.startAnimating()
+            overlay.addSubview(spinner)
+            NSLayoutConstraint.activate([
+                spinner.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+                spinner.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+            ])
+
+            self.view.addSubview(overlay)
+            self.loadingOverlay = overlay
+        }
+    }
+
+    private func hideLoadingOverlay() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let overlay = self.loadingOverlay else { return }
+            UIView.animate(withDuration: 0.3, animations: {
+                overlay.alpha = 0
+            }, completion: { _ in
+                overlay.removeFromSuperview()
+                if self.loadingOverlay === overlay { self.loadingOverlay = nil }
+            })
+        }
+    }
+
+    private func showRetryView() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.loadingOverlay?.removeFromSuperview()
+            self.loadingOverlay = nil
+
+            let bg = UIView(frame: self.view.bounds)
+            bg.backgroundColor = UIColor(red: 0.039, green: 0.039, blue: 0.059, alpha: 1.0)
+            bg.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+            let label = UILabel()
+            label.text = "Unable to connect to SYNAP.\\nCheck your internet connection."
+            label.textColor = UIColor(white: 0.7, alpha: 1.0)
+            label.font = UIFont.systemFont(ofSize: 15, weight: .regular)
+            label.textAlignment = .center
+            label.numberOfLines = 0
+            label.translatesAutoresizingMaskIntoConstraints = false
+
+            let button = UIButton(type: .system)
+            button.setTitle("Try Again", for: .normal)
+            button.setTitleColor(.white, for: .normal)
+            button.backgroundColor = UIColor(red: 0.733, green: 0.361, blue: 0.965, alpha: 1.0)
+            button.layer.cornerRadius = 14
+            button.titleLabel?.font = UIFont.boldSystemFont(ofSize: 17)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.addTarget(self, action: #selector(self.retryLoad), for: .touchUpInside)
+
+            bg.addSubview(label)
+            bg.addSubview(button)
+            NSLayoutConstraint.activate([
+                label.centerXAnchor.constraint(equalTo: bg.centerXAnchor),
+                label.centerYAnchor.constraint(equalTo: bg.centerYAnchor, constant: -36),
+                label.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 32),
+                label.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -32),
+                button.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 28),
+                button.centerXAnchor.constraint(equalTo: bg.centerXAnchor),
+                button.widthAnchor.constraint(equalToConstant: 160),
+                button.heightAnchor.constraint(equalToConstant: 52),
+            ])
+
+            self.view.addSubview(bg)
+            self.loadingOverlay = bg
+        }
+    }
+
+    @objc private func retryLoad() {
+        NSLog("[SYNAP] User tapped Retry — reloading WebView")
+        retryCount = 0
+        showLoadingOverlay()
+        webView?.reload()
+    }
+
+    private func handleLoadFailure(error: Error) {
+        let nsError = error as NSError
+        // NSURLErrorCancelled (-999) fires on every redirect — not a real failure
+        guard nsError.code != NSURLErrorCancelled else {
+            NSLog("[SYNAP] Navigation cancelled (redirect) — ignoring")
+            return
+        }
+        if retryCount < maxRetries {
+            retryCount += 1
+            let delay = Double(retryCount) * 1.5
+            NSLog("[SYNAP] Load failed (%@) — retry %d/%d in %.1fs",
+                  error.localizedDescription, retryCount, maxRetries, delay)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.webView?.reload()
+            }
+        } else {
+            NSLog("[SYNAP] All retries exhausted — showing error UI")
+            showRetryView()
+        }
+    }
+
+    // MARK: - WKNavigationDelegate overrides
+
+    override func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        super.webView(webView, didStartProvisionalNavigation: navigation)
+        NSLog("[SYNAP] didStartProvisionalNavigation — %@",
+              webView.url?.absoluteString ?? "nil")
+    }
+
+    override func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        super.webView(webView, didFinish: navigation)
+        retryCount = 0
+        NSLog("[SYNAP] didFinish — %@", webView.url?.absoluteString ?? "nil")
+        hideLoadingOverlay()
+    }
+
+    override func webView(_ webView: WKWebView,
+                          didFailProvisionalNavigation navigation: WKNavigation!,
+                          withError error: Error) {
+        super.webView(webView, didFailProvisionalNavigation: navigation, withError: error)
+        NSLog("[SYNAP] didFailProvisionalNavigation: %@ (code %ld)",
+              error.localizedDescription, (error as NSError).code)
+        handleLoadFailure(error: error)
+    }
+
+    override func webView(_ webView: WKWebView,
+                          didFail navigation: WKNavigation!,
+                          withError error: Error) {
+        super.webView(webView, didFail: navigation, withError: error)
+        NSLog("[SYNAP] didFail: %@ (code %ld)",
+              error.localizedDescription, (error as NSError).code)
+        handleLoadFailure(error: error)
     }
 }
 `
 
-const capacitorDidLoadPatch = `\n    /// Capacitor 8: register custom bundled plugins here.\n    override func capacitorDidLoad() {\n        bridge?.registerPluginInstance(SynapHealthKitPlugin())\n    }\n`
+// Minimal patch applied when ViewController.swift already exists but lacks
+// capacitorDidLoad (shouldn't happen on CI since ios/ is always regenerated
+// fresh, but kept as a safety net for local development).
+const capacitorDidLoadPatch = `\n    override func capacitorDidLoad() {\n        bridge?.registerPluginInstance(SynapHealthKitPlugin())\n    }\n`
 
 let vcCreated = false
 if (existsSync(VIEWCONTROLLER)) {

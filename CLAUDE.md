@@ -208,7 +208,7 @@ The `ios/` folder is **never committed**. On each CI run:
 | 3 | Writes `App.entitlements` | Associated Domains, Push Notifications, HealthKit |
 | 4 | Writes `SynapHealthKitPlugin.swift` | Custom HealthKit bridge (`CAPBridgedPlugin` conformance) |
 | 5 | Writes `SynapHealthKitPlugin.m` (empty stub) | Avoids linker warnings; the macro-based registration is NOT used |
-| 6 | Writes / patches `ViewController.swift` | Subclasses `CAPBridgeViewController` to register HealthKit plugin via `capacitorDidLoad()` |
+| 6 | Writes `ViewController.swift` | Registers HealthKit plugin; branded loading overlay; WKNavigationDelegate error logging + auto-retry |
 | 7 | **Patches `Main.storyboard`** | Changes `customClass="CAPBridgeViewController" customModule="Capacitor"` → `customClass="ViewController"` so the subclass is actually instantiated |
 | 8 | Adds all new files to `project.pbxproj` | PBXBuildFile + PBXFileReference + PBXSourcesBuildPhase entries |
 | 9 | Links `HealthKit.framework` | PBXFrameworksBuildPhase entry |
@@ -254,7 +254,22 @@ unless the storyboard is updated to reference `customClass="ViewController"`
 
 ---
 
-## 8. Splash Screen (Black Screen Prevention)
+## 8. Native Launch URL
+
+`capacitor.config.ts → server.url = 'https://www.synapfit.app/dashboard'`
+
+**Always use the `www.` subdomain.** The apex domain (`synapfit.app`) redirects
+to `www.synapfit.app` before the first byte is served. Inside a native WebView
+this redirect fires before React paints, adding latency and a potential failure
+point. Using `www.` directly removes that hop.
+
+The `/dashboard` route then performs a single server-side redirect to
+`/auth/login?redirectTo=%2Fdashboard` for unauthenticated users. This is handled
+correctly by `allowNavigation: ['synapfit.app', '*.synapfit.app']`.
+
+---
+
+## 9. Splash Screen (Black Screen Prevention)
 
 `capacitor.config.ts` settings:
 ```typescript
@@ -275,7 +290,7 @@ load or React crashes, the app will show a permanent black screen.
 
 ---
 
-## 9. Notification System
+## 10. Notification System
 
 ### Architecture
 
@@ -307,7 +322,7 @@ load or React crashes, the app will show a permanent black screen.
 
 ---
 
-## 10. Apple Health (HealthKit)
+## 11. Apple Health (HealthKit)
 
 - **JS side**: `src/lib/healthkit.ts` — `registerPlugin<NativeHealthKitPlugin>('SynapHealthKit')`
 - **Swift side**: `SynapHealthKitPlugin.swift` — written by `setup-ios.mjs`
@@ -324,7 +339,7 @@ plugin is not registered. This happens when:
 
 ---
 
-## 11. Subscription & Billing
+## 12. Subscription & Billing
 
 - **LemonSqueezy** for web payments (`/api/checkout`, `/api/billing/`)
 - **Apple In-App Purchase** — not yet wired (native builds use LemonSqueezy
@@ -335,7 +350,7 @@ plugin is not registered. This happens when:
 
 ---
 
-## 12. Internationalisation
+## 13. Internationalisation
 
 - Language stored in `users.language` column (`'en'` | `'ar'`)
 - `ArabicUiTranslator` component applies RTL (`dir="rtl"`) + translates
@@ -344,7 +359,7 @@ plugin is not registered. This happens when:
 
 ---
 
-## 13. Supabase Tables (Key)
+## 14. Supabase Tables (Key)
 
 | Table | Purpose |
 |---|---|
@@ -357,7 +372,7 @@ Full Row/Insert/Update types in `src/lib/supabase.ts`.
 
 ---
 
-## 14. Vercel Deployment
+## 15. Vercel Deployment
 
 - **Auto-deploy**: every push to `main` triggers a Vercel production deploy.
 - **Crons** (defined in `vercel.json`):
@@ -374,7 +389,7 @@ Full Row/Insert/Update types in `src/lib/supabase.ts`.
 
 ---
 
-## 15. Common Issues & Fixes
+## 16. Common Issues & Fixes
 
 ### Black screen on app open
 **Cause**: `launchAutoHide: false` with dark background — splash never hides.  
@@ -398,6 +413,20 @@ Requires a new native build.
 **Cause**: Capacitor plugin calls blocking the UI thread indefinitely.  
 **Fix**: All plugin calls wrapped in `withTimeout()` — max 2s for schedule, 1.5s for cancel/check.
 
+### Black screen — WebView fails to load remote URL
+**Symptom**: App opens, splash hides, then black screen. No React UI.  
+**Diagnosis**: WKWebView failing to complete the remote navigation silently.  
+**Fix applied**:
+- `server.url` changed to `https://www.synapfit.app/dashboard` (removes apex→www redirect)
+- `ViewController.swift` shows a branded loading overlay while WebView loads
+- `WKNavigationDelegate` overrides log `NSLog("[SYNAP] ...")` for Xcode/Console diagnosis
+- Auto-retry 3× with 1.5/3.0/4.5s back-off on `didFailProvisionalNavigation` / `didFail`
+- "Try Again" button shown after all retries fail
+
+**To diagnose a live device**: Connect iPhone → Xcode → Window → Devices →
+select device → open Console and filter by `[SYNAP]`. Every navigation event
+is logged with the URL, error code, and retry count.
+
 ### Vercel build error (TypeScript)
 **Diagnose locally**: `npm run build` — errors print immediately.  
 **TypeScript only**: `npx tsc --noEmit`.  
@@ -410,7 +439,7 @@ Capacitor's conditional types failing Vercel's TypeScript check.
 
 ---
 
-## 16. Keeping This File Updated
+## 17. Keeping This File Updated
 
 Update CLAUDE.md when:
 - A new Capacitor plugin is added (update §7 and §10)
@@ -420,4 +449,4 @@ Update CLAUDE.md when:
 - The subscription model changes (update §11)
 - The iOS CI runner or Xcode version changes (update §7)
 
-Last updated: 2026-05-22
+Last updated: 2026-05-22 (build 57 — WebView overlay + retry, www URL, CLAUDE.md)
