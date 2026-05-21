@@ -209,32 +209,38 @@ public class SynapHealthKitPlugin: CAPPlugin {
             return
         }
 
+        // Use a serial queue so all result mutations are thread-safe (Swift 6)
+        let serialQueue = DispatchQueue(label: "app.synap.healthkit.results")
         let group = DispatchGroup()
         var result = baseSummary(available: true, authorized: true)
 
         group.enter()
         readTodaySum(identifier: .stepCount, unit: HKUnit.count()) { value in
-            if let value = value { result["stepsToday"] = Int(value.rounded()) }
+            serialQueue.sync { if let v = value { result["stepsToday"] = Int(v.rounded()) } }
             group.leave()
         }
 
         group.enter()
         readTodaySum(identifier: .activeEnergyBurned, unit: HKUnit.kilocalorie()) { value in
-            if let value = value { result["activeEnergyKcalToday"] = Int(value.rounded()) }
+            serialQueue.sync { if let v = value { result["activeEnergyKcalToday"] = Int(v.rounded()) } }
             group.leave()
         }
 
         group.enter()
         readLatest(identifier: .heartRate, unit: HKUnit.count().unitDivided(by: HKUnit.minute())) { value, date in
-            if let value = value { result["latestHeartRateBpm"] = Int(value.rounded()) }
-            if let date = date { result["latestHeartRateDate"] = iso8601(date) }
+            serialQueue.sync {
+                if let v = value { result["latestHeartRateBpm"] = Int(v.rounded()) }
+                if let d = date { result["latestHeartRateDate"] = self.iso8601(d) }
+            }
             group.leave()
         }
 
         group.enter()
         readLatest(identifier: .bodyMass, unit: HKUnit.gramUnit(with: .kilo)) { value, date in
-            if let value = value { result["latestWeightKg"] = round(value * 10) / 10 }
-            if let date = date { result["latestWeightDate"] = iso8601(date) }
+            serialQueue.sync {
+                if let v = value { result["latestWeightKg"] = round(v * 10) / 10 }
+                if let d = date { result["latestWeightDate"] = self.iso8601(d) }
+            }
             group.leave()
         }
 
@@ -313,31 +319,54 @@ console.log('   ✓  SynapHealthKitPlugin.m')
 if (existsSync(PBXPROJ)) {
   let pbx = readFileSync(PBXPROJ, 'utf8')
   if (!pbx.includes('SynapHealthKitPlugin.swift')) {
-    const swiftFileRef = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '0')
+    const swiftFileRef  = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '0')
     const swiftBuildFile = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '1')
-    const objcFileRef = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '2')
-    const objcBuildFile = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '3')
+    const objcFileRef   = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '2')
+    const objcBuildFile  = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '3')
+    // Fixed IDs for HealthKit.framework (stable across runs)
+    const hkFwRef       = 'SYNAPHEALTH0000000000FWREF'
+    const hkFwBuildFile = 'SYNAPHEALTH0000000000FWBLD'
 
+    // ── PBXBuildFile ──────────────────────────────────────────────────────────
     pbx = pbx.replace(
       '/* End PBXBuildFile section */',
-      `\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${swiftFileRef} /* SynapHealthKitPlugin.swift */; };\n\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = ${objcFileRef} /* SynapHealthKitPlugin.m */; };\n/* End PBXBuildFile section */`,
+      `\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${swiftFileRef} /* SynapHealthKitPlugin.swift */; };\n` +
+      `\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = ${objcFileRef} /* SynapHealthKitPlugin.m */; };\n` +
+      `\t\t${hkFwBuildFile} /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${hkFwRef} /* HealthKit.framework */; settings = {ATTRIBUTES = (Required, ); }; };\n` +
+      `/* End PBXBuildFile section */`,
     )
+
+    // ── PBXFileReference ─────────────────────────────────────────────────────
     pbx = pbx.replace(
       '/* End PBXFileReference section */',
-      `\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynapHealthKitPlugin.swift; sourceTree = "<group>"; };\n\t\t${objcFileRef} /* SynapHealthKitPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SynapHealthKitPlugin.m; sourceTree = "<group>"; };\n/* End PBXFileReference section */`,
+      `\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynapHealthKitPlugin.swift; sourceTree = "<group>"; };\n` +
+      `\t\t${objcFileRef} /* SynapHealthKitPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SynapHealthKitPlugin.m; sourceTree = "<group>"; };\n` +
+      `\t\t${hkFwRef} /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };\n` +
+      `/* End PBXFileReference section */`,
     )
+
+    // ── Group children (cosmetic — for Xcode navigator) ───────────────────────
     pbx = pbx.replace(
       /(\s+children = \(\n\s+[A-Z0-9]+ \/\* AppDelegate\.swift \*\/,)/,
       `$1\n\t\t\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */,\n\t\t\t\t${objcFileRef} /* SynapHealthKitPlugin.m */,`,
     )
-    // In pbxproj, isa = PBXSourcesBuildPhase comes BEFORE files = (, so we
-    // anchor on the isa line and insert right after the opening of files = (.
+
+    // ── PBXSourcesBuildPhase — add plugin files to compile ───────────────────
+    // isa = PBXSourcesBuildPhase comes BEFORE files = ( in pbxproj format
     pbx = pbx.replace(
       /(isa = PBXSourcesBuildPhase;[\s\S]*?files = \(\n)/,
       `$1\t\t\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */,\n\t\t\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */,\n`,
     )
+
+    // ── PBXFrameworksBuildPhase — link HealthKit.framework ───────────────────
+    pbx = pbx.replace(
+      /(isa = PBXFrameworksBuildPhase;[\s\S]*?files = \(\n)/,
+      `$1\t\t\t\t${hkFwBuildFile} /* HealthKit.framework in Frameworks */,\n`,
+    )
+
     writeFileSync(PBXPROJ, pbx, 'utf8')
-    console.log('   ✓  Added SynapHealthKitPlugin files to Xcode sources')
+    console.log('   ✓  Added SynapHealthKitPlugin.swift + .m to Xcode sources')
+    console.log('   ✓  Linked HealthKit.framework')
   } else {
     console.log('   ✓  SynapHealthKitPlugin files already in Xcode project')
   }
@@ -355,13 +384,17 @@ if (existsSync(PBXPROJ)) {
 
   // Only insert if not already there
   if (!pbx.includes('CODE_SIGN_ENTITLEMENTS')) {
-    // Insert into both Debug and Release build settings blocks
+    // Insert into both Debug and Release build settings blocks.
+    // Also add OTHER_SWIFT_FLAGS to enable the NonescapableTypes experimental
+    // feature — required because our SynapHealthKitPlugin.swift imports Capacitor
+    // whose XCFramework is compiled with this Swift feature enabled.
     pbx = pbx.replace(
       /PRODUCT_BUNDLE_IDENTIFIER = app\.synap\.fit;/g,
-      `CODE_SIGN_ENTITLEMENTS = "${entRelPath}";\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = app.synap.fit;`
+      `CODE_SIGN_ENTITLEMENTS = "${entRelPath}";\n\t\t\t\tOTHER_SWIFT_FLAGS = "-enable-experimental-feature NonescapableTypes";\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = app.synap.fit;`
     )
     writeFileSync(PBXPROJ, pbx, 'utf8')
     console.log('   ✓  CODE_SIGN_ENTITLEMENTS added to project.pbxproj')
+    console.log('   ✓  OTHER_SWIFT_FLAGS = NonescapableTypes added to project.pbxproj')
   } else {
     console.log('   ✓  CODE_SIGN_ENTITLEMENTS already present — skipped')
   }
