@@ -73,6 +73,12 @@ jobs:
       - name: Sync Capacitor config and assets into iOS project
         run: npx cap sync ios
 
+      # ── Generate app icon + splash for iOS ───────────────────────────────────
+      # Reads resources/icon.png and resources/splash.png and writes all
+      # required icon sizes into ios/App/App/Assets.xcassets/
+      - name: Generate iOS app icon and splash screen
+        run: npx @capacitor/assets generate --ios
+
       # ── Apply iOS configuration ───────────────────────────────────────────────
       # Patches plugin Package.swift files for NonescapableTypes,
       # adds Info.plist permission strings, Associated Domains entitlement,
