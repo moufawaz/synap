@@ -128,6 +128,11 @@ for (const [key, value] of plistKeys) {
   console.log(`   ✓  ${key}`)
 }
 
+// Add export compliance key as boolean — tells App Store Connect this app uses
+// only standard HTTPS/TLS (exempt from export compliance documentation)
+pb(`-c "Add :ITSAppUsesNonExemptEncryption bool false" "${PLIST}"`)
+console.log('   ✓  ITSAppUsesNonExemptEncryption = false')
+
 // ── 2. App.entitlements — Associated Domains + Push Notifications ─────────────
 console.log('\n🔑  Writing App.entitlements...')
 
