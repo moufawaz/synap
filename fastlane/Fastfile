@@ -25,10 +25,8 @@ platform :android do
     #    otherwise fall back to timestamp.
     version_code = (ENV['GITHUB_RUN_NUMBER'] || Time.now.to_i.to_s).to_i
 
-    android_set_version_code(
-      version_code: version_code,
-      gradle_file: 'android/app/build.gradle',
-    )
+    # Patch versionCode directly — no plugin required
+    sh("sed -i 's/versionCode [0-9]*/versionCode #{version_code}/' ../android/app/build.gradle")
 
     # 2. Build signed release AAB
     gradle(
