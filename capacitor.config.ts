@@ -7,9 +7,10 @@ const config: CapacitorConfig = {
   // because server.url points to the live Vercel deployment
   webDir: 'out',
   server: {
-    // Load the live Vercel app inside the native WebView.
-    // All Next.js API routes, Supabase auth, and streaming work as normal.
-    url: 'https://synapfit.app',
+    // Start the native app at /dashboard so the landing page is never loaded.
+    // The app layout redirects unauthenticated users to /auth/login automatically,
+    // so this works correctly for both logged-in and logged-out states.
+    url: 'https://synapfit.app/dashboard',
     cleartext: false,
     androidScheme: 'https',
     // Explicitly allow synapfit.app navigations to stay inside the WebView.
