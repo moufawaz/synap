@@ -17,8 +17,26 @@ export default function LandingPage() {
   const { lang, setLang } = useLanguage()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userName, setUserName] = useState('')
+  const [isNative, setIsNative] = useState(false)
 
   useEffect(() => {
+    // In the native Capacitor app, skip the landing page entirely —
+    // show a black screen immediately and redirect to app/login.
+    if ((window as any).Capacitor?.isNativePlatform?.()) {
+      setIsNative(true)
+      import('@/lib/supabase').then(async ({ createBrowserClient }) => {
+        const supabase = createBrowserClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+          SplashScreen.hide()
+        }).catch(() => {})
+        window.location.replace(user ? '/dashboard' : '/auth/login')
+      }).catch(() => {
+        window.location.replace('/auth/login')
+      })
+      return
+    }
+
     // Supabase password recovery sends users to the site URL (homepage) with
     // the recovery token in the URL hash when the redirectTo URL isn't in the
     // allowlist. Detect this and forward to the reset-password page immediately.
@@ -34,18 +52,6 @@ export default function LandingPage() {
         const supabase = createBrowserClient()
         const { data: { user } } = await supabase.auth.getUser()
 
-        // In the native app, skip the landing page entirely —
-        // go straight to the app or login screen.
-        const { isNativePlatform } = await import('@/lib/platform')
-        if (isNativePlatform()) {
-          // Hide splash screen before navigating
-          import('@capacitor/splash-screen').then(({ SplashScreen }) => {
-            SplashScreen.hide()
-          }).catch(() => {})
-          window.location.replace(user ? '/dashboard' : '/auth/login')
-          return
-        }
-
         if (user) {
           setIsLoggedIn(true)
           const { data } = await supabase
@@ -59,6 +65,11 @@ export default function LandingPage() {
     }
     checkAuth()
   }, [])
+
+  // Show black screen instantly in native app while auth check + redirect runs
+  if (isNative) {
+    return <div style={{ background: '#0A0A0F', minHeight: '100vh' }} />
+  }
 
   return (
     <div
