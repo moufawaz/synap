@@ -330,9 +330,11 @@ if (existsSync(PBXPROJ)) {
       /(\s+children = \(\n\s+[A-Z0-9]+ \/\* AppDelegate\.swift \*\/,)/,
       `$1\n\t\t\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */,\n\t\t\t\t${objcFileRef} /* SynapHealthKitPlugin.m */,`,
     )
+    // In pbxproj, isa = PBXSourcesBuildPhase comes BEFORE files = (, so we
+    // anchor on the isa line and insert right after the opening of files = (.
     pbx = pbx.replace(
-      /(\s+files = \(\n)([\s\S]*?)(\s+\);[\s\S]*?isa = PBXSourcesBuildPhase;)/,
-      (match, open, files, close) => `${open}\t\t\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */,\n\t\t\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */,\n${files}${close}`,
+      /(isa = PBXSourcesBuildPhase;[\s\S]*?files = \(\n)/,
+      `$1\t\t\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */,\n\t\t\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */,\n`,
     )
     writeFileSync(PBXPROJ, pbx, 'utf8')
     console.log('   ✓  Added SynapHealthKitPlugin files to Xcode sources')

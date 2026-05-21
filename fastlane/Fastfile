@@ -89,10 +89,7 @@ platform :ios do
       app_identifier:          'app.synap.fit',
       git_url:                 ENV['MATCH_GIT_URL'],
       git_basic_authorization: ENV['MATCH_GIT_TOKEN'],
-      # readonly: false — allows match to update the provisioning profile when
-      # new capabilities (HealthKit, Push, etc.) are added to the App ID.
-      # The profile is stored in the certs repo so the cert itself isn't recreated.
-      readonly:                false,
+      readonly:                is_ci,
       keychain_name:           'fastlane_match',
       keychain_password:       ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
       api_key:                 asc_api_key,
