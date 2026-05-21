@@ -36,13 +36,15 @@ export async function isAppleHealthAvailable(): Promise<boolean> {
   }
 }
 
-export async function requestAppleHealthAccess(): Promise<boolean> {
-  if (!canUseAppleHealth()) return false
+export async function requestAppleHealthAccess(): Promise<{ authorized: boolean; error?: string }> {
+  if (!canUseAppleHealth()) return { authorized: false, error: 'not_native_ios' }
   try {
     const result = await NativeHealthKit.requestAuthorization()
-    return !!result.authorized
-  } catch {
-    return false
+    return { authorized: !!result.authorized, error: (result as any).error }
+  } catch (e: any) {
+    const msg = e?.message || e?.toString() || 'plugin_not_found'
+    console.error('[HealthKit] requestAuthorization failed:', msg)
+    return { authorized: false, error: msg }
   }
 }
 

@@ -32,7 +32,7 @@
  * and forwards to Next.js router.push(url).
  */
 
-import { isNativePlatform } from './platform'
+import { isNativePlatform, getPlatform } from './platform'
 import type { NotificationPrefs } from './notification-prefs'
 
 // ── Stable notification IDs ──────────────────────────────────────────────────
@@ -79,6 +79,14 @@ async function getPlugin() {
   }
 }
 
+/** Wrap a promise with a timeout — resolves with fallback value if it hangs */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ])
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -104,8 +112,8 @@ export async function checkNotificationPermission(): Promise<'granted' | 'denied
   const plugin = await getPlugin()
   if (!plugin) return 'prompt'
   try {
-    const { display } = await plugin.checkPermissions()
-    return display as 'granted' | 'denied' | 'prompt'
+    const result = await withTimeout(plugin.checkPermissions(), 3000, { display: 'prompt' as const })
+    return result.display as 'granted' | 'denied' | 'prompt'
   } catch {
     return 'prompt'
   }
@@ -210,7 +218,7 @@ export async function cancelAllNotifications(): Promise<void> {
       { id: NOTIF_IDS.COACHING },
       { id: NOTIF_IDS.STREAK },
     ]
-    await plugin.cancel({ notifications: all })
+    await withTimeout(plugin.cancel({ notifications: all }), 3000, undefined)
   } catch {/* ignore */}
 }
 
@@ -242,8 +250,8 @@ export async function applyNotificationSchedule(
     if (!granted) return
   }
 
-  // 4. Ensure Android channels exist
-  await setupNotificationChannels()
+  // 4. Ensure Android channels exist (iOS doesn't use channels — skip)
+  if (getPlatform() === 'android') await setupNotificationChannels()
 
   // Typed as any[] to avoid complex conditional Capacitor type resolution on the
   // web build (Vercel TypeScript check).  All fields are validated at runtime
@@ -365,10 +373,10 @@ export async function applyNotificationSchedule(
     })
   }
 
-  // 5. Schedule everything in one batch call
+  // 5. Schedule everything in one batch call (3 s timeout — never hang the UI)
   if (notifications.length === 0) return
   try {
-    await plugin.schedule({ notifications })
+    await withTimeout(plugin.schedule({ notifications }), 5000, undefined)
   } catch (e) {
     console.warn('[Notifications] Schedule failed:', e)
   }

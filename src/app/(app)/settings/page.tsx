@@ -75,16 +75,20 @@ export default function SettingsPage() {
     setHealthLoading(true)
     setHealthMessage(null)
     try {
-      const authorized = await requestAppleHealthAccess()
+      const { authorized, error: hkError } = await requestAppleHealthAccess()
       const summary = await readAppleHealthSummary()
       setHealthSummary(summary)
-      setHealthMessage(
-        authorized || summary.authorized
-          ? (lang === 'ar' ? 'تم الاتصال بـ Apple Health.' : 'Apple Health connected.')
-          : (lang === 'ar' ? 'لم يتم منح إذن Apple Health.' : 'Apple Health permission was not granted.'),
-      )
-    } catch {
-      setHealthMessage(lang === 'ar' ? 'تعذر الاتصال بـ Apple Health.' : 'Could not connect to Apple Health.')
+      if (authorized || summary.authorized) {
+        setHealthMessage(lang === 'ar' ? 'تم الاتصال بـ Apple Health.' : 'Apple Health connected.')
+      } else if (hkError?.includes('plugin_not_found') || hkError?.includes('not implemented')) {
+        setHealthMessage('HealthKit bridge not loaded — rebuild required.')
+      } else if (hkError) {
+        setHealthMessage(`HealthKit error: ${hkError}`)
+      } else {
+        setHealthMessage(lang === 'ar' ? 'لم يتم منح إذن Apple Health.' : 'Apple Health permission was not granted.')
+      }
+    } catch (e: any) {
+      setHealthMessage(`Could not connect: ${e?.message || 'unknown error'}`)
     } finally {
       setHealthLoading(false)
     }
