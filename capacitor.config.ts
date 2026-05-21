@@ -12,6 +12,9 @@ const config: CapacitorConfig = {
     url: 'https://synapfit.app',
     cleartext: false,
     androidScheme: 'https',
+    // Explicitly allow synapfit.app navigations to stay inside the WebView.
+    // Without this, Capacitor may open external HTTPS URLs in Safari.
+    allowNavigation: ['synapfit.app', '*.synapfit.app'],
   },
   plugins: {
     SplashScreen: {
