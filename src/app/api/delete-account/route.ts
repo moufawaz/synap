@@ -41,6 +41,12 @@ export async function DELETE() {
       }
     }
 
+    // 'users' table uses 'id' as the FK column rather than 'user_id'
+    const { error: usersErr } = await admin.from('users').delete().eq('id', userId)
+    if (usersErr && !isMissingTableError(usersErr.message)) {
+      console.warn('[delete-account] Could not delete users row:', usersErr.message)
+    }
+
     const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
     if (deleteError) {
       console.error('[delete-account] Failed to delete auth user:', deleteError.message)
