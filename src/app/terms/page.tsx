@@ -43,6 +43,7 @@ export default function TermsPage() {
               <li>Custom workout programs with progressive overload and exercise guidance.</li>
               <li>Body measurement tracking, progress analytics, and composition reports.</li>
               <li>Nutrition logging via text, manual entry, and food photo scanning.</li>
+              <li>Optional Apple Health connection in the iOS app for steps, active calories, heart rate, and body weight.</li>
               <li>AI-driven check-ins, plateau detection, and plan renewal.</li>
               <li>Supplement recommendations (Elite tier).</li>
               <li>Weekly body composition reports delivered via email (Elite tier).</li>
@@ -110,6 +111,7 @@ export default function TermsPage() {
               <li>Any other significant health conditions</li>
             </ul>
             <P>...you should consult a qualified physician, registered dietitian, or certified personal trainer. SYNAP and its operators are not liable for any injury, illness, or adverse outcome arising from your use of the Service.</P>
+            <P>Apple Health data is used only as supporting context for general wellness coaching. It is not used to diagnose, treat, or monitor medical conditions.</P>
           </Section>
 
           <Section title="8. Intellectual Property">

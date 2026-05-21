@@ -16,11 +16,12 @@
 
 import { execSync } from 'child_process'
 import { existsSync, writeFileSync, readFileSync } from 'fs'
-import path from 'path'
 
 const PLIST        = 'ios/App/App/Info.plist'
 const ENTITLEMENTS = 'ios/App/App/App.entitlements'
 const PBXPROJ      = 'ios/App/App.xcodeproj/project.pbxproj'
+const HEALTHKIT_PLUGIN = 'ios/App/App/SynapHealthKitPlugin.swift'
+const HEALTHKIT_REGISTRATION = 'ios/App/App/SynapHealthKitPlugin.m'
 
 // ── 1. Patch Capacitor plugin Package.swift for NonescapableTypes ─────────────
 // Capacitor 8 core ships as a binary XCFramework compiled with the experimental
@@ -162,7 +163,187 @@ writeFileSync(ENTITLEMENTS, entitlementsXml, 'utf8')
 console.log('   ✓  Associated Domains: applinks:synapfit.app')
 console.log('   ✓  Push Notifications: aps-environment = production')
 
-// ── 3. Wire entitlements into Xcode build settings ───────────────────────────
+// ── 3. Native HealthKit Capacitor bridge ─────────────────────────────────────
+console.log('\n🫀  Writing SynapHealthKit native bridge...')
+
+const healthKitSwift = `import Foundation
+import Capacitor
+import HealthKit
+
+@objc(SynapHealthKitPlugin)
+public class SynapHealthKitPlugin: CAPPlugin {
+    private let healthStore = HKHealthStore()
+
+    @objc func isAvailable(_ call: CAPPluginCall) {
+        call.resolve(["available": HKHealthStore.isHealthDataAvailable()])
+    }
+
+    @objc func requestAuthorization(_ call: CAPPluginCall) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            call.resolve(["authorized": false, "available": false])
+            return
+        }
+
+        var readTypes = Set<HKObjectType>()
+        if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) { readTypes.insert(steps) }
+        if let activeEnergy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) { readTypes.insert(activeEnergy) }
+        if let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate) { readTypes.insert(heartRate) }
+        if let bodyMass = HKObjectType.quantityType(forIdentifier: .bodyMass) { readTypes.insert(bodyMass) }
+
+        var shareTypes = Set<HKSampleType>()
+        if let bodyMass = HKObjectType.quantityType(forIdentifier: .bodyMass) { shareTypes.insert(bodyMass) }
+        shareTypes.insert(HKObjectType.workoutType())
+
+        healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { success, error in
+            if let error = error {
+                call.resolve(["authorized": false, "available": true, "error": error.localizedDescription])
+                return
+            }
+            call.resolve(["authorized": success, "available": true])
+        }
+    }
+
+    @objc func readSummary(_ call: CAPPluginCall) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            call.resolve(baseSummary(available: false, authorized: false))
+            return
+        }
+
+        let group = DispatchGroup()
+        var result = baseSummary(available: true, authorized: true)
+
+        group.enter()
+        readTodaySum(identifier: .stepCount, unit: HKUnit.count()) { value in
+            if let value = value { result["stepsToday"] = Int(value.rounded()) }
+            group.leave()
+        }
+
+        group.enter()
+        readTodaySum(identifier: .activeEnergyBurned, unit: HKUnit.kilocalorie()) { value in
+            if let value = value { result["activeEnergyKcalToday"] = Int(value.rounded()) }
+            group.leave()
+        }
+
+        group.enter()
+        readLatest(identifier: .heartRate, unit: HKUnit.count().unitDivided(by: HKUnit.minute())) { value, date in
+            if let value = value { result["latestHeartRateBpm"] = Int(value.rounded()) }
+            if let date = date { result["latestHeartRateDate"] = iso8601(date) }
+            group.leave()
+        }
+
+        group.enter()
+        readLatest(identifier: .bodyMass, unit: HKUnit.gramUnit(with: .kilo)) { value, date in
+            if let value = value { result["latestWeightKg"] = round(value * 10) / 10 }
+            if let date = date { result["latestWeightDate"] = iso8601(date) }
+            group.leave()
+        }
+
+        group.notify(queue: .main) {
+            call.resolve(result)
+        }
+    }
+
+    private func readTodaySum(identifier: HKQuantityTypeIdentifier, unit: HKUnit, completion: @escaping (Double?) -> Void) {
+        guard let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else {
+            completion(nil)
+            return
+        }
+
+        let start = Calendar.current.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
+
+        let query = HKStatisticsQuery(quantityType: quantityType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, _ in
+            completion(statistics?.sumQuantity()?.doubleValue(for: unit))
+        }
+        healthStore.execute(query)
+    }
+
+    private func readLatest(identifier: HKQuantityTypeIdentifier, unit: HKUnit, completion: @escaping (Double?, Date?) -> Void) {
+        guard let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else {
+            completion(nil, nil)
+            return
+        }
+
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let query = HKSampleQuery(sampleType: quantityType, predicate: nil, limit: 1, sortDescriptors: [sort]) { _, samples, _ in
+            guard let sample = samples?.first as? HKQuantitySample else {
+                completion(nil, nil)
+                return
+            }
+            completion(sample.quantity.doubleValue(for: unit), sample.endDate)
+        }
+        healthStore.execute(query)
+    }
+
+    private func baseSummary(available: Bool, authorized: Bool) -> [String: Any] {
+        return [
+            "available": available,
+            "authorized": authorized,
+            "stepsToday": NSNull(),
+            "activeEnergyKcalToday": NSNull(),
+            "latestHeartRateBpm": NSNull(),
+            "latestWeightKg": NSNull(),
+            "latestWeightDate": NSNull(),
+            "latestHeartRateDate": NSNull()
+        ]
+    }
+
+    private func iso8601(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        return formatter.string(from: date)
+    }
+}
+`
+
+writeFileSync(HEALTHKIT_PLUGIN, healthKitSwift, 'utf8')
+console.log('   ✓  SynapHealthKitPlugin.swift')
+
+const healthKitRegistration = `#import <Capacitor/Capacitor.h>
+
+CAP_PLUGIN(SynapHealthKitPlugin, "SynapHealthKit",
+  CAP_PLUGIN_METHOD(isAvailable, CAPPluginReturnPromise);
+  CAP_PLUGIN_METHOD(requestAuthorization, CAPPluginReturnPromise);
+  CAP_PLUGIN_METHOD(readSummary, CAPPluginReturnPromise);
+)
+`
+
+writeFileSync(HEALTHKIT_REGISTRATION, healthKitRegistration, 'utf8')
+console.log('   ✓  SynapHealthKitPlugin.m')
+
+if (existsSync(PBXPROJ)) {
+  let pbx = readFileSync(PBXPROJ, 'utf8')
+  if (!pbx.includes('SynapHealthKitPlugin.swift')) {
+    const swiftFileRef = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '0')
+    const swiftBuildFile = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '1')
+    const objcFileRef = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '2')
+    const objcBuildFile = 'SYNAP' + Math.random().toString(16).slice(2, 20).toUpperCase().padEnd(19, '3')
+
+    pbx = pbx.replace(
+      '/* End PBXBuildFile section */',
+      `\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${swiftFileRef} /* SynapHealthKitPlugin.swift */; };\n\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = ${objcFileRef} /* SynapHealthKitPlugin.m */; };\n/* End PBXBuildFile section */`,
+    )
+    pbx = pbx.replace(
+      '/* End PBXFileReference section */',
+      `\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynapHealthKitPlugin.swift; sourceTree = "<group>"; };\n\t\t${objcFileRef} /* SynapHealthKitPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SynapHealthKitPlugin.m; sourceTree = "<group>"; };\n/* End PBXFileReference section */`,
+    )
+    pbx = pbx.replace(
+      /(\s+children = \(\n\s+[A-Z0-9]+ \/\* AppDelegate\.swift \*\/,)/,
+      `$1\n\t\t\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */,\n\t\t\t\t${objcFileRef} /* SynapHealthKitPlugin.m */,`,
+    )
+    pbx = pbx.replace(
+      /(\s+files = \(\n)([\s\S]*?)(\s+\);[\s\S]*?isa = PBXSourcesBuildPhase;)/,
+      (match, open, files, close) => `${open}\t\t\t\t${swiftBuildFile} /* SynapHealthKitPlugin.swift in Sources */,\n\t\t\t\t${objcBuildFile} /* SynapHealthKitPlugin.m in Sources */,\n${files}${close}`,
+    )
+    writeFileSync(PBXPROJ, pbx, 'utf8')
+    console.log('   ✓  Added SynapHealthKitPlugin files to Xcode sources')
+  } else {
+    console.log('   ✓  SynapHealthKitPlugin files already in Xcode project')
+  }
+} else {
+  console.warn('   ⚠  project.pbxproj not found — HealthKit bridge file was written but not added')
+}
+
+// ── 4. Wire entitlements into Xcode build settings ───────────────────────────
 // The .pbxproj needs CODE_SIGN_ENTITLEMENTS set so Xcode uses the file.
 console.log('\n🔧  Updating Xcode project build settings...')
 

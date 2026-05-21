@@ -45,6 +45,7 @@ export default function PrivacyPage() {
               <li><strong className="text-white">Nutrition data:</strong> Meals, foods, and calories you log manually or via food photo scan.</li>
               <li><strong className="text-white">Workout data:</strong> Exercise completions, weights, sets, and reps you log.</li>
               <li><strong className="text-white">Progress photos:</strong> Images you voluntarily upload for progress tracking (Elite tier).</li>
+              <li><strong className="text-white">Apple Health data:</strong> If you connect Apple Health in the iOS app, we may read steps, active calories, heart rate, and body weight with your permission. You can deny or revoke access in iOS Health settings.</li>
               <li><strong className="text-white">Communications:</strong> Messages you send to Ion, support inquiries, and contact form submissions.</li>
               <li><strong className="text-white">Payment data:</strong> Billing is handled by Lemon Squeezy. We do not store your card details.</li>
             </ul>
@@ -63,6 +64,7 @@ export default function PrivacyPage() {
               <li>Generate and adapt your personalized diet and workout plans.</li>
               <li>Power Ion&apos;s AI coaching, responses, and proactive check-ins.</li>
               <li>Track your progress and generate weekly reports (Elite).</li>
+              <li>Use Apple Health data you choose to share to improve activity-aware coaching and measurement tracking.</li>
               <li>Process payments and manage your subscription.</li>
               <li>Send transactional emails (trial reminders, plan updates, weekly reports).</li>
               <li>Improve our AI models, product features, and service quality.</li>

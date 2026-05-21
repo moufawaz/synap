@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import IonAvatar from '@/components/ui/IonAvatar'
-import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown, Utensils, Heart, Upload, Activity, RefreshCw, CheckCircle, Bell } from 'lucide-react'
+import { Save, LogOut, Globe, User, Dumbbell, CreditCard, Shield, ChevronRight, AlertTriangle, Infinity as InfinityIcon, Zap, Crown, Utensils, Heart, Upload, Activity, RefreshCw, CheckCircle, Bell, Watch } from 'lucide-react'
 import { loadNotifPrefs, saveNotifPrefs, type NotificationPrefs } from '@/lib/notification-prefs'
 import { applyNotificationSchedule, requestNotificationPermission, checkNotificationPermission } from '@/lib/notifications'
 import { isNativePlatform } from '@/lib/platform'
+import { canUseAppleHealth, readAppleHealthSummary, requestAppleHealthAccess, type HealthKitSummary } from '@/lib/healthkit'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/lib/useLanguage'
@@ -39,6 +40,9 @@ export default function SettingsPage() {
   const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'prompt' | null>(null)
   const [notifApplying, setNotifApplying] = useState(false)
   const [isNative, setIsNative] = useState(false)
+  const [healthSummary, setHealthSummary] = useState<HealthKitSummary | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
+  const [healthMessage, setHealthMessage] = useState<string | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -65,6 +69,66 @@ export default function SettingsPage() {
       sub = { status: 'free_trial', plan_type: 'elite', trial_ends_at: profileRes.data.trial_ends_at, _is_free_trial: true }
     }
     setSubscription(sub)
+  }
+
+  async function connectAppleHealth() {
+    setHealthLoading(true)
+    setHealthMessage(null)
+    try {
+      const authorized = await requestAppleHealthAccess()
+      const summary = await readAppleHealthSummary()
+      setHealthSummary(summary)
+      setHealthMessage(
+        authorized || summary.authorized
+          ? (lang === 'ar' ? 'تم الاتصال بـ Apple Health.' : 'Apple Health connected.')
+          : (lang === 'ar' ? 'لم يتم منح إذن Apple Health.' : 'Apple Health permission was not granted.'),
+      )
+    } catch {
+      setHealthMessage(lang === 'ar' ? 'تعذر الاتصال بـ Apple Health.' : 'Could not connect to Apple Health.')
+    } finally {
+      setHealthLoading(false)
+    }
+  }
+
+  async function refreshAppleHealth() {
+    setHealthLoading(true)
+    setHealthMessage(null)
+    try {
+      const summary = await readAppleHealthSummary()
+      setHealthSummary(summary)
+      setHealthMessage(lang === 'ar' ? 'تم تحديث بيانات Apple Health.' : 'Apple Health data refreshed.')
+    } catch {
+      setHealthMessage(lang === 'ar' ? 'تعذر قراءة بيانات Apple Health.' : 'Could not read Apple Health data.')
+    } finally {
+      setHealthLoading(false)
+    }
+  }
+
+  async function saveAppleHealthWeight() {
+    if (!healthSummary?.latestWeightKg) return
+    setHealthLoading(true)
+    setHealthMessage(null)
+    try {
+      const date = healthSummary.latestWeightDate
+        ? new Date(healthSummary.latestWeightDate).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10)
+      const res = await fetch('/api/measurements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date,
+          weight_kg: healthSummary.latestWeightKg,
+          notes: 'Imported from Apple Health',
+        }),
+      })
+      if (!res.ok) throw new Error('save_failed')
+      updateProfile('weight_kg', healthSummary.latestWeightKg)
+      setHealthMessage(lang === 'ar' ? 'تم حفظ الوزن في القياسات.' : 'Weight saved to Measurements.')
+    } catch {
+      setHealthMessage(lang === 'ar' ? 'تعذر حفظ الوزن.' : 'Could not save weight.')
+    } finally {
+      setHealthLoading(false)
+    }
   }
 
   async function saveProfile() {
@@ -614,6 +678,76 @@ export default function SettingsPage() {
       {/* ── Health ──────────────────────────────────────────── */}
       {activeSection === 'health' && (
         <div className="flex flex-col gap-4">
+          <div className="glass-card p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Watch size={14} style={{ color: '#10B981' }} />
+                <p className="font-heading font-black text-xs tracking-widest uppercase" style={{ color: '#475569', letterSpacing: '0.14em' }}>
+                  {lang === 'ar' ? 'Apple Health' : 'APPLE HEALTH'}
+                </p>
+              </div>
+              {healthSummary?.authorized && (
+                <span className="font-heading text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981' }}>
+                  {lang === 'ar' ? 'متصل' : 'CONNECTED'}
+                </span>
+              )}
+            </div>
+            <p className="font-heading text-xs mb-4 leading-relaxed" style={{ color: '#64748B' }}>
+              {lang === 'ar'
+                ? 'اربط Apple Health ليقرأ Ion خطواتك، السعرات النشطة، معدل القلب، وآخر وزن. هذا يساعده على ضبط الخطة بناءً على نشاطك الحقيقي.'
+                : 'Connect Apple Health so Ion can read your steps, active calories, heart rate, and latest body weight. This helps Ion tune your plan from real activity data.'}
+            </p>
+
+            {!canUseAppleHealth() && (
+              <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <p className="font-heading text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
+                  {lang === 'ar'
+                    ? 'Apple Health يظهر داخل تطبيق iOS فقط بعد تثبيته من TestFlight أو App Store.'
+                    : 'Apple Health appears inside the iOS app after installing from TestFlight or the App Store.'}
+                </p>
+              </div>
+            )}
+
+            {healthSummary && (
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <HealthMetric label={lang === 'ar' ? 'خطوات اليوم' : 'Steps today'} value={healthSummary.stepsToday} unit="" />
+                <HealthMetric label={lang === 'ar' ? 'السعرات النشطة' : 'Active kcal'} value={healthSummary.activeEnergyKcalToday} unit="kcal" />
+                <HealthMetric label={lang === 'ar' ? 'آخر نبض' : 'Latest HR'} value={healthSummary.latestHeartRateBpm} unit="bpm" />
+                <HealthMetric label={lang === 'ar' ? 'آخر وزن' : 'Latest weight'} value={healthSummary.latestWeightKg} unit="kg" />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={healthSummary?.authorized ? refreshAppleHealth : connectAppleHealth}
+                disabled={!canUseAppleHealth() || healthLoading}
+                className="py-3 rounded-xl font-heading font-bold text-xs tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
+                style={{ background: '#10B981', color: '#04130E', letterSpacing: '0.08em' }}
+              >
+                {healthLoading ? <RefreshCw size={13} className="animate-spin" /> : <Watch size={13} />}
+                {healthSummary?.authorized
+                  ? (lang === 'ar' ? 'تحديث البيانات' : 'REFRESH DATA')
+                  : (lang === 'ar' ? 'ربط Apple Health' : 'CONNECT APPLE HEALTH')}
+              </button>
+              <button
+                type="button"
+                onClick={saveAppleHealthWeight}
+                disabled={!healthSummary?.latestWeightKg || healthLoading}
+                className="py-3 rounded-xl font-heading font-bold text-xs tracking-wider disabled:opacity-50"
+                style={{ background: 'rgba(187,92,246,0.1)', border: '1px solid rgba(187,92,246,0.25)', color: '#D88BFF', letterSpacing: '0.08em' }}
+              >
+                {lang === 'ar' ? 'حفظ الوزن في القياسات' : 'SAVE WEIGHT TO MEASUREMENTS'}
+              </button>
+            </div>
+
+            {healthMessage && (
+              <p className="font-heading text-xs mt-3" style={{ color: healthMessage.includes('Could not') || healthMessage.includes('تعذر') || healthMessage.includes('not granted') ? '#FCA5A5' : '#6EE7B7' }}>
+                {healthMessage}
+              </p>
+            )}
+          </div>
+
           <div className="glass-card p-5">
             <p className="font-heading font-black text-xs tracking-widest uppercase mb-1" style={{ color: '#475569', letterSpacing: '0.14em' }}>
               {lang === 'ar' ? 'الإصابات والقيود الجسدية' : 'INJURIES & PHYSICAL LIMITATIONS'}
@@ -1468,6 +1602,24 @@ function BillingHistory() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function HealthMetric({ label, value, unit }: { label: string; value: number | null; unit: string }) {
+  const display = value == null
+    ? '-'
+    : unit === ''
+      ? Math.round(value).toLocaleString()
+      : Number(value.toFixed(unit === 'kg' ? 1 : 0)).toLocaleString()
+
+  return (
+    <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <p className="font-heading text-[10px] tracking-wider mb-1" style={{ color: '#64748B' }}>{label}</p>
+      <p className="font-heading font-black text-lg text-white">
+        {display}
+        {value != null && unit && <span className="text-xs ml-1" style={{ color: '#64748B' }}>{unit}</span>}
+      </p>
     </div>
   )
 }

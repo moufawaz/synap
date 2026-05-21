@@ -29,7 +29,7 @@ const EN = {
     { icon: RefreshCw, title: 'Weekly Macro Auto-Adjustments', body: 'Every Monday Ion reviews your last 7 days — weight trend, workout completion, calorie adherence — and fine-tunes your macros by ±50–150 kcal automatically.', badge: 'Elite ⭐' },
     { icon: Pill, title: 'Supplement Recommendations', body: 'Based on your diet gaps and training — Ion recommends exactly what supplements help, right dose, right timing, and where to buy near you.', badge: 'Elite ⭐' },
     { icon: Globe, title: 'Bilingual Arabic + English', body: 'Full Arabic and English support. Ion speaks your language. RTL interface. Saudi food database. Local context built in.', badge: null },
-    { icon: Watch, title: 'Wearable Integration', body: 'Connect Apple Watch or Fitbit. Ion sees your actual steps, heart rate, and sleep — and adjusts your plan accordingly.', badge: 'Coming Soon' },
+    { icon: Watch, title: 'Apple Health Integration', body: 'On iOS, connect Apple Health so Ion can use your steps, active calories, heart rate, and body weight as coaching context.', badge: null },
     { icon: Users, title: 'Community Feed', body: 'See real SYNAP users hitting real goals. The accountability that keeps you consistent.', badge: 'Coming Soon' },
   ],
 }
@@ -58,7 +58,7 @@ const AR = {
     { icon: RefreshCw, title: 'تعديل الماكرو الأسبوعي التلقائي', body: 'كل اثنين آيون يراجع الـ 7 أيام الماضية — اتجاه الوزن، إتمام التمارين، الالتزام بالسعرات — ويضبط ماكروزك تلقائياً بـ ±50–150 سعرة.', badge: 'Elite ⭐' },
     { icon: Pill, title: 'توصيات المكملات الغذائية', body: 'بناءً على نقص نظامك الغذائي وتدريبك — آيون يوصي بالمكملات المناسبة، الجرعة الصحيحة، التوقيت، وأين تشتريها في السعودية.', badge: 'Elite ⭐' },
     { icon: Globe, title: 'ثنائي اللغة عربي + إنجليزي', body: 'دعم كامل للعربية والإنجليزية. آيون يتحدث لغتك. واجهة RTL. قاعدة بيانات طعام سعودي. سياق محلي مدمج.', badge: null },
-    { icon: Watch, title: 'تكامل الأجهزة القابلة للارتداء', body: 'وصّل Apple Watch أو Fitbit. آيون يرى خطواتك الفعلية، معدل قلبك، ونومك — ويعدّل خطتك وفقاً لذلك.', badge: 'قريباً' },
+    { icon: Watch, title: 'تكامل Apple Health', body: 'على iOS، اربط Apple Health ليستخدم آيون خطواتك، السعرات النشطة، معدل القلب، ووزن الجسم كسياق تدريبي.', badge: null },
     { icon: Users, title: 'مجتمع المستخدمين', body: 'اطّلع على نتائج حقيقية لمستخدمي SYNAP الحقيقيين. المساءلة التي تبقيك ثابتاً.', badge: 'قريباً' },
   ],
 }
