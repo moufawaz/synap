@@ -20,6 +20,7 @@ import { existsSync, writeFileSync, readFileSync } from 'fs'
 const PLIST        = 'ios/App/App/Info.plist'
 const ENTITLEMENTS = 'ios/App/App/App.entitlements'
 const PBXPROJ      = 'ios/App/App.xcodeproj/project.pbxproj'
+const STORYBOARD   = 'ios/App/App/Base.lproj/Main.storyboard'
 const HEALTHKIT_PLUGIN       = 'ios/App/App/SynapHealthKitPlugin.swift'
 const HEALTHKIT_REGISTRATION = 'ios/App/App/SynapHealthKitPlugin.m'
 const VIEWCONTROLLER         = 'ios/App/App/ViewController.swift'
@@ -380,6 +381,36 @@ if (existsSync(VIEWCONTROLLER)) {
   writeFileSync(VIEWCONTROLLER, viewControllerContent, 'utf8')
   vcCreated = true
   console.log('   ✓  ViewController.swift created from scratch (was absent from Capacitor template)')
+}
+
+// ── Patch Main.storyboard to use our ViewController subclass ─────────────────
+// Capacitor 8 template has Main.storyboard pointing to CAPBridgeViewController
+// in the Capacitor module directly:
+//   customClass="CAPBridgeViewController" customModule="Capacitor"
+//
+// This means our ViewController.swift subclass is never instantiated — the
+// storyboard bypasses it entirely, even though it compiles fine.
+//
+// Fix: change the storyboard to use our ViewController class (App module, no
+// customModule attribute needed since it lives in the app target itself).
+console.log('\n📱  Patching Main.storyboard to use ViewController subclass...')
+if (existsSync(STORYBOARD)) {
+  let sb = readFileSync(STORYBOARD, 'utf8')
+  if (sb.includes('customClass="CAPBridgeViewController"')) {
+    // Remove customModule="Capacitor" and change class to our ViewController
+    sb = sb.replace(
+      /customClass="CAPBridgeViewController"\s+customModule="Capacitor"/g,
+      'customClass="ViewController"',
+    )
+    writeFileSync(STORYBOARD, sb, 'utf8')
+    console.log('   ✓  Main.storyboard now uses ViewController (App module)')
+  } else if (sb.includes('customClass="ViewController"')) {
+    console.log('   ✓  Main.storyboard already uses ViewController — skipped')
+  } else {
+    console.warn('   ⚠  Main.storyboard: unexpected viewController class — check manually')
+  }
+} else {
+  console.warn('   ⚠  Main.storyboard not found at expected path')
 }
 
 if (existsSync(PBXPROJ)) {

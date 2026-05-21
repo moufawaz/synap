@@ -116,6 +116,10 @@ jobs:
           echo "=== SynapHealthKitPlugin.m ==="
           cat ios/App/App/SynapHealthKitPlugin.m 2>/dev/null || echo "(file not found)"
           echo ""
+          echo "=== Main.storyboard viewController line ==="
+          grep -n "viewController\|customClass\|customModule" \
+            ios/App/App/Base.lproj/Main.storyboard 2>/dev/null || echo "(not found)"
+          echo ""
           echo "=== pbxproj SynapHealthKit entries ==="
           grep -n "SynapHealthKit\|ViewController\|instancePlugins\|HealthKit.framework" \
             ios/App/App.xcodeproj/project.pbxproj 2>/dev/null | head -40 || echo "(not found)"
