@@ -70,7 +70,7 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
+  maximumScale: 1,
   // Required for env(safe-area-inset-*) to work on notched iPhones
   viewportFit: 'cover',
 }

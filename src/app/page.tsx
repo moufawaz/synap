@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect } from 'react'
 import { useLanguage } from '@/lib/useLanguage'
 import Navbar from '@/components/landing/Navbar'
 import Hero from '@/components/landing/Hero'
@@ -19,23 +19,26 @@ export default function LandingPage() {
   const [userName, setUserName] = useState('')
   const [isNative, setIsNative] = useState(false)
 
+  // useLayoutEffect fires BEFORE the browser paints — so if we're in the
+  // native app the landing page is never visible for even a single frame.
+  useLayoutEffect(() => {
+    if (!(window as any).Capacitor?.isNativePlatform?.()) return
+    setIsNative(true)
+    import('@/lib/supabase').then(async ({ createBrowserClient }) => {
+      const supabase = createBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+        SplashScreen.hide()
+      }).catch(() => {})
+      window.location.replace(user ? '/dashboard' : '/auth/login')
+    }).catch(() => {
+      window.location.replace('/auth/login')
+    })
+  }, [])
+
   useEffect(() => {
-    // In the native Capacitor app, skip the landing page entirely —
-    // show a black screen immediately and redirect to app/login.
-    if ((window as any).Capacitor?.isNativePlatform?.()) {
-      setIsNative(true)
-      import('@/lib/supabase').then(async ({ createBrowserClient }) => {
-        const supabase = createBrowserClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        import('@capacitor/splash-screen').then(({ SplashScreen }) => {
-          SplashScreen.hide()
-        }).catch(() => {})
-        window.location.replace(user ? '/dashboard' : '/auth/login')
-      }).catch(() => {
-        window.location.replace('/auth/login')
-      })
-      return
-    }
+    // Not native — run web-only checks.
+    if ((window as any).Capacitor?.isNativePlatform?.()) return
 
     // Supabase password recovery sends users to the site URL (homepage) with
     // the recovery token in the URL hash when the redirectTo URL isn't in the

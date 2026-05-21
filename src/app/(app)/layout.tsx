@@ -42,8 +42,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       style={{
         background: 'var(--void)',
         paddingTop: 'env(safe-area-inset-top)',
-        paddingLeft: 'env(safe-area-inset-left)',
-        paddingRight: 'env(safe-area-inset-right)',
       }}
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
       lang={lang}
