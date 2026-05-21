@@ -236,19 +236,22 @@ export async function applyNotificationSchedule(
   const plugin = await getPlugin()
   if (!plugin) return
 
-  // 1. Always cancel everything first — clean slate
+  // 1. Check permission FIRST — bail immediately if denied so we don't
+  //    burn through the cancel + schedule timeouts for nothing
+  if (prefs.enabled) {
+    const status = await checkNotificationPermission()
+    if (status === 'denied') return
+    if (status === 'prompt') {
+      const granted = await requestNotificationPermission()
+      if (!granted) return
+    }
+  }
+
+  // 2. Always cancel everything first — clean slate
   await cancelAllNotifications()
 
-  // 2. Master switch off → done
+  // 3. Master switch off → done
   if (!prefs.enabled) return
-
-  // 3. Check / request permission
-  const status = await checkNotificationPermission()
-  if (status === 'denied') return
-  if (status === 'prompt') {
-    const granted = await requestNotificationPermission()
-    if (!granted) return
-  }
 
   // 4. Ensure Android channels exist (iOS doesn't use channels — skip)
   if (getPlatform() === 'android') await setupNotificationChannels()

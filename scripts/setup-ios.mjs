@@ -20,8 +20,9 @@ import { existsSync, writeFileSync, readFileSync } from 'fs'
 const PLIST        = 'ios/App/App/Info.plist'
 const ENTITLEMENTS = 'ios/App/App/App.entitlements'
 const PBXPROJ      = 'ios/App/App.xcodeproj/project.pbxproj'
-const HEALTHKIT_PLUGIN = 'ios/App/App/SynapHealthKitPlugin.swift'
+const HEALTHKIT_PLUGIN       = 'ios/App/App/SynapHealthKitPlugin.swift'
 const HEALTHKIT_REGISTRATION = 'ios/App/App/SynapHealthKitPlugin.m'
+const VIEWCONTROLLER         = 'ios/App/App/ViewController.swift'
 
 // ── 1. Patch Capacitor plugin Package.swift for NonescapableTypes ─────────────
 // Capacitor 8 core ships as a binary XCFramework compiled with the experimental
@@ -315,6 +316,27 @@ CAP_PLUGIN(SynapHealthKitPlugin, "SynapHealthKit",
 
 writeFileSync(HEALTHKIT_REGISTRATION, healthKitRegistration, 'utf8')
 console.log('   ✓  SynapHealthKitPlugin.m')
+
+// ── Register plugin via ViewController.instancePlugins (Capacitor 8 API) ─────
+// The CAP_PLUGIN macro relies on ObjC runtime scanning which is unreliable
+// in Capacitor 8. Overriding instancePlugins in ViewController is the
+// official explicit registration API and guarantees the plugin is loaded.
+console.log('\n📱  Registering SynapHealthKitPlugin via ViewController...')
+if (existsSync(VIEWCONTROLLER)) {
+  let vc = readFileSync(VIEWCONTROLLER, 'utf8')
+  if (!vc.includes('instancePlugins')) {
+    vc = vc.replace(
+      /class ViewController\s*:\s*CAPBridgeViewController\s*\{/,
+      `class ViewController: CAPBridgeViewController {\n\n    /// Register custom bundled plugins (Capacitor 8 explicit API)\n    override open var instancePlugins: [CAPPlugin] {\n        return [SynapHealthKitPlugin()]\n    }\n`,
+    )
+    writeFileSync(VIEWCONTROLLER, vc, 'utf8')
+    console.log('   ✓  instancePlugins override added to ViewController.swift')
+  } else {
+    console.log('   ✓  instancePlugins already present — skipped')
+  }
+} else {
+  console.warn('   ⚠  ViewController.swift not found — plugin may not load at runtime')
+}
 
 if (existsSync(PBXPROJ)) {
   let pbx = readFileSync(PBXPROJ, 'utf8')
