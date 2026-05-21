@@ -19,14 +19,7 @@
 name: Android — Build & Deploy
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'ios/**'
-      - 'ios-setup/**'
-      - 'store-metadata.md'
+  # Android pipeline is disabled — only trigger manually when ready
   workflow_dispatch:
     inputs:
       track:
