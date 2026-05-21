@@ -38,6 +38,10 @@ export default function LandingPage() {
         // go straight to the app or login screen.
         const { isNativePlatform } = await import('@/lib/platform')
         if (isNativePlatform()) {
+          // Hide splash screen before navigating
+          import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+            SplashScreen.hide()
+          }).catch(() => {})
           window.location.replace(user ? '/dashboard' : '/auth/login')
           return
         }

@@ -26,6 +26,8 @@ export default function InstallPrompt() {
   const [isiOS, setIsiOS] = useState(false)
 
   useEffect(() => {
+    // Never show inside the native Capacitor app — user is already installed
+    if ((window as any).Capacitor?.isNativePlatform?.()) return
     if (isStandalone() || !isMobileLike()) return
 
     const snoozedUntil = Number(localStorage.getItem(SNOOZE_KEY) || 0)
