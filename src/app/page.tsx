@@ -33,6 +33,15 @@ export default function LandingPage() {
         const { createBrowserClient } = await import('@/lib/supabase')
         const supabase = createBrowserClient()
         const { data: { user } } = await supabase.auth.getUser()
+
+        // In the native app, skip the landing page entirely —
+        // go straight to the app or login screen.
+        const { isNativePlatform } = await import('@/lib/platform')
+        if (isNativePlatform()) {
+          window.location.replace(user ? '/dashboard' : '/auth/login')
+          return
+        }
+
         if (user) {
           setIsLoggedIn(true)
           const { data } = await supabase
