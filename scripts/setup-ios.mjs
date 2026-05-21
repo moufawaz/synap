@@ -337,10 +337,14 @@ if (existsSync(PBXPROJ)) {
     )
 
     // ── PBXFileReference ─────────────────────────────────────────────────────
+    // Use SOURCE_ROOT-relative paths so Xcode always resolves correctly
+    // regardless of which group the file ends up in.
+    // SOURCE_ROOT = ios/App/ (the dir containing App.xcodeproj)
+    // Source files live in ios/App/App/ → path = App/SynapHealthKitPlugin.swift
     pbx = pbx.replace(
       '/* End PBXFileReference section */',
-      `\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynapHealthKitPlugin.swift; sourceTree = "<group>"; };\n` +
-      `\t\t${objcFileRef} /* SynapHealthKitPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SynapHealthKitPlugin.m; sourceTree = "<group>"; };\n` +
+      `\t\t${swiftFileRef} /* SynapHealthKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SynapHealthKitPlugin.swift; path = App/SynapHealthKitPlugin.swift; sourceTree = SOURCE_ROOT; };\n` +
+      `\t\t${objcFileRef} /* SynapHealthKitPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = SynapHealthKitPlugin.m; path = App/SynapHealthKitPlugin.m; sourceTree = SOURCE_ROOT; };\n` +
       `\t\t${hkFwRef} /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };\n` +
       `/* End PBXFileReference section */`,
     )
