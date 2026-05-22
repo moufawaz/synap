@@ -157,7 +157,7 @@ The real mobile data screens are now connected:
 - Signup, login, password-reset request, support/legal links
 - Account deletion
 
-Next immediate task: run native iOS QA on a real device/dev client through EAS or macOS, then create an EAS production build.
+Next immediate task: upload build 12 to TestFlight/App Store Connect, run final real-device QA, then submit for Apple review.
 
 The current iOS release path is the manual GitHub workflow `iOS Expo EAS Build`. It requires only the GitHub secret `EXPO_TOKEN`. The EAS project ID is stored in the Expo config as non-secret project metadata. The old `Legacy iOS Capacitor Build` workflow remains manual-only for reference and should not be used for the App Store release.
 
@@ -387,3 +387,16 @@ Still blocked outside code:
   - `npx npm@10.9.3 ci --include=dev --dry-run --cache D:\Synap\.npm-cache-mobile`
 - Result: EAS iOS build `e2d0f3e9-193a-4582-8b6f-ad7b710c3c5b` still failed during Hermes bytecode compilation with React Native internal `invalid statement encountered` errors. Reverted iOS back to `jsEngine: "jsc"` for the App Review build path while keeping all review polish fixes.
 - Result: EAS iOS production build `c8a1b067-da25-44f6-843a-ac28e6f57d8b` finished successfully from commit `54f71a9af5749ef3fa40c751c297d174ed29b8c1`. App build number `11`; IPA artifact: `https://expo.dev/artifacts/eas/qLWzyZSgXLJYJroKomHJgn.ipa`.
+
+## Latest Progress - Final iOS Review Build 12
+
+- Removed remaining iOS review-risk copy from native onboarding and billing.
+- Removed web checkout/cancel subscription actions from the native Billing screen. iOS now shows account/access status and sends subscription help through support until Apple IAP products are approved.
+- Cleaned the More screen Arabic language label and verified the touched native UI no longer exposes internal App Review wording.
+- Kept `jsEngine: "jsc"` intentionally for the App Store build path because Hermes still fails during EAS bytecode compilation on React Native internals. JSC has produced stable production archives.
+- Verified before build:
+  - `npm run mobile:typecheck`
+  - `npm run mobile:config`
+  - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
+  - `npx npm@10.9.3 ci --include=dev --dry-run --cache D:\Synap\.npm-cache-mobile`
+- Result: EAS iOS production build `3bac743c-a9c2-4f3e-8cc3-ece58df907f6` finished successfully from commit `b0105067a26a5f178e8792ca13b8e0c6713ec82a`. App build number `12`; IPA artifact: `https://expo.dev/artifacts/eas/8nouPS6ciaUmiqGCuBwxaQ.ipa`.
