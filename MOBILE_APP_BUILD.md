@@ -378,10 +378,11 @@ Still blocked outside code:
 - Removed the iOS external pricing link from the Billing screen. The app now shows current access and states that in-app upgrades require approved Apple IAP products.
 - Replaced corrupted Arabic translation strings and removed visible mojibake/placeholder review text from the touched mobile screens.
 - Added `react-native-reanimated` and `react-native-gesture-handler`, imported gesture handler at the root, and added the Reanimated Babel plugin.
-- Switched the native iOS JavaScript engine back to Hermes after removing the Supabase tracing bundle issue.
+- Tried switching the native iOS JavaScript engine back to Hermes after removing the Supabase tracing bundle issue.
 - Verified locally:
   - `npm run mobile:typecheck`
   - `npm run mobile:config`
   - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
   - Confirmed the generated bundle has no Supabase tracing markers or prior mojibake review-risk strings.
   - `npx npm@10.9.3 ci --include=dev --dry-run --cache D:\Synap\.npm-cache-mobile`
+- Result: EAS iOS build `e2d0f3e9-193a-4582-8b6f-ad7b710c3c5b` still failed during Hermes bytecode compilation with React Native internal `invalid statement encountered` errors. Reverted iOS back to `jsEngine: "jsc"` for the App Review build path while keeping all review polish fixes.
