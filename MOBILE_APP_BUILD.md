@@ -361,3 +361,11 @@ Still blocked outside code:
   - Confirmed the generated bundle contains zero matches for the failing `#x/#y/#width/#height` private fields.
 - Follow-up 4: EAS build `e641d5c9-e4ae-4f9e-afcf-bf855ec56847` passed the previous private-field failure, but Hermes then rejected raw `class` statements from React Native internals with `invalid statement encountered`. For the first App Store/TestFlight build, switched the Expo mobile app to `jsEngine: "jsc"` to avoid the Hermes bytecode compile step on iOS. This is safer for submission than continuing to fight React Native internal syntax transforms during the archive.
 - Follow-up 5: EAS build `5cb724c5-87d5-4b2a-bce9-a0f56b59f8af` confirmed `jsEngine: "jsc"` was read, but failed during eager bundling because the temporary `@babel/plugin-transform-classes` transform ran too early on React Native Flow class fields (`FlatList.js`) and produced `Missing class properties transform`. Removed that class transform again; local `npx expo export:embed --eager --platform ios --dev false` passes.
+- Follow-up 6: EAS build `f3d19f81-a909-491e-8e16-9ceda33ff0f5` passed dependency install, CocoaPods, and eager bundling, then failed in Xcode with `Invalid expression encountered`. The failing generated line came from Supabase JS OpenTelemetry tracing (`import(/* webpackIgnore */ OTEL_PKG)` / `@opentelemetry/api`) inside `main.jsbundle`.
+- Fix: the native app only needs Supabase Auth, so the mobile client now uses `@supabase/auth-js` directly instead of importing the full `@supabase/supabase-js` bundle. This removes Supabase storage/realtime/postgrest/tracing code from the iOS bundle while preserving login, signup, password reset, session restore, and bearer token API calls.
+- Verified locally:
+  - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
+  - Confirmed the generated bundle has zero matches for `webpackIgnore`, `turbopackIgnore`, `OTEL_PKG`, `@vite-ignore`, `@opentelemetry/api`, or `Dynamic require defined`.
+  - `npm run mobile:typecheck`
+  - `npm run mobile:config`
+  - `npx npm@10.9.3 ci --include=dev --dry-run --cache D:\Synap\.npm-cache-mobile`
