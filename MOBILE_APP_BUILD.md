@@ -359,3 +359,4 @@ Still blocked outside code:
   - `npx expo export:embed --eager --platform ios --dev false`
   - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
   - Confirmed the generated bundle contains zero matches for the failing `#x/#y/#width/#height` private fields.
+- Follow-up 4: EAS build `e641d5c9-e4ae-4f9e-afcf-bf855ec56847` passed the previous private-field failure, but Hermes then rejected raw `class` statements from React Native internals with `invalid statement encountered`. For the first App Store/TestFlight build, switched the Expo mobile app to `jsEngine: "jsc"` to avoid the Hermes bytecode compile step on iOS. This is safer for submission than continuing to fight React Native internal syntax transforms during the archive.
