@@ -386,3 +386,4 @@ Still blocked outside code:
   - Confirmed the generated bundle has no Supabase tracing markers or prior mojibake review-risk strings.
   - `npx npm@10.9.3 ci --include=dev --dry-run --cache D:\Synap\.npm-cache-mobile`
 - Result: EAS iOS build `e2d0f3e9-193a-4582-8b6f-ad7b710c3c5b` still failed during Hermes bytecode compilation with React Native internal `invalid statement encountered` errors. Reverted iOS back to `jsEngine: "jsc"` for the App Review build path while keeping all review polish fixes.
+- Result: EAS iOS production build `c8a1b067-da25-44f6-843a-ac28e6f57d8b` finished successfully from commit `54f71a9af5749ef3fa40c751c297d174ed29b8c1`. App build number `11`; IPA artifact: `https://expo.dev/artifacts/eas/qLWzyZSgXLJYJroKomHJgn.ipa`.
