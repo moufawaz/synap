@@ -370,3 +370,18 @@ Still blocked outside code:
   - `npm run mobile:config`
   - `npx npm@10.9.3 ci --include=dev --dry-run --cache D:\Synap\.npm-cache-mobile`
 - Result: EAS iOS production build `db680157-1ba4-49ea-9444-70c935af145b` finished successfully from commit `09b357782bb5d36cfe1132ec849f261226c9350f`. App build number `9`; IPA artifact: `https://expo.dev/artifacts/eas/t6pAEtN8ZLZuHRBshw3ZVD.ipa`.
+
+## Latest Progress - App Review Polish
+
+- Replaced the Home tab placeholder cards with real subscription, today's workout, and nutrition summaries from the existing backend APIs.
+- Rebuilt the native chat screen around `FlatList` plus `KeyboardAvoidingView` so long histories and the iOS keyboard behave like a proper chat app.
+- Removed the iOS external pricing link from the Billing screen. The app now shows current access and states that in-app upgrades require approved Apple IAP products.
+- Replaced corrupted Arabic translation strings and removed visible mojibake/placeholder review text from the touched mobile screens.
+- Added `react-native-reanimated` and `react-native-gesture-handler`, imported gesture handler at the root, and added the Reanimated Babel plugin.
+- Switched the native iOS JavaScript engine back to Hermes after removing the Supabase tracing bundle issue.
+- Verified locally:
+  - `npm run mobile:typecheck`
+  - `npm run mobile:config`
+  - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
+  - Confirmed the generated bundle has no Supabase tracing markers or prior mojibake review-risk strings.
+  - `npx npm@10.9.3 ci --include=dev --dry-run --cache D:\Synap\.npm-cache-mobile`

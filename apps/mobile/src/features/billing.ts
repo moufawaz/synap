@@ -3,14 +3,14 @@ import { apiFetch } from '@/lib/api'
 export type MobileBillingStatus = {
   nativeIapReady: false
   reason: string
-  webBillingAvailable: true
+  webBillingAvailable: false
 }
 
 export function getMobileBillingStatus(): MobileBillingStatus {
   return {
     nativeIapReady: false,
-    webBillingAvailable: true,
-    reason: 'Apple In-App Purchase products are not configured yet. Web billing remains available outside iOS.',
+    webBillingAvailable: false,
+    reason: 'Apple In-App Purchase products are not configured yet. The iOS app does not open external checkout for digital subscriptions.',
   }
 }
 

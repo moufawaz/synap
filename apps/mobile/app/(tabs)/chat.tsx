@@ -1,10 +1,21 @@
-import { useMemo, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useMemo, useRef, useState } from 'react'
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
-import { getChatHistory, sendChatMessage, ChatMessage } from '@/features/chat'
+import { ChatMessage, getChatHistory, sendChatMessage } from '@/features/chat'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -15,7 +26,8 @@ export default function ChatScreen() {
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const history = useAsyncData(() => getChatHistory(80), [])
-  const messages = useMemo(() => history.data?.messages ?? [], [history.data])
+  const messages = useMemo(() => [...(history.data?.messages ?? [])].reverse(), [history.data])
+  const listRef = useRef<FlatList<ChatMessage>>(null)
 
   async function handleSend(nextMessage?: string) {
     const trimmed = (nextMessage ?? message).trim()
@@ -43,6 +55,7 @@ export default function ChatScreen() {
         created_at: new Date().toISOString(),
       }
       history.setData(prev => prev ? { ...prev, messages: [...prev.messages, assistant] } : prev)
+      requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }))
     } catch (error: any) {
       Alert.alert('Ion', error?.message || 'Could not send message')
       await history.reload()
@@ -51,75 +64,103 @@ export default function ChatScreen() {
     }
   }
 
-  return (
-    <Screen>
-      <PageHeader eyebrow="ION" title={text.chat} subtitle="Native chat shell ready. Streaming and plan edit confirmation come next." />
-      {history.loading ? <ActivityIndicator color={color.spark} /> : null}
-      {history.error ? <Text style={[styles.error, { color: color.danger }]}>{history.error}</Text> : null}
-      <View style={styles.thread}>
-        {messages.length === 0 && !history.loading ? (
-          <Card>
-            <Text style={[styles.ion, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>
-              Ion will remember profile, plans, meals, workouts, measurements, and prior messages through the existing backend context.
-            </Text>
-          </Card>
-        ) : null}
-        {messages.map(item => {
-          const isUser = item.role === 'user'
-          return (
-            <View key={item.id} style={[styles.messageRow, isUser ? styles.userRow : styles.ionRow]}>
-              <View style={[
-                styles.bubble,
-                {
-                  backgroundColor: isUser ? color.sparkSoft : color.surface,
-                  borderColor: isUser ? color.spark : color.border,
-                  maxWidth: '88%',
-                },
-              ]}>
-                <Text style={[styles.bubbleText, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>{item.content}</Text>
-                {item.metadata?.plan_edit ? (
-                  <View style={[styles.planEditCard, { borderColor: color.spark }]}>
-                    <Text style={[styles.planEditTitle, { color: color.spark }]}>Plan change preview</Text>
-                    <Text style={[styles.bubbleText, { color: color.text }]}>{String((item.metadata.plan_edit as any).summary || 'Ion prepared a plan change.')}</Text>
-                    <View style={styles.planButtons}>
-                      <Pressable onPress={() => handleSend('Confirm')} style={[styles.planButton, { borderColor: color.pulse }]}>
-                        <Text style={[styles.planButtonText, { color: color.pulse }]}>Apply</Text>
-                      </Pressable>
-                      <Pressable onPress={() => handleSend('No, cancel this change')} style={[styles.planButton, { borderColor: color.danger }]}>
-                        <Text style={[styles.planButtonText, { color: color.danger }]}>Cancel</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : null}
+  function renderMessage({ item }: { item: ChatMessage }) {
+    const isUser = item.role === 'user'
+    return (
+      <View style={[styles.messageRow, isUser ? styles.userRow : styles.ionRow]}>
+        <View style={[
+          styles.bubble,
+          {
+            backgroundColor: isUser ? color.sparkSoft : color.surface,
+            borderColor: isUser ? color.spark : color.border,
+            maxWidth: '88%',
+          },
+        ]}>
+          <Text style={[styles.bubbleText, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>{item.content}</Text>
+          {item.metadata?.plan_edit ? (
+            <View style={[styles.planEditCard, { borderColor: color.spark }]}>
+              <Text style={[styles.planEditTitle, { color: color.spark }]}>Plan change preview</Text>
+              <Text style={[styles.bubbleText, { color: color.text }]}>{String((item.metadata.plan_edit as any).summary || 'Ion prepared a plan change.')}</Text>
+              <View style={styles.planButtons}>
+                <Pressable onPress={() => handleSend('Confirm')} style={[styles.planButton, { borderColor: color.pulse }]}>
+                  <Text style={[styles.planButtonText, { color: color.pulse }]}>Apply</Text>
+                </Pressable>
+                <Pressable onPress={() => handleSend('No, cancel this change')} style={[styles.planButton, { borderColor: color.danger }]}>
+                  <Text style={[styles.planButtonText, { color: color.danger }]}>Cancel</Text>
+                </Pressable>
               </View>
             </View>
-          )
-        })}
+          ) : null}
+        </View>
       </View>
-      <View style={[styles.composer, { backgroundColor: color.surface, borderColor: color.border }]}>
-        <TextInput
-          value={message}
-          onChangeText={setMessage}
-          placeholder={text.askIon}
-          placeholderTextColor={color.dim}
-          style={[styles.input, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}
+    )
+  }
+
+  return (
+    <Screen scroll={false}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 86 : 0}
+        style={styles.root}
+      >
+        <View style={styles.header}>
+          <PageHeader eyebrow="ION" title={text.chat} subtitle="Ion remembers your profile, plans, meals, workouts, measurements, and previous coaching context." />
+        </View>
+        {history.loading ? <ActivityIndicator color={color.spark} /> : null}
+        {history.error ? <Text style={[styles.error, { color: color.danger }]}>{history.error}</Text> : null}
+        <FlatList
+          ref={listRef}
+          data={messages}
+          keyExtractor={item => item.id}
+          renderItem={renderMessage}
+          inverted
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.thread}
+          ListEmptyComponent={!history.loading ? (
+            <Card>
+              <Text style={[styles.ion, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>
+                Ion is ready. Ask about your plan, meals, training, recovery, or progress.
+              </Text>
+            </Card>
+          ) : null}
         />
-        <Pressable disabled={sending} onPress={() => handleSend()} style={[styles.send, { backgroundColor: sending ? color.dim : color.spark }]}>
-          {sending ? <ActivityIndicator color="#FFFFFF" /> : <Feather name="send" color="#FFFFFF" size={20} />}
-        </Pressable>
-      </View>
+        <View style={[styles.composer, { backgroundColor: color.surface, borderColor: color.border }]}>
+          <TextInput
+            value={message}
+            onChangeText={setMessage}
+            placeholder={text.askIon}
+            placeholderTextColor={color.dim}
+            multiline
+            style={[styles.input, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}
+          />
+          <Pressable disabled={sending} onPress={() => handleSend()} style={[styles.send, { backgroundColor: sending ? color.dim : color.spark }]}>
+            {sending ? <ActivityIndicator color="#FFFFFF" /> : <Feather name="send" color="#FFFFFF" size={20} />}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
   ion: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600',
   },
   thread: {
+    flexGrow: 1,
     gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   messageRow: {
     flexDirection: 'row',
@@ -167,23 +208,27 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   error: {
+    marginHorizontal: 20,
     marginBottom: 12,
     fontWeight: '700',
   },
   composer: {
-    marginTop: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderRadius: 18,
     padding: 8,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
   },
   input: {
     flex: 1,
     minHeight: 46,
+    maxHeight: 120,
     fontSize: 16,
     paddingHorizontal: 10,
+    paddingTop: 12,
   },
   send: {
     width: 44,
