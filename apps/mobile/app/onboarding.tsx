@@ -58,7 +58,7 @@ export default function OnboardingScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="ONBOARDING" title="Build your plan" subtitle="A compact native intake for App Review and real mobile users." />
+      <PageHeader eyebrow="ONBOARDING" title="Build your plan" subtitle="Tell Ion the essentials so your diet and workout plan can be personalized." />
       <Card>
         <Field label="Name" value={profile.name} onChangeText={value => update('name', value)} />
         <View style={styles.row}>

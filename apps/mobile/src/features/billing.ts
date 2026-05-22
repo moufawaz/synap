@@ -1,5 +1,3 @@
-import { apiFetch } from '@/lib/api'
-
 export type MobileBillingStatus = {
   nativeIapReady: false
   reason: string
@@ -10,12 +8,6 @@ export function getMobileBillingStatus(): MobileBillingStatus {
   return {
     nativeIapReady: false,
     webBillingAvailable: false,
-    reason: 'Apple In-App Purchase products are not configured yet. The iOS app does not open external checkout for digital subscriptions.',
+    reason: 'Your account access is shown here. In-app upgrades are not available in this iOS version.',
   }
-}
-
-export async function cancelWebSubscription() {
-  return apiFetch<{ ok: boolean; message: string }>('/api/billing/cancel', {
-    method: 'POST',
-  })
 }

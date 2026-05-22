@@ -10,6 +10,18 @@ import { HealthSummary, requestHealthAccessAndRead } from '@/features/health'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
+const featureLinks = [
+  ['Plan', '/plan'],
+  ['Programme', '/programme'],
+  ['Measurements', '/measurements'],
+  ['Grocery list', '/grocery'],
+  ['Eating out', '/eating-out'],
+  ['Form check', '/form-check'],
+  ['Reports', '/reports'],
+  ['Billing', '/billing'],
+  ['Notifications', '/notifications'],
+] as const
+
 export default function MoreScreen() {
   const { signOut } = useAuth()
   const { color, mode, toggleMode } = useTheme()
@@ -89,18 +101,8 @@ export default function MoreScreen() {
       <Card style={styles.section}>
         <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>Features</Text>
         <View style={styles.linkList}>
-          {[
-            ['Plan', '/plan'],
-            ['Programme', '/programme'],
-            ['Measurements', '/measurements'],
-            ['Grocery list', '/grocery'],
-            ['Eating out', '/eating-out'],
-            ['Form check', '/form-check'],
-            ['Reports', '/reports'],
-            ['Billing', '/billing'],
-            ['Notifications', '/notifications'],
-          ].map(([label, href]) => (
-            <Pressable key={href} onPress={() => router.push(href as any)}>
+          {featureLinks.map(([label, href]) => (
+            <Pressable key={href} onPress={() => router.push(href)}>
               <Text style={[styles.link, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{label}</Text>
             </Pressable>
           ))}
