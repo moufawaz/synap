@@ -28,7 +28,7 @@
           "remote-notification"
         ]
       },
-      "buildNumber": "4"
+      "buildNumber": "5"
     },
     "android": {
       "package": "app.synap.fit",

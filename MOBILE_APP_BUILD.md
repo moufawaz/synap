@@ -353,3 +353,9 @@ Still blocked outside code:
   - `npm run mobile:config`
 - Follow-up: EAS uses npm 10.9.3, which also requires nested optional dependencies in the lockfile. Regenerated `apps/mobile/package-lock.json` with npm 10 so it includes the nested `@expo/image-utils/node_modules/typescript@5.9.3` entry required by `npm ci`.
 - Follow-up 2: the next EAS run passed dependency install and CocoaPods, then failed during JavaScript bundling because `babel-preset-expo` was not explicit in the mobile workspace. Added `babel-preset-expo` as a mobile dev dependency and verified `npx expo export:embed --eager --platform ios --dev false` locally.
+- Follow-up 3: EAS build `cebc990d-292e-408f-9bcb-ea6849daeb64` passed dependency install and JS bundling, then failed in Xcode while Hermes compiled the production bundle. Cause: React Native internal `DOMRectReadOnly` code reached `main.jsbundle` with private class fields (`#x`, `#width`, etc.), and Hermes rejected them with `private properties are not supported`.
+- Fix: added Babel private-field downlevel transforms in `apps/mobile/babel.config.js` and a mobile `metro.config.js` using the `hermes-stable` transform profile so React Native internals are also emitted in Hermes-compatible syntax.
+- Verified locally:
+  - `npx expo export:embed --eager --platform ios --dev false`
+  - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
+  - Confirmed the generated bundle contains zero matches for the failing `#x/#y/#width/#height` private fields.
