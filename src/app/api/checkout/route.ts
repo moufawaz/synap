@@ -1,4 +1,4 @@
-﻿import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { createCheckout, VARIANT_IDS } from '@/lib/lemon-squeezy'
 
@@ -12,14 +12,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid plan selected' }, { status: 400 })
     }
 
-    const supabase = await createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { user, error: authError } = await getAuthenticatedUser(req)
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Load user name
-    const { data: profile } = await supabase
+    const admin = createAdminClient()
+    const { data: profile } = await admin
       .from('profiles')
       .select('name')
       .eq('user_id', user.id)
@@ -30,7 +29,6 @@ export async function POST(req: Request) {
       userId: user.id,
       userEmail: user.email!,
       userName: profile?.name || '',
-      // Trial is configured on the variant in Lemon Squeezy dashboard, not via API
     })
 
     return NextResponse.json({ url: checkoutUrl })
@@ -38,7 +36,6 @@ export async function POST(req: Request) {
     const msg = err?.message || String(err)
     console.error('[Checkout] Error:', msg)
 
-    // Return the real error so the client can show it (helps diagnose LS API issues)
     let userFacing = msg
     if (msg.includes('LEMON_SQUEEZY_API_KEY')) userFacing = 'Payment system not configured. Add LEMON_SQUEEZY_API_KEY to Vercel env vars.'
     else if (msg.includes('No Lemon Squeezy stores')) userFacing = 'No store found. Check your Lemon Squeezy account has a store.'

@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { getAuthenticatedUser } from '@/lib/supabase-server'
 import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 
 // GET /api/me/subscription
 // Returns the authenticated user's effective plan tier.
-// Uses getUserSubscription so free-trial users get 'elite' not 'starter'.
-export async function GET() {
-  const supabase = await createServerClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
+// Accepts web Supabase cookies or native mobile bearer tokens.
+export async function GET(req: Request) {
+  const { user, error } = await getAuthenticatedUser(req)
   if (error || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -17,7 +16,7 @@ export async function GET() {
 
   return NextResponse.json({
     tier,
-    status:   sub?.status   ?? null,
+    status: sub?.status ?? null,
     planName: sub?.plan_name ?? null,
   })
 }

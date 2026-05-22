@@ -1,0 +1,70 @@
+name: iOS Expo EAS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile
+        required: true
+        default: production
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+      submit:
+        description: Submit the latest successful production build to App Store Connect
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: ios-expo-eas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eas-build:
+    name: Build native iOS app with EAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Install mobile dependencies
+        run: npm ci
+
+      - name: Typecheck mobile app
+        working-directory: .
+        run: npm run mobile:typecheck
+
+      - name: Validate Expo config
+        working-directory: .
+        run: npm run mobile:config
+
+      - name: Build iOS app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli build --platform ios --profile "${{ inputs.profile }}" --non-interactive --no-wait
+
+      - name: Submit latest production build
+        if: ${{ inputs.submit && inputs.profile == 'production' }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli submit --platform ios --profile production --latest --non-interactive

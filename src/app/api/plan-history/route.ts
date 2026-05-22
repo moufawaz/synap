@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
 type PlanType = 'diet' | 'workout'
 
-export async function GET() {
-  const supabase = await createServerClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+export async function GET(req: Request) {
+  const { user, error: authError } = await getAuthenticatedUser(req)
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
@@ -20,15 +19,29 @@ export async function GET() {
   if (workoutRes.error) return NextResponse.json({ error: workoutRes.error.message }, { status: 500 })
 
   const diet = (dietRes.data || []).map(row => summarizePlan(row, 'diet'))
-  const workout = (workoutRes.data || []).map(row => summarizePlan(row, 'workout'))
+  const activeDietRow = (dietRes.data || []).find(row => row.active)
+  const workoutRows = workoutRes.data || []
+  const workout = workoutRows.map(row => summarizePlan(row, 'workout'))
+  const activeWorkoutRow = workoutRows.find(row => row.active)
 
   return NextResponse.json({
     diet,
     workout,
+    activeDietPlan: activeDietRow ? {
+      id: activeDietRow.id,
+      created_at: activeDietRow.created_at,
+      plan_json: activeDietRow.plan_json,
+    } : null,
+    activeWorkoutPlan: activeWorkoutRow ? {
+      id: activeWorkoutRow.id,
+      created_at: activeWorkoutRow.created_at,
+      plan_json: activeWorkoutRow.plan_json,
+    } : null,
     timing: {
       diet: cycleTiming(diet.find(row => row.active), 'diet'),
       workout: cycleTiming(workout.find(row => row.active), 'workout'),
     },
+    todayWorkout: summarizeTodayWorkout(activeWorkoutRow?.plan_json),
   })
 }
 
@@ -67,6 +80,38 @@ function workoutDays(plan: any) {
   if (Array.isArray(plan?.days)) return plan.days
   if (Array.isArray(plan?.weeks)) return plan.weeks.flatMap((week: any) => week.days || [])
   return []
+}
+
+function summarizeTodayWorkout(plan: any) {
+  const days = workoutDays(plan)
+  if (!days.length) return null
+
+  const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const today = weekDays[new Date().getDay()]
+  const selected = days.find((day: any) => {
+    const name = String(day?.day_name ?? day?.day ?? '').toLowerCase()
+    return name.includes(today.toLowerCase())
+  }) ?? days.find((day: any) => Array.isArray(day?.exercises) && day.exercises.length > 0) ?? days[0]
+
+  const exercises = Array.isArray(selected?.exercises) ? selected.exercises : []
+  return {
+    day_name: selected?.day_name ?? selected?.day ?? today,
+    muscle_focus: selected?.muscle_focus ?? selected?.focus ?? null,
+    duration_min: selected?.duration_min ?? selected?.duration_minutes ?? null,
+    is_rest_day: exercises.length === 0 || exercises.every((exercise: any) => {
+      const name = String(exercise?.name ?? exercise?.title ?? '').toLowerCase()
+      return name.includes('rest day')
+    }),
+    exercises: exercises.map((exercise: any, index: number) => ({
+      index,
+      name: exercise?.name ?? exercise?.title ?? 'Exercise',
+      sets: exercise?.sets ?? null,
+      reps: exercise?.reps ?? null,
+      rest_sec: exercise?.rest_sec ?? exercise?.rest_seconds ?? null,
+      muscle_group: exercise?.muscle_group ?? exercise?.muscle ?? null,
+      video_id: exercise?.video_id ?? null,
+    })),
+  }
 }
 
 function fallbackEndDate(createdAt: string | null, planType: PlanType) {

@@ -1,4 +1,4 @@
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { canSendMessage, incrementMessageCount, isLaunchMode, getUserSubscription, effectivePlan } from '@/lib/subscription'
@@ -9,14 +9,31 @@ import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { canonicalDayName, normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
-// Plan-edit calls Claude with up to 10 000 output tokens — can take 30-40 s.
+// Plan-edit calls Claude with up to 10 000 output tokens; it can take 30-40 s.
 // Without this Vercel cuts the connection at the platform default (10-15 s),
 // which causes the client to receive a network error ("Load failed").
 export const maxDuration = 60
 
+async function fetchRecentWorkoutLogs(supabase: any, userId: string) {
+  const primary = await supabase
+    .from('workout_log')
+    .select('date,day_name,completion_pct,duration_min,exercises_completed')
+    .eq('user_id', userId)
+    .order('date', { ascending: false })
+    .limit(7)
+
+  if (!primary.error) return primary
+
+  return supabase
+    .from('workout_logs')
+    .select('date,day_name,exercises_completed,total_exercises,duration_minutes,logged_at')
+    .eq('user_id', userId)
+    .order('date', { ascending: false })
+    .limit(7)
+}
+
 export async function GET(req: Request) {
-  const supabase = await createServerClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const { user, error: authError } = await getAuthenticatedUser(req)
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -67,14 +84,15 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { message } = body
+    const wantsJsonResponse = body.stream === false || body.responseMode === 'json'
 
     if (!message || typeof message !== 'string' || !message.trim()) {
       return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 })
     }
 
-    const supabase = await createServerClient()
+    const supabase = await createRouteClient(req)
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { user, error: authError } = await getAuthenticatedUser(req)
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -104,13 +122,12 @@ export async function POST(req: Request) {
       supabase.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('chat_messages').select('role, content').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
       getUserSubscription(user.id),
-      // Latest 5 measurements — enough to compute a meaningful trend
+      // Latest 5 measurements: enough to compute a meaningful trend
       supabase.from('measurements').select('date,weight_kg,body_fat_pct,waist_cm,chest_cm,hips_cm,bicep_left_cm,bicep_right_cm,thigh_left_cm,thigh_right_cm')
         .eq('user_id', user.id).order('date', { ascending: false }).limit(5),
       // Last 7 workout logs
-      supabase.from('workout_log').select('date,day_name,completion_pct,duration_min,exercises_completed')
-        .eq('user_id', user.id).order('date', { ascending: false }).limit(7),
-      // Last 7 meal logs — one week is enough for compliance analysis
+      fetchRecentWorkoutLogs(supabase, user.id),
+      // Last 7 meal logs: one week is enough for compliance analysis
       supabase.from('meals_log').select('date,meal_time,description,calories_estimated,protein_g,carbs_g,fats_g')
         .eq('user_id', user.id).order('date', { ascending: false }).limit(7),
       // Latest pending plan proposals (for two-step confirm flow).
@@ -226,9 +243,56 @@ export async function POST(req: Request) {
       { role: 'user', content: message },
     ]
 
+    if (wantsJsonResponse) {
+      const finalMessage = await client.messages.create({
+        model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
+        max_tokens: 1024,
+        system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+        messages,
+      })
+
+      const rawText = finalMessage.content
+        .filter(part => part.type === 'text')
+        .map(part => part.text)
+        .join('')
+
+      const normalizedReply = normalizeAssistantReply(rawText)
+      const reply = normalizedReply.content
+      const messageType = normalizedReply.messageType
+      const usageMetadata = {
+        model: finalMessage.model,
+        input_tokens: finalMessage.usage.input_tokens,
+        output_tokens: finalMessage.usage.output_tokens,
+        cache_creation_input_tokens: (finalMessage.usage as any).cache_creation_input_tokens || 0,
+        cache_read_input_tokens: (finalMessage.usage as any).cache_read_input_tokens || 0,
+        estimated_cost_usd: estimateAnthropicCostUsd(finalMessage.usage, finalMessage.model),
+      }
+
+      await Promise.all([
+        recordAiUsage({ userId: user.id, feature: 'ion_chat', model: finalMessage.model, usage: finalMessage.usage }),
+        supabase.from('chat_messages').insert({
+          user_id: user.id,
+          role: 'assistant',
+          content: reply,
+          message_type: messageType,
+          metadata: { usage: usageMetadata, total_estimated_cost_usd: usageMetadata.estimated_cost_usd },
+        }),
+      ])
+
+      if (!isLaunchMode()) {
+        await incrementMessageCount(user.id).catch(() => {})
+      }
+
+      return NextResponse.json({
+        reply,
+        message_type: messageType,
+        plan_edit: null,
+      })
+    }
+
     // Stream the response via SSE
     // system is an array so we can attach cache_control — the prompt is re-used across
-    // multiple turns in a session and caching it cuts repeated input cost by ~10×
+    // multiple turns in a session and caching it cuts repeated input cost by ~10x
     const stream = client.messages.stream({
       model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
       max_tokens: 1024,
@@ -329,7 +393,7 @@ function detectConfirmation(message: string): boolean {
   if (!text) return false
 
   const askingForExplanation = isExplanationQuestion(message)
-  const rejectingChange = /\b(no|nope|don't|do not|not now|stop|cancel|return|revert|undo|don't change|do not change)\b|Ù„Ø§|Ø§Ù„Øº|Ø§Ù„ØºÙŠ|ØªØ±Ø§Ø¬Ø¹|Ø§Ø±Ø¬Ø¹/.test(text)
+  const rejectingChange = /\b(no|nope|don't|do not|not now|stop|cancel|return|revert|undo|don't change|do not change)\b|لا|الغ|الغي|تراجع|ارجع/.test(text)
   if (askingForExplanation || rejectingChange) return false
   return /\b(yes|yeah|sure|ok|okay|do it|apply|apply it|go ahead|confirm|confirmed|that's fine|that's good|perfect|sounds good|looks good|sounds great|do that|make it|change it|update it|save it|use it|let's do it|let's go)\b|^(yes|yeah|sure|ok|okay|yep|yup|نعم|أجل|موافق|طبق|حسناً|تمام|اعمله|صح|جيد|بالتأكيد|افعل|نعم افعله|طبق التغيير)/i.test(message.trim())
 }
@@ -346,7 +410,7 @@ async function maybeApplyPlanEdit({
   recentHistory,
 }: {
   client: Anthropic
-  supabase: Awaited<ReturnType<typeof createServerClient>>
+  supabase: Awaited<ReturnType<typeof createRouteClient>>
   userId: string
   profile: any
   message: string

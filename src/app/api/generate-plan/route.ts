@@ -1,4 +1,4 @@
-﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+﻿import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
@@ -30,8 +30,8 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { profileData } = body
 
-    const supabase = await createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const supabase = await createRouteClient(req)
+    const { user, error: authError } = await getAuthenticatedUser(req)
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -275,8 +275,7 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error('Generate plan error:', err?.message || err)
     try {
-      const supabase = await createServerClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(req)
       await recordAppEvent({
         userId: user?.id,
         eventType: 'plan_generation_failed',
@@ -397,9 +396,9 @@ function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[]
 
 ${aiLanguageInstruction(language, 'all user-facing JSON string values including plan names, meal names, recipes, exercise tips, coaching notes, summaries, and ion_message')}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 COMPLETE CLIENT PROFILE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 Name: ${p.name} | Age: ${p.age} | Gender: ${p.gender}
 Weight: ${latestMeasurement?.weight_kg || p.weight_kg} kg | Height: ${p.height_cm} cm
 Goal: ${goalLabels[p.goal] || p.goal}
@@ -410,7 +409,7 @@ BODY COMPOSITION (InBody scan data — use this instead of population defaults):
   Lean Body Mass: ${m.leanMass} kg
   Body fat: ${m.bodyFatPct}% (${m.usingRealBf ? 'measured via InBody scan — use this value' : 'estimated default — no InBody scan on file'})${p.muscle_mass_kg ? `
   Skeletal Muscle Mass (InBody): ${p.muscle_mass_kg} kg` : ''}${p.visceral_fat != null ? `
-  Visceral Fat Level (InBody): ${p.visceral_fat}${Number(p.visceral_fat) > 10 ? ' ⚠️ HIGH — above safe threshold of 10, elevated cardiovascular risk. Include cardiovascular health foods and prioritise fat loss.' : Number(p.visceral_fat) > 7 ? ' (moderate — monitor)' : ' (healthy range)'}` : ''}${p.inbody_score != null ? `
+  Visceral Fat Level (InBody): ${p.visceral_fat}${Number(p.visceral_fat) > 10 ? ' ?? HIGH — above safe threshold of 10, elevated cardiovascular risk. Include cardiovascular health foods and prioritise fat loss.' : Number(p.visceral_fat) > 7 ? ' (moderate — monitor)' : ' (healthy range)'}` : ''}${p.inbody_score != null ? `
   InBody Score: ${p.inbody_score}/100${Number(p.inbody_score) < 60 ? ' — well below average, prioritise body recomposition' : Number(p.inbody_score) < 75 ? ' — below average' : Number(p.inbody_score) >= 85 ? ' — above average, good foundation' : ''}` : ''}${p.bmr_kcal ? `
   Measured BMR (InBody device): ${p.bmr_kcal} kcal/day (use this as the baseline BMR if it significantly differs from Mifflin-St Jeor)` : ''}
 
@@ -430,9 +429,9 @@ TRAINING:
   Injuries: ${p.injuries || 'None'} | Medical: ${p.medical_conditions || 'None'}
   Strength levels: ${p.strength_levels || 'Not provided'}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 NUTRITION PROFILE — READ CAREFULLY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 Foods LOVED (MUST appear in meals): ${p.foods_loved || 'Not specified — use common whole foods'}
 Foods HATED (NEVER include): ${p.foods_hated || 'None'}
 Allergies (NEVER include — safety critical): ${p.allergies || 'None'}
@@ -441,13 +440,13 @@ Meals per day: ${p.meals_per_day || 3}
 Cooking ability: ${p.cooking_ability || 'moderate'} | Budget: ${p.food_budget || 'moderate'}
 Current supplements: ${supplements.join(', ') || 'None'}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 CALCULATED MACRO TARGETS
 (derived from LBM + TDEE formula below — adjust ±5% if strongly justified)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 TDEE: ${m.tdee} kcal/day
 Goal adjustment: ${p.goal === 'lose_fat' ? `–${m.tdee - m.calories} kcal deficit (${m.weeklyWeightChangeKg} kg/week expected loss)` : p.goal === 'build_muscle' ? `+${m.calories - m.tdee} kcal surplus (lean gain)` : 'maintenance'}
-→ daily_calories: ${m.calories} kcal
+? daily_calories: ${m.calories} kcal
 
 Protein: ${m.protein} g  (${(m.protein / m.leanMass).toFixed(1)} g/kg LBM — LBM-based, not total weight)
 Fat:     ${m.fat} g  (27% of calories for hormonal health)
@@ -462,9 +461,9 @@ METHODOLOGY:
 - Fat floored at 27% of calories for hormone production
 - Meal totals MUST sum to ±40 kcal of daily_calories target
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 DIET PLAN BUILDING RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 1. PERSONALISATION — this is not a generic plan:
    - Every meal must contain at least one food from the "Foods LOVED" list
    - Zero exceptions: never include foods from "Foods HATED" or "Allergies"
@@ -472,8 +471,8 @@ DIET PLAN BUILDING RULES
    - Ingredient costs must align with budget (${p.food_budget || 'moderate'})
 
 2. MEAL TIMING — built around the user's real day:
-   - First meal ≈ 1 hour after wake (${p.wake_time || '7:00'})
-   - Last meal ≥ 1.5 hours before sleep (${p.sleep_time || '23:00'})
+   - First meal ˜ 1 hour after wake (${p.wake_time || '7:00'})
+   - Last meal = 1.5 hours before sleep (${p.sleep_time || '23:00'})
    - Pre-workout meal: ~60–90 min before training, rich in carbs + moderate protein, low fat
    - Post-workout meal: within 45 min, high protein + carbs, low fat
    - Meals spaced ~${Math.max(2, Math.round(14 / (parseInt(p.meals_per_day || '3'))))} hours apart
@@ -508,9 +507,9 @@ ${p.goal === 'recomposition' ? `   - Calorie cycling: slightly higher on trainin
    - Protein at every meal is non-negotiable for simultaneous fat loss + muscle retention
    - Carb timing is critical — carbs mostly around training` : ''}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 WORKOUT PLAN BUILDING RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+????????????????????????????
 CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
   Experience tier:        ${w.expTier}
   Recommended split:      ${w.splitType}
@@ -527,7 +526,7 @@ CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
    - Use the ${w.splitType} split — it is the evidence-based optimal choice for ${p.training_days} days/week at this experience level
    - Each day must start with 1–2 compound movements (squat, hinge, press, or row patterns)
    - Accessory work follows compounds; isolation exercises come last
-   - Session order: warm-up → compounds → accessories → isolation → cool-down
+   - Session order: warm-up ? compounds ? accessories ? isolation ? cool-down
    - Each session must fit within ${p.session_duration || 60} min total
 
 2. EXERCISE SELECTION — NON-NEGOTIABLE:

@@ -14,7 +14,7 @@ const client = new Anthropic()
 // and estimate its nutritional values.
 export async function POST(req: Request) {
   try {
-    const gate = await requireFoodScanAccess()
+    const gate = await requireFoodScanAccess(req)
     if (gate.response) return gate.response
 
     const { image, mimeType = 'image/jpeg' } = await req.json()

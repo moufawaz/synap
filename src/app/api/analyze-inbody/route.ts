@@ -1,4 +1,4 @@
-﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+﻿import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { recordAiUsage } from '@/lib/ai-usage'
@@ -14,17 +14,17 @@ export async function POST(req: Request) {
   const client = new Anthropic({ apiKey })
 
   try {
-    const supabase = await createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const supabase = await createRouteClient(req)
+    const { user, error: authError } = await getAuthenticatedUser(req)
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await req.json()
-    const { inbody_url } = body
+    const { inbody_url, image, mimeType } = body
 
-    if (!inbody_url || typeof inbody_url !== 'string') {
-      return NextResponse.json({ error: 'Missing inbody_url' }, { status: 400 })
+    if ((!inbody_url || typeof inbody_url !== 'string') && (!image || typeof image !== 'string')) {
+      return NextResponse.json({ error: 'Missing inbody_url or image' }, { status: 400 })
     }
 
     const admin = createAdminClient()
@@ -34,37 +34,41 @@ export async function POST(req: Request) {
     ])
     const language = normalizeAiLanguage(userLangRes.data?.language ?? profileRes.data?.language)
 
-    console.info('[analyze-inbody] Fetching uploaded InBody file')
+    let contentType = typeof mimeType === 'string' ? mimeType : ''
+    let base64Data = typeof image === 'string' ? image : ''
 
-    // Fetch the file from Supabase Storage public URL
-    let fileResponse: Response
-    try {
-      fileResponse = await fetch(inbody_url, {
-        signal: AbortSignal.timeout(30_000),
-      })
-    } catch (fetchErr: any) {
-      console.error('[analyze-inbody] File fetch error:', fetchErr?.message)
-      return NextResponse.json(
-        { error: 'Could not download your InBody file. Please try again.' },
-        { status: 400 },
-      )
+    if (!base64Data) {
+      console.info('[analyze-inbody] Fetching uploaded InBody file')
+
+      let fileResponse: Response
+      try {
+        fileResponse = await fetch(inbody_url, {
+          signal: AbortSignal.timeout(30_000),
+        })
+      } catch (fetchErr: any) {
+        console.error('[analyze-inbody] File fetch error:', fetchErr?.message)
+        return NextResponse.json(
+          { error: 'Could not download your InBody file. Please try again.' },
+          { status: 400 },
+        )
+      }
+
+      if (!fileResponse.ok) {
+        console.error('[analyze-inbody] File fetch failed:', fileResponse.status)
+        return NextResponse.json(
+          { error: 'InBody file not accessible. Please re-upload and try again.' },
+          { status: 400 },
+        )
+      }
+
+      contentType = fileResponse.headers.get('content-type') || ''
+      const arrayBuffer = await fileResponse.arrayBuffer()
+      base64Data = Buffer.from(arrayBuffer).toString('base64')
     }
-
-    if (!fileResponse.ok) {
-      console.error('[analyze-inbody] File fetch failed:', fileResponse.status)
-      return NextResponse.json(
-        { error: 'InBody file not accessible. Please re-upload and try again.' },
-        { status: 400 },
-      )
-    }
-
-    const contentType = fileResponse.headers.get('content-type') || ''
-    const arrayBuffer = await fileResponse.arrayBuffer()
-    const base64Data = Buffer.from(arrayBuffer).toString('base64')
 
     const isPDF =
       contentType.includes('pdf') ||
-      inbody_url.toLowerCase().includes('.pdf')
+      String(inbody_url || '').toLowerCase().includes('.pdf')
 
     const analysisPrompt = `You are analyzing an InBody body composition report. Extract ALL available data from this report.
 

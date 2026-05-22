@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { getAuthenticatedUser } from '@/lib/supabase-server'
 import { getUserSubscription, isLaunchMode, isProUser } from '@/lib/subscription'
 
-export async function requireFoodScanAccess() {
-  const supabase = await createServerClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
+export async function requireFoodScanAccess(req?: Request) {
+  const { user, error } = await getAuthenticatedUser(req)
 
   if (error || !user) {
     return {

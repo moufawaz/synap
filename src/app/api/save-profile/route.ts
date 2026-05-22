@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase-server'
+import { createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { recordAppEvent } from '@/lib/app-events'
 import { sendPlanErrorEmailIfNeeded } from '@/lib/plan-error-emails'
@@ -9,8 +9,8 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { data: profileData } = body
 
-    const supabase = await createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const supabase = await createRouteClient(req)
+    const { user, error: authError } = await getAuthenticatedUser(req)
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

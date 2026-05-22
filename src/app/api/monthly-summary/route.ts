@@ -1,17 +1,37 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, aiLanguageName, normalizeAiLanguage } from '@/lib/ai-language'
 
-export async function GET() {
+async function fetchMonthlyWorkoutLogs(supabase: any, userId: string, thirtyDaysAgo: string) {
+  const primary = await supabase
+    .from('workout_log')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('date', thirtyDaysAgo)
+
+  if (!primary.error) return primary
+
+  return supabase
+    .from('workout_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('logged_at', `${thirtyDaysAgo}T00:00:00`)
+}
+
+function workoutDurationMinutes(log: any) {
+  return Number(log?.duration_min ?? log?.duration_minutes ?? 0)
+}
+
+export async function GET(req: Request) {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
     }
     const client = new Anthropic()
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabase = await createRouteClient(req)
+    const { user } = await getAuthenticatedUser(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
@@ -21,7 +41,7 @@ export async function GET() {
       supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       admin.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('measurements').select('*').eq('user_id', user.id).gte('date', thirtyDaysAgo).order('date'),
-      supabase.from('workout_log').select('*').eq('user_id', user.id).gte('logged_at', `${thirtyDaysAgo}T00:00:00`),
+      fetchMonthlyWorkoutLogs(supabase, user.id, thirtyDaysAgo),
     ])
 
     const profile = profileRes.data
@@ -39,7 +59,7 @@ export async function GET() {
 
 Data from the past 30 days:
 - Workouts completed: ${workoutLogs.length}
-- Avg workout duration: ${workoutLogs.length ? Math.round(workoutLogs.reduce((s: number, l: any) => s + (l.duration_min || 0), 0) / workoutLogs.length) : 0} min
+- Avg workout duration: ${workoutLogs.length ? Math.round(workoutLogs.reduce((s: number, l: any) => s + workoutDurationMinutes(l), 0) / workoutLogs.length) : 0} min
 - Weight change: ${weightChange !== null ? `${weightChange}kg` : 'no data'}
 - Goal: ${profile.goal}
 - Language: ${language}
@@ -62,7 +82,7 @@ Write a monthly summary in ${aiLanguageName(language)} as Ion. Make it personal,
         workouts: workoutLogs.length,
         weightChange,
         avgDuration: workoutLogs.length
-          ? Math.round(workoutLogs.reduce((s: number, l: any) => s + (l.duration_min || 0), 0) / workoutLogs.length)
+          ? Math.round(workoutLogs.reduce((s: number, l: any) => s + workoutDurationMinutes(l), 0) / workoutLogs.length)
           : 0,
         measurementCount: measurements.length,
       },

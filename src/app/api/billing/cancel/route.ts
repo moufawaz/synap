@@ -1,17 +1,16 @@
-﻿import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { cancelSubscription } from '@/lib/lemon-squeezy'
 
-export async function POST(_req: Request) {
+export async function POST(req: Request) {
   try {
-    const supabase = await createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { user, error: authError } = await getAuthenticatedUser(req)
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get the subscription
-    const { data: sub, error: subError } = await supabase
+    const admin = createAdminClient()
+    const { data: sub, error: subError } = await admin
       .from('subscriptions')
       .select('lemon_squeezy_subscription_id, status, trial_ends_at')
       .eq('user_id', user.id)
@@ -29,12 +28,10 @@ export async function POST(_req: Request) {
       return NextResponse.json({ error: 'Subscription is already cancelled or inactive' }, { status: 400 })
     }
 
-    // Cancel via Lemon Squeezy API
     await cancelSubscription(sub.lemon_squeezy_subscription_id)
 
-    // The webhook will handle updating the DB, but optimistically update here too
     const isInTrial = sub.status === 'trial'
-    await supabase
+    await admin
       .from('subscriptions')
       .update({
         status: isInTrial ? 'free' : 'cancelled',
@@ -59,7 +56,7 @@ export async function POST(_req: Request) {
     console.error('[Cancel] Error:', err?.message || err)
     return NextResponse.json(
       { error: 'Failed to cancel. Please contact support.' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

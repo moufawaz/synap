@@ -1,4 +1,4 @@
-﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
 function today() {
@@ -10,8 +10,7 @@ function normalizeDate(value: unknown) {
 }
 
 export async function GET(req: Request) {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const date = normalizeDate(new URL(req.url).searchParams.get('date'))
@@ -28,8 +27,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))

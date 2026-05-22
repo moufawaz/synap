@@ -26,16 +26,9 @@
 #   SLACK_WEBHOOK_URL                 build notifications
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: iOS — Build & Deploy
+name: Legacy iOS Capacitor Build
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'android/**'
-      - 'store-metadata.md'
   workflow_dispatch:
 
 concurrency:

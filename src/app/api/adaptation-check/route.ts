@@ -6,6 +6,24 @@ import { sendEmail } from '@/lib/resend'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
+async function fetchAdaptationWorkoutLogs(supabase: any, userId: string) {
+  const primary = await supabase
+    .from('workout_log')
+    .select('*')
+    .eq('user_id', userId)
+    .order('logged_at', { ascending: false })
+    .limit(30)
+
+  if (!primary.error) return primary
+
+  return supabase
+    .from('workout_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .order('logged_at', { ascending: false })
+    .limit(30)
+}
+
 // POST /api/adaptation-check
 // Called daily (e.g., via Vercel Cron or external scheduler) for a specific user
 // Also called from dashboard load for the current user
@@ -27,7 +45,7 @@ export async function POST(req: Request) {
       supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       admin.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('measurements').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(10),
-      supabase.from('workout_log').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(30),
+      fetchAdaptationWorkoutLogs(supabase, user.id),
       supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
       supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
     ])
@@ -104,8 +122,8 @@ export async function POST(req: Request) {
       }
     }
 
-    const uniqueDays = [...new Set(workoutLogs.map((l) =>
-      new Date(l.logged_at).toDateString()
+    const uniqueDays = [...new Set(workoutLogs.map((log: any) =>
+      new Date(log.logged_at || log.date).toDateString()
     ))]
     let streak = 0
     for (let i = 0; i < uniqueDays.length; i++) {

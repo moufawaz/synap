@@ -10,7 +10,7 @@
  * so these rows never appear in the Ion chat.
  */
 
-import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
 const SESSION_TYPE = 'workout_session'
@@ -18,14 +18,14 @@ const TODAY = () => new Date().toISOString().split('T')[0]
 
 // GET /api/workout-session?date=YYYY-MM-DD
 export async function GET(req: Request) {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const admin = createAdminClient()
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ session: null }, { status: 401 })
 
   const url = new URL(req.url)
   const date = url.searchParams.get('date') || TODAY()
 
-  const { data } = await supabase
+  const { data } = await admin
     .from('chat_messages')
     .select('metadata, created_at')
     .eq('user_id', user.id)
@@ -44,15 +44,15 @@ export async function GET(req: Request) {
 // PUT /api/workout-session
 // Body: { date, dayName, completedExercises: number[], exercisePerformance?: object }
 export async function PUT(req: Request) {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const admin = createAdminClient()
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
   const { date = TODAY(), dayName, completedExercises = [], exercisePerformance = {} } = body
 
   // Delete any existing session rows for today to keep it tidy (upsert by delete+insert)
-  await supabase
+  await admin
     .from('chat_messages')
     .delete()
     .eq('user_id', user.id)
@@ -62,7 +62,7 @@ export async function PUT(req: Request) {
     .gte('created_at', `${date}T00:00:00Z`)
     .lte('created_at', `${date}T23:59:59Z`)
 
-  const { error } = await supabase.from('chat_messages').insert({
+  const { error } = await admin.from('chat_messages').insert({
     user_id:      user.id,
     role:         'system',
     content:      '',
@@ -82,13 +82,13 @@ export async function PUT(req: Request) {
 }
 
 // DELETE /api/workout-session — call when session finishes
-export async function DELETE() {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export async function DELETE(req: Request) {
+  const admin = createAdminClient()
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const date = TODAY()
-  await supabase
+  await admin
     .from('chat_messages')
     .delete()
     .eq('user_id', user.id)

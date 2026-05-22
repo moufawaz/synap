@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { sendPushNotification, VALID_PUSH_TYPES, type PushType } from '@/lib/onesignal'
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getAuthenticatedUser(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { type, overrides }: { type: PushType; overrides?: any } = await req.json()
@@ -13,8 +12,8 @@ export async function POST(req: Request) {
 
     const result = await sendPushNotification({ userId: user.id, type, overrides })
 
-    // Log
-    await supabase.from('notifications').insert({
+    const admin = createAdminClient()
+    await admin.from('notifications').insert({
       user_id: user.id,
       type,
       title: overrides?.title || type,

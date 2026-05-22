@@ -1,4 +1,4 @@
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { normalizeAiLanguage } from '@/lib/ai-language'
 import { NextResponse } from 'next/server'
 
@@ -175,9 +175,8 @@ function buildGroceryList(plan: any, language: 'en' | 'ar' = 'en') {
   return { groups, items }
 }
 
-export async function GET() {
-  const server = await createServerClient()
-  const { data: { user } } = await server.auth.getUser()
+export async function GET(req: Request) {
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()

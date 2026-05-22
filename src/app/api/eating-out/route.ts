@@ -1,4 +1,4 @@
-﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { getAnthropicClient, withAnthropicRetry } from '@/lib/anthropic'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
@@ -34,8 +34,7 @@ function parseJsonObject(text: string) {
 }
 
 export async function POST(req: Request) {
-  const server = await createServerClient()
-  const { data: { user } } = await server.auth.getUser()
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   if (!isLaunchMode()) {

@@ -1,4 +1,4 @@
-﻿import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { getUserSubscription, isEliteUser, isLaunchMode } from '@/lib/subscription'
@@ -11,8 +11,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
   }
 
-  const supabase = await createServerClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const { user, error: authError } = await getAuthenticatedUser(req)
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

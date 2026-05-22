@@ -8,6 +8,10 @@
     "start": "next start",
     "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
     "icons": "node scripts/generate-icons.mjs",
+    "mobile:start": "npm --prefix apps/mobile run start",
+    "mobile:typecheck": "npm --prefix apps/mobile run typecheck",
+    "mobile:config": "npm --prefix apps/mobile run config",
+    "mobile:prebuild:ios": "npm --prefix apps/mobile run prebuild:ios",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios"
