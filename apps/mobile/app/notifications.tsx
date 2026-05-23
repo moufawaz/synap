@@ -7,11 +7,13 @@ import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
 import { registerDeviceToken, requestTestPush } from '@/features/tools'
+import { cancelSynapReminders, getSynapScheduledReminders, scheduleSynapReminders } from '@/features/notifications'
 import { useTheme } from '@/theme/ThemeProvider'
 
 export default function NotificationsScreen() {
   const { color } = useTheme()
   const [token, setToken] = useState<string | null>(null)
+  const [scheduledCount, setScheduledCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function enable() {
@@ -27,12 +29,26 @@ export default function NotificationsScreen() {
       const res = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
       setToken(res.data)
       await registerDeviceToken({ token: res.data, platform: Platform.OS })
-      Alert.alert('Push enabled', 'This device is registered for push notifications.')
+      const scheduledIds = await scheduleSynapReminders()
+      setScheduledCount(scheduledIds.length)
+      Alert.alert('Notifications enabled', 'This device is registered for push and daily reminders are scheduled.')
     } catch (error) {
       Alert.alert('Push', error instanceof Error ? error.message : 'Could not enable push.')
     } finally {
       setLoading(false)
     }
+  }
+
+  async function refreshScheduled() {
+    const scheduled = await getSynapScheduledReminders()
+    setScheduledCount(scheduled.length)
+    Alert.alert('Local reminders', `${scheduled.length} SYNAP reminder(s) are scheduled.`)
+  }
+
+  async function disableLocal() {
+    await cancelSynapReminders()
+    setScheduledCount(0)
+    Alert.alert('Local reminders', 'Daily SYNAP reminders were cancelled on this device.')
   }
 
   async function test() {
@@ -46,12 +62,15 @@ export default function NotificationsScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="PUSH" title="Notifications" subtitle="Native permission flow and backend push test." />
+      <PageHeader eyebrow="PUSH" title="Notifications" subtitle="Remote push, local reminders, and tap routing." />
       <Card>
         <Text style={[styles.title, { color: color.text }]}>Push status</Text>
         <Text style={[styles.body, { color: color.muted }]}>{token || 'No native token yet.'}</Text>
+        <Text style={[styles.body, { color: color.muted }]}>Local reminders: {scheduledCount ?? 'not checked'}</Text>
         <Pressable onPress={enable} style={[styles.primary, { backgroundColor: color.spark }]}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Enable push</Text>}</Pressable>
         <Pressable onPress={test} style={[styles.secondary, { borderColor: color.cyan }]}><Text style={[styles.secondaryText, { color: color.cyan }]}>Send backend test</Text></Pressable>
+        <Pressable onPress={refreshScheduled} style={[styles.secondary, { borderColor: color.pulse }]}><Text style={[styles.secondaryText, { color: color.pulse }]}>Check local reminders</Text></Pressable>
+        <Pressable onPress={disableLocal} style={[styles.secondary, { borderColor: color.danger }]}><Text style={[styles.secondaryText, { color: color.danger }]}>Cancel local reminders</Text></Pressable>
       </Card>
     </Screen>
   )

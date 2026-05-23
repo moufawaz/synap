@@ -444,3 +444,16 @@ Still blocked outside code:
   - `npm run build`
   - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
 - Result: EAS iOS production build `b975ff0b-6909-4e53-b3d0-47dfd6499c22` finished successfully from commit `da2391614cdb08ba31edbe7cb4d5a597727ac40e`. App build number `16`; IPA artifact: `https://expo.dev/artifacts/eas/oUhEwwSUbdPiNvzni9yCf7.ipa`.
+
+## Latest Progress - Notification Scheduling And Deep Links
+
+- Added native local notification scheduling for daily SYNAP reminders:
+  - Workout check-in routes to Train.
+  - Meal logging reminder routes to Nutrition.
+  - Hydration reminder routes to Nutrition.
+- Notifications screen now schedules/cancels/checks local reminders after permission is granted.
+- Added app-level notification handler so foreground notifications display in iOS.
+- Added push/local notification tap routing:
+  - `data.url` opens the specific native route.
+  - Known notification types route to Nutrition, Train, Progress, Reports, or Plan.
+- Re-tested Hermes with EAS build `f1e4281c-20af-4d54-9e04-6abb822b2834`. It still fails during Xcode/Hermes bytecode compilation with React Native internal `invalid statement encountered` errors. Release path remains `jsEngine: "jsc"` for stability.
