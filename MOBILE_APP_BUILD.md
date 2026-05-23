@@ -457,3 +457,5 @@ Still blocked outside code:
   - `data.url` opens the specific native route.
   - Known notification types route to Nutrition, Train, Progress, Reports, or Plan.
 - Re-tested Hermes with EAS build `f1e4281c-20af-4d54-9e04-6abb822b2834`. It still fails during Xcode/Hermes bytecode compilation with React Native internal `invalid statement encountered` errors. Release path remains `jsEngine: "jsc"` for stability.
+- Result: EAS iOS production build `bd1a6f1b-fee9-40a1-a5cf-fbd576e3c1e3` finished successfully from commit `ce891d0c8200e461e0d42a9742f47abddd1afd95`. App build number `20`; IPA artifact: `https://expo.dev/artifacts/eas/pmnGfPY7KCLtpBTNsXFttR.ipa`.
+- Submit status: `eas submit --platform ios --profile production --latest --non-interactive` is blocked until `ascAppId` is added to `apps/mobile/eas.json` or the submit command is run interactively with Apple ID login. Non-interactive Codex shell cannot answer the Apple ID prompt.
