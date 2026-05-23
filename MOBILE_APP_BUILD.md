@@ -429,3 +429,17 @@ Still blocked outside code:
   - `npm run build`
   - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
 - Result: EAS iOS production build `ced867ad-21e2-438c-a863-3000fdf57567` finished successfully from commit `659726ef4943e88369ed89209664d86f6c862d7f`. App build number `14`; IPA artifact: `https://expo.dev/artifacts/eas/rxrLFRKxfdsHtC5n8Q3JT2.ipa`.
+
+## Latest Progress - Remaining Web Parity Screens
+
+- Added native Profile Settings so users can edit the key profile fields Ion depends on: age, body stats, goal, training schedule, injuries, food preferences, allergies, and meals/day.
+- Added a mobile `GET /api/save-profile` path and reused the existing `POST /api/save-profile` profile persistence flow for native settings.
+- Added native Supplement Stack screen connected to `/api/supplement-recommendations`.
+- Added native Macro Adjustment screen connected to `/api/macro-adjustment`.
+- Updated supplement and macro-adjustment APIs to accept native bearer auth while preserving web behavior.
+- Added More-screen links for Settings, Supplements, and Macro adjustment.
+- Verified:
+  - `npm run mobile:typecheck`
+  - `npm run mobile:config`
+  - `npm run build`
+  - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`

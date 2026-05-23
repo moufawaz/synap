@@ -3,6 +3,23 @@ import { NextResponse } from 'next/server'
 import { recordAppEvent } from '@/lib/app-events'
 import { sendPlanErrorEmailIfNeeded } from '@/lib/plan-error-emails'
 
+export async function GET(req: Request) {
+  const supabase = await createRouteClient(req)
+  const { user, error: authError } = await getAuthenticatedUser(req)
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ profile: data || null })
+}
+
 export async function POST(req: Request) {
   let userId: string | undefined
   try {

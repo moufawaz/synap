@@ -1,4 +1,4 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getUserSubscription, effectivePlan, isLaunchMode } from '@/lib/subscription'
@@ -11,9 +11,9 @@ function eliteGate(plan: string) {
 }
 
 // GET — fetch latest recommendations
-export async function GET() {
-  const supabase = await createServerClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
+export async function GET(req: Request) {
+  const supabase = await createRouteClient(req)
+  const { user, error } = await getAuthenticatedUser(req)
   if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   if (!isLaunchMode()) {
@@ -35,12 +35,12 @@ export async function GET() {
 }
 
 // POST — generate recommendations on demand (for users who have a plan but no recs yet)
-export async function POST() {
+export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
 
-  const supabase = await createServerClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const supabase = await createRouteClient(req)
+  const { user, error } = await getAuthenticatedUser(req)
   if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   if (!isLaunchMode()) {

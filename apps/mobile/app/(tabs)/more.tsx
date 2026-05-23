@@ -11,12 +11,15 @@ import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
 const featureLinks: Array<[string, Href]> = [
+  ['Settings', '/settings'],
   ['Plan', '/plan'],
   ['Programme', '/programme'],
   ['Measurements', '/measurements'],
   ['Grocery list', '/grocery'],
   ['Eating out', '/eating-out'],
   ['Form check', '/form-check'],
+  ['Supplements', '/supplements'],
+  ['Macro adjustment', '/macro-adjustment'],
   ['Reports', '/reports'],
   ['Billing', '/billing'],
   ['Notifications', '/notifications'],

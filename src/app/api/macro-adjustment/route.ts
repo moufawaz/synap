@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getUserSubscription, isEliteUser } from '@/lib/subscription'
 import { recordAiUsage } from '@/lib/ai-usage'
@@ -7,10 +7,10 @@ import { recordAiUsage } from '@/lib/ai-usage'
 // POST /api/macro-adjustment
 // Generates weekly macro micro-adjustments for Elite users based on
 // recent weight trend vs target, workout completion rate, and meal adherence.
-export async function POST() {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export async function POST(req: Request) {
+  const supabase = await createRouteClient(req)
+  const { user, error: authError } = await getAuthenticatedUser(req)
+  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const sub = await getUserSubscription(user.id)
   if (!isEliteUser(sub)) {
