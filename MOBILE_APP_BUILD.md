@@ -477,3 +477,58 @@ Still blocked outside code:
   - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
 - Result: EAS iOS production build `8733eaea-8f03-4e89-99ae-ae505fde95e5` finished successfully from commit `3d0f39e60f3f81c4e10c563c3180ebe1d9cd981c`. App build number `60`; IPA artifact: `https://expo.dev/artifacts/eas/hGkovfapCF5M3D7NGvLCvk.ipa`.
 - Submit result: `eas submit --platform ios --profile production --latest --non-interactive` successfully uploaded build `60` to App Store Connect. Apple is processing it for TestFlight/App Review selection.
+
+## Latest Progress - Build 61 Debug Pass (2026-05-23)
+
+User reported build 60 still crashing on launch and showing the wrong app icon. Full debug audit performed.
+
+### Crash root cause — react-native-reanimated v4 / JSC incompatibility
+
+- `apps/mobile/package.json` had `react-native-reanimated: ~4.1.1` installed.
+- Reanimated v4 dropped JSC support entirely — it requires Hermes. The mobile app uses `jsEngine: "jsc"` (Hermes still fails on EAS due to React Native internal syntax errors).
+- Result: immediate fatal launch crash on any JSC build with reanimated v4.
+- Fix: downgraded `react-native-reanimated` from `~4.1.1` → `~3.16.7` (the last v3 release, fully compatible with Expo 54 + JSC).
+
+### Wrong icon — asset file mismatch
+
+- `apps/mobile/assets/icon.png` was a 1,457,298-byte file (different image, not the SYNAP icon).
+- Fix: replaced with the correct SYNAP icon copied from `resources/icon.png` (467,327 bytes, 1024×1024).
+
+### Wrong splash screen — asset file mismatch
+
+- `apps/mobile/assets/splash.png` was the same wrong 1,457,298-byte file as the icon.
+- Fix: replaced with the correct SYNAP splash copied from `resources/splash.png` (345,068 bytes, 2732×2732).
+
+### Dead @supabase/supabase-js dependency
+
+- `@supabase/supabase-js: ^2.105.1` was still listed in `apps/mobile/package.json` even though the mobile app switched to `@supabase/auth-js` directly (to avoid OpenTelemetry dynamic imports that crash JSC).
+- No mobile source file imports `@supabase/supabase-js` — it was dead weight pulling in the full Supabase bundle unnecessarily.
+- Fix: removed `@supabase/supabase-js` from mobile `package.json`.
+
+### Metro config dead Supabase CJS resolver
+
+- `apps/mobile/metro.config.js` had a `@supabase/supabase-js` CJS resolver redirect left over from before the auth-js switch. It was never hit at runtime after supabase-js was removed, but caused Metro to scan and resolve the redirect on every startup.
+- Effect: Metro startup was 8844ms instead of ~850ms.
+- Fix: simplified `metro.config.js` to just `getDefaultConfig(__dirname)` — no custom resolver needed.
+- Verified: Metro startup dropped from 8844ms → 849ms; bundle still builds 1477 modules cleanly.
+
+### Verified after all fixes
+
+- `npm run mobile:typecheck` — clean, 0 errors.
+- `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>` — 849ms Metro startup, 1477 modules, 0 errors.
+- `npm run mobile:config` — clean, expected iOS bundle ID, HealthKit plugin, correct icon and splash paths.
+- Icon asset: `apps/mobile/assets/icon.png` — 467,327 bytes (correct SYNAP icon, 1024×1024).
+- Splash asset: `apps/mobile/assets/splash.png` — 345,068 bytes (correct SYNAP splash, 2732×2732).
+
+### Next step
+
+Commit all changes and trigger a new EAS production build (will auto-increment to build 61+):
+
+```bash
+cd D:\Synap
+git add apps/mobile/package.json apps/mobile/metro.config.js apps/mobile/assets/icon.png apps/mobile/assets/splash.png MOBILE_APP_BUILD.md
+git commit -m "fix: crash (reanimated v4→v3.16.7), icon/splash assets, remove dead supabase-js dep"
+git push
+eas build --platform ios --profile production --non-interactive --no-wait
+eas submit --platform ios --profile production --latest --non-interactive
+```
