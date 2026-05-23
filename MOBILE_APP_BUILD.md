@@ -466,3 +466,14 @@ Still blocked outside code:
 - Bumped the Expo iOS build number above the old Capacitor build numbers to avoid selecting the wrong binary in App Store Connect.
 - Result: EAS iOS production build `f8b7166c-e33f-419a-8159-8c2855ab89b4` finished successfully from commit `2fb721fe99ae3251c13a48bdd812ab1e249fc216`. App build number `58`; IPA artifact: `https://expo.dev/artifacts/eas/wHjy2Li9MCDCmYWmE8NQco.ipa`.
 - Submit result: `eas submit --platform ios --profile production --latest --non-interactive` successfully uploaded build `58` to App Store Connect. Apple is processing it for TestFlight/App Review selection.
+
+## Latest Progress - Launch Crash Follow-up
+
+- User reported TestFlight app crashed immediately on open after build `58`.
+- Diagnosis found `apps/mobile/metro.config.js` still forced `unstable_transformProfile: "hermes-stable"` while `apps/mobile/app.json` uses `jsEngine: "jsc"`. This can produce a runtime/bundle mismatch on iOS startup.
+- Removed the Hermes transform profile so production iOS bundles are transformed for the configured JSC runtime.
+- Verified:
+  - `npm run typecheck`
+  - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
+- Result: EAS iOS production build `8733eaea-8f03-4e89-99ae-ae505fde95e5` finished successfully from commit `3d0f39e60f3f81c4e10c563c3180ebe1d9cd981c`. App build number `60`; IPA artifact: `https://expo.dev/artifacts/eas/hGkovfapCF5M3D7NGvLCvk.ipa`.
+- Submit result: `eas submit --platform ios --profile production --latest --non-interactive` successfully uploaded build `60` to App Store Connect. Apple is processing it for TestFlight/App Review selection.
