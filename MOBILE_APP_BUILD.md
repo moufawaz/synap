@@ -459,3 +459,10 @@ Still blocked outside code:
 - Re-tested Hermes with EAS build `f1e4281c-20af-4d54-9e04-6abb822b2834`. It still fails during Xcode/Hermes bytecode compilation with React Native internal `invalid statement encountered` errors. Release path remains `jsEngine: "jsc"` for stability.
 - Result: EAS iOS production build `bd1a6f1b-fee9-40a1-a5cf-fbd576e3c1e3` finished successfully from commit `ce891d0c8200e461e0d42a9742f47abddd1afd95`. App build number `20`; IPA artifact: `https://expo.dev/artifacts/eas/pmnGfPY7KCLtpBTNsXFttR.ipa`.
 - Submit status: `eas submit --platform ios --profile production --latest --non-interactive` is blocked until `ascAppId` is added to `apps/mobile/eas.json` or the submit command is run interactively with Apple ID login. Non-interactive Codex shell cannot answer the Apple ID prompt.
+
+## Latest Progress - Expo Build Above Capacitor
+
+- Added App Store Connect app ID `6771498466` to the EAS submit profile.
+- Bumped the Expo iOS build number above the old Capacitor build numbers to avoid selecting the wrong binary in App Store Connect.
+- Result: EAS iOS production build `f8b7166c-e33f-419a-8159-8c2855ab89b4` finished successfully from commit `2fb721fe99ae3251c13a48bdd812ab1e249fc216`. App build number `58`; IPA artifact: `https://expo.dev/artifacts/eas/wHjy2Li9MCDCmYWmE8NQco.ipa`.
+- Submit result: `eas submit --platform ios --profile production --latest --non-interactive` successfully uploaded build `58` to App Store Connect. Apple is processing it for TestFlight/App Review selection.
