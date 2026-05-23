@@ -428,3 +428,4 @@ Still blocked outside code:
   - `npm run mobile:config`
   - `npm run build`
   - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
+- Result: EAS iOS production build `ced867ad-21e2-438c-a863-3000fdf57567` finished successfully from commit `659726ef4943e88369ed89209664d86f6c862d7f`. App build number `14`; IPA artifact: `https://expo.dev/artifacts/eas/rxrLFRKxfdsHtC5n8Q3JT2.ipa`.
