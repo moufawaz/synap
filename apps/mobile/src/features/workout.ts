@@ -7,6 +7,9 @@ export type WorkoutExercise = {
   reps: string | number | null
   rest_sec: number | null
   muscle_group: string | null
+  weight_guidance?: string | null
+  form_tip?: string | null
+  progression_note?: string | null
   video_id: string | null
 }
 
@@ -43,6 +46,27 @@ export async function getPlanHistory() {
   return apiFetch<PlanHistoryResponse>('/api/plan-history')
 }
 
+export async function renewPlan(planType: 'diet' | 'workout') {
+  return apiFetch<{ ok: boolean; action: 'preview'; previewId: string; preview: any; plan: any }>('/api/renew-plan', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'preview', planType }),
+  })
+}
+
+export async function applyRenewalPreview(previewId: string) {
+  return apiFetch<{ ok: boolean; action: 'apply'; planType: 'diet' | 'workout'; plan: any }>('/api/renew-plan', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'apply', previewId }),
+  })
+}
+
+export async function rollbackPlan(planType: 'diet' | 'workout', targetPlanId?: string) {
+  return apiFetch<{ ok: boolean; action: 'rollback'; planType: 'diet' | 'workout'; restoredPlanId: string; plan: any }>('/api/renew-plan', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'rollback', planType, targetPlanId }),
+  })
+}
+
 export async function getWorkoutSession(date: string) {
   return apiFetch<{ session: WorkoutSession | null }>(`/api/workout-session?date=${encodeURIComponent(date)}`)
 }
@@ -65,6 +89,7 @@ export async function logWorkout(payload: {
   exercises_completed: number
   total_exercises: number
   exercises: Array<{ name: string; completed: boolean }>
+  exercisePerformance?: Record<string, unknown>
   notes?: string | null
 }) {
   return apiFetch<{ log: unknown }>('/api/log-workout', {

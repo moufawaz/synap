@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, type Href } from 'expo-router'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
@@ -10,7 +10,7 @@ import { HealthSummary, requestHealthAccessAndRead } from '@/features/health'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
-const featureLinks = [
+const featureLinks: Array<[string, Href]> = [
   ['Plan', '/plan'],
   ['Programme', '/programme'],
   ['Measurements', '/measurements'],
@@ -102,7 +102,7 @@ export default function MoreScreen() {
         <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>Features</Text>
         <View style={styles.linkList}>
           {featureLinks.map(([label, href]) => (
-            <Pressable key={href} onPress={() => router.push(href)}>
+            <Pressable key={String(href)} onPress={() => router.push(href)}>
               <Text style={[styles.link, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{label}</Text>
             </Pressable>
           ))}

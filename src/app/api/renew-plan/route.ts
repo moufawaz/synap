@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerClient, createAdminClient } from '@/lib/supabase-server'
+import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
 import { sendPushNotification } from '@/lib/onesignal'
@@ -16,11 +16,11 @@ import { recordAppEvent } from '@/lib/app-events'
 // POST /api/renew-plan  — called when a user's plan cycle expires
 export async function POST(req: Request) {
   try {
-    const supabase = await createServerClient()
+    const supabase = await createRouteClient(req)
     const admin    = createAdminClient()
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { user, error: authError } = await getAuthenticatedUser(req)
+    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json().catch(() => ({}))
     const action = body.action || 'preview'
@@ -182,7 +182,7 @@ async function applyRenewalPreview({
   email,
   previewId,
 }: {
-  supabase: Awaited<ReturnType<typeof createServerClient>>
+  supabase: Awaited<ReturnType<typeof createRouteClient>>
   admin: ReturnType<typeof createAdminClient>
   userId: string
   email?: string | null

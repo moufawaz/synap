@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
@@ -26,12 +26,16 @@ export default function TrainScreen() {
   const plan = useAsyncData(getPlanHistory, [])
   const workout = plan.data?.todayWorkout ?? null
   const [completed, setCompleted] = useState<number[]>([])
+  const [performance, setPerformance] = useState<Record<string, { weight?: string; reps?: string }>>({})
   const [saving, setSaving] = useState(false)
   const date = todayKey()
 
   useEffect(() => {
     getWorkoutSession(date)
-      .then(({ session }) => setCompleted(session?.completedExercises ?? []))
+      .then(({ session }) => {
+        setCompleted(session?.completedExercises ?? [])
+        setPerformance((session?.exercisePerformance as Record<string, { weight?: string; reps?: string }>) ?? {})
+      })
       .catch(() => {})
   }, [date])
 
@@ -49,6 +53,26 @@ export default function TrainScreen() {
         date,
         dayName: workout.day_name,
         completedExercises: next,
+        exercisePerformance: performance,
+      }).catch(() => {})
+    }
+  }
+
+  async function updatePerformance(index: number, key: 'weight' | 'reps', value: string) {
+    const next = {
+      ...performance,
+      [index]: {
+        ...(performance[index] || {}),
+        [key]: value,
+      },
+    }
+    setPerformance(next)
+    if (workout) {
+      await saveWorkoutSession({
+        date,
+        dayName: workout.day_name,
+        completedExercises: completed,
+        exercisePerformance: next,
       }).catch(() => {})
     }
   }
@@ -66,7 +90,9 @@ export default function TrainScreen() {
         exercises: workout.exercises.map(exercise => ({
           name: exercise.name,
           completed: completedSet.has(exercise.index),
+          performance: performance[exercise.index] || null,
         })),
+        exercisePerformance: performance,
         notes: workout.muscle_focus,
       })
       Alert.alert('Workout saved', 'Your session was logged successfully.')
@@ -133,6 +159,26 @@ export default function TrainScreen() {
                         <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
                           {exerciseMeta(exercise)}
                         </Text>
+                        {exercise.weight_guidance ? <Text style={[styles.body, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{exercise.weight_guidance}</Text> : null}
+                        {exercise.progression_note ? <Text style={[styles.body, { color: color.pulse, textAlign: isRtl ? 'right' : 'left' }]}>{exercise.progression_note}</Text> : null}
+                        <View style={styles.performanceRow}>
+                          <TextInput
+                            value={performance[exercise.index]?.weight || ''}
+                            onChangeText={value => updatePerformance(exercise.index, 'weight', value)}
+                            placeholder="Weight"
+                            placeholderTextColor={color.dim}
+                            keyboardType="decimal-pad"
+                            style={[styles.performanceInput, { color: color.text, borderColor: color.border, backgroundColor: color.elevated }]}
+                          />
+                          <TextInput
+                            value={performance[exercise.index]?.reps || ''}
+                            onChangeText={value => updatePerformance(exercise.index, 'reps', value)}
+                            placeholder="Reps"
+                            placeholderTextColor={color.dim}
+                            keyboardType="number-pad"
+                            style={[styles.performanceInput, { color: color.text, borderColor: color.border, backgroundColor: color.elevated }]}
+                          />
+                        </View>
                       </View>
                     </View>
                   </Card>
@@ -190,6 +236,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     marginBottom: 4,
+  },
+  performanceRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  performanceInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    fontWeight: '800',
   },
   finishButton: {
     marginTop: 18,

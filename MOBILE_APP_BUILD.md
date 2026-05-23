@@ -400,3 +400,31 @@ Still blocked outside code:
   - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`
   - `npx npm@10.9.3 ci --include=dev --dry-run --cache D:\Synap\.npm-cache-mobile`
 - Result: EAS iOS production build `3bac743c-a9c2-4f3e-8cc3-ece58df907f6` finished successfully from commit `b0105067a26a5f178e8792ca13b8e0c6713ec82a`. App build number `12`; IPA artifact: `https://expo.dev/artifacts/eas/8nouPS6ciaUmiqGCuBwxaQ.ipa`.
+
+## Latest Progress - Native Core Parity Pass
+
+- Upgraded the native Plan screen from a read-only summary to a real plan hub:
+  - Diet/workout tabs.
+  - Active cycle timing.
+  - Full meal and workout-day detail.
+  - Meal recipe generation.
+  - Plan history.
+  - Previous-cycle rollback.
+  - Renewal preview and "Apply new plan" confirmation using `/api/renew-plan`.
+- Updated `/api/renew-plan` so native bearer-authenticated users can generate renewal previews, apply them, and roll back previous plans.
+- Expanded native Nutrition:
+  - Macro progress bars for calories, protein, carbs, and fat.
+  - Water controls kept on the main screen.
+  - Planned meal checklist now toggles on/off against Supabase meal logs.
+  - Manual, barcode, live scanner, and photo scan paths still feed the editable food log form.
+- Expanded native Train:
+  - Per-exercise weight and reps inputs.
+  - Session draft sync now keeps completion state and performance notes.
+  - Workout logs include the per-exercise performance inside the logged exercise payload.
+  - Exercise guidance/progression notes from the backend now display in native.
+- Fixed the More screen typed navigation and kept Arabic language switch text clean.
+- Verified:
+  - `npm run mobile:typecheck`
+  - `npm run mobile:config`
+  - `npm run build`
+  - `npx expo export:embed --eager --platform ios --dev false --bundle-output <temp> --assets-dest <temp>`

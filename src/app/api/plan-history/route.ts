@@ -109,6 +109,9 @@ function summarizeTodayWorkout(plan: any) {
       reps: exercise?.reps ?? null,
       rest_sec: exercise?.rest_sec ?? exercise?.rest_seconds ?? null,
       muscle_group: exercise?.muscle_group ?? exercise?.muscle ?? null,
+      weight_guidance: exercise?.weight_guidance ?? exercise?.weight_suggestion ?? null,
+      form_tip: exercise?.form_tip ?? exercise?.notes ?? null,
+      progression_note: exercise?.progression_note ?? null,
       video_id: exercise?.video_id ?? null,
     })),
   }

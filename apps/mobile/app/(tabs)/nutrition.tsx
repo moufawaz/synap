@@ -126,6 +126,13 @@ export default function NutritionScreen() {
   }
 
   async function logPlannedMeal(meal: any) {
+    const mealKey = String(meal.name || meal.meal_name || '').toLowerCase()
+    const existing = (logs.data?.logs || []).find(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
+    if (existing) {
+      await deleteMealLog(existing.id)
+      await logs.reload()
+      return
+    }
     await createMealLog({
       meal_name: meal.name || meal.meal_name || 'Planned meal',
       meal_time: meal.time || meal.meal_time,
@@ -136,6 +143,11 @@ export default function NutritionScreen() {
       source: 'mobile_plan_meal',
     })
     await logs.reload()
+  }
+
+  function progress(current: number, target: number) {
+    if (!target || target <= 0) return 0
+    return Math.max(0, Math.min(100, Math.round((current / target) * 100)))
   }
 
   async function addWater(delta: number) {
@@ -197,8 +209,24 @@ export default function NutritionScreen() {
       <PageHeader eyebrow="NUTRITION" title={text.nutrition} subtitle={`${totalCalories}/${targets.calories || '-'} kcal - P:${Math.round(totalProtein)}/${targets.protein || '-'} C:${Math.round(totalCarbs)}/${targets.carbs || '-'} F:${Math.round(totalFat)}/${targets.fat || '-'}`} />
       <Card>
         <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>Macro progress</Text>
-        <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
-          Calories {totalCalories}/{targets.calories || '-'} - Water {hydration.data?.hydration?.glasses ?? 0} glasses / {targets.water}L target
+        {[
+          ['Calories', totalCalories, targets.calories, color.flame],
+          ['Protein', Math.round(totalProtein), targets.protein, color.spark],
+          ['Carbs', Math.round(totalCarbs), targets.carbs, color.cyan],
+          ['Fat', Math.round(totalFat), targets.fat, color.pulse],
+        ].map(([label, current, target, barColor]) => (
+          <View key={String(label)} style={styles.macroLine}>
+            <View style={styles.macroHeader}>
+              <Text style={[styles.body, { color: color.text }]}>{String(label)}</Text>
+              <Text style={[styles.body, { color: color.muted }]}>{Number(current)}/{Number(target) || '-'}</Text>
+            </View>
+            <View style={[styles.barTrack, { backgroundColor: color.elevated }]}>
+              <View style={[styles.barFill, { width: `${progress(Number(current), Number(target))}%`, backgroundColor: String(barColor) }]} />
+            </View>
+          </View>
+        ))}
+        <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left', marginTop: 10 }]}>
+          Water {hydration.data?.hydration?.glasses ?? 0} glasses / {targets.water}L target
         </Text>
         <View style={styles.row}>
           <Pressable onPress={() => addWater(1)} style={[styles.secondary, { borderColor: color.cyan }]}><Text style={[styles.secondaryText, { color: color.cyan }]}>+ Water</Text></Pressable>
@@ -214,6 +242,7 @@ export default function NutritionScreen() {
               <Pressable key={index} onPress={() => logPlannedMeal(meal)} style={[styles.mealRow, { borderColor: done ? color.pulse : color.border }]}>
                 <Text style={[styles.itemTitle, { color: color.text }]}>{done ? '✓ ' : ''}{meal.name || meal.meal_name || `Meal ${index + 1}`}</Text>
                 <Text style={[styles.body, { color: color.muted }]}>{meal.time || ''} {meal.calories ? `- ${meal.calories} kcal` : ''}</Text>
+                <Text style={[styles.body, { color: done ? color.pulse : color.dim }]}>{done ? 'Tap to unlog' : 'Tap to log this planned meal'}</Text>
               </Pressable>
             )
           })}
@@ -373,6 +402,24 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     fontWeight: '900',
+  },
+  macroLine: {
+    marginTop: 10,
+  },
+  macroHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 6,
+  },
+  barTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 999,
   },
   scannerRoot: {
     flex: 1,
