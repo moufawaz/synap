@@ -3,11 +3,6 @@ const { getDefaultConfig } = require('expo/metro-config')
 const config = getDefaultConfig(__dirname)
 const supabaseCjsEntry = require.resolve('@supabase/supabase-js/dist/index.cjs')
 
-config.transformer = {
-  ...config.transformer,
-  unstable_transformProfile: 'hermes-stable',
-}
-
 const defaultResolveRequest = config.resolver.resolveRequest
 
 config.resolver = {
