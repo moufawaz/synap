@@ -706,3 +706,12 @@ Decision:
 - Reason: Reanimated v4 crashes under the current JSC release path, and Reanimated v3.16.7 fails native compilation with React Native 0.81 new architecture on EAS.
 - This dependency was added for UI polish only; no native mobile feature currently depends on Reanimated APIs.
 - Keep `react-native-gesture-handler` because it is harmless and still useful for navigation/gesture compatibility.
+
+Final result:
+
+- Removed `react-native-reanimated` from `apps/mobile/package.json`.
+- Removed `react-native-reanimated/plugin` from `apps/mobile/babel.config.js`.
+- Regenerated the mobile lockfile with `npm@10.9.3`.
+- EAS iOS production build `079716c8-a8bd-4181-8a1f-b7c23398fc6b` finished successfully from commit `eca8633b67c8f6398c648615d2eb9a1cbb6714ac`.
+- App build number: `64`.
+- IPA artifact: `https://expo.dev/artifacts/eas/WmYt5qhoH3HGCebXPf6aM.ipa`.
