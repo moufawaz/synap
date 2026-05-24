@@ -7,6 +7,11 @@ on:
         description: Optional iOS build number. Leave empty to use 1000 + GitHub run number.
         required: false
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ios-expo-direct.yml
 
 concurrency:
   group: ios-expo-direct-${{ github.ref }}
@@ -100,4 +105,3 @@ jobs:
           else
             echo "No gym log found."
           fi
-
