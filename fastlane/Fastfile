@@ -86,13 +86,13 @@ platform :ios do
       UI.user_error!('APP_STORE_CONNECT_API_KEY_P8 must include the full BEGIN/END PRIVATE KEY block.')
     end
 
-    app_store_connect_api_key(
-      key_id:      ENV['APP_STORE_CONNECT_API_KEY_ID'],
-      issuer_id:   ENV['APP_STORE_CONNECT_ISSUER_ID'],
-      key_filepath: ENV['ASC_P8_KEY_PATH'],
-      duration:    1200,
-      in_house:    false,
-    )
+    {
+      key_id:    ENV['APP_STORE_CONNECT_API_KEY_ID'],
+      issuer_id: ENV['APP_STORE_CONNECT_ISSUER_ID'],
+      key:       key_content,
+      duration:  1200,
+      in_house:  false,
+    }
   end
 
   desc "Sync (or create) App Store Distribution certificates using match"
