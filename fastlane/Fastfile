@@ -183,4 +183,69 @@ platform :ios do
     end
   end
 
+  desc "Build Expo native IPA and upload to TestFlight"
+  lane :expo_beta do
+    require 'json'
+
+    create_keychain(
+      name:            'fastlane_match',
+      password:        ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
+      default_keychain: true,
+      unlock:          true,
+      timeout:         3600,
+      lock_when_sleeps: false,
+    )
+    certs
+
+    project_path = Dir['apps/mobile/ios/*.xcodeproj'].first
+    UI.user_error!('Expo iOS project was not generated. Run expo prebuild first.') unless project_path
+
+    project_json = sh("xcodebuild -list -json -project '#{project_path}'", log: false)
+    schemes = JSON.parse(project_json).dig('project', 'schemes') || []
+    scheme = schemes.include?('SYNAP') ? 'SYNAP' : schemes.first
+    UI.user_error!("No Xcode scheme found in #{project_path}.") unless scheme
+
+    requested_build_number = ENV['IOS_BUILD_NUMBER'].to_s.strip
+    build_number = requested_build_number.empty? ? (1000 + (ENV['GITHUB_RUN_NUMBER'] || '1').to_i).to_s : requested_build_number
+    increment_build_number(
+      build_number: build_number,
+      xcodeproj:    project_path,
+    )
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path:                  project_path,
+      bundle_identifier:     'app.synap.fit',
+      profile_name:          'match AppStore app.synap.fit',
+      code_sign_identity:    'iPhone Distribution',
+      team_id:               ENV['APPLE_TEAM_ID'],
+    )
+
+    build_app(
+      project:           project_path,
+      scheme:            scheme,
+      configuration:     'Release',
+      sdk:               'iphoneos',
+      export_method:     'app-store',
+      output_directory:  './build',
+      output_name:       'SYNAP-Expo.ipa',
+      xcargs:            "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='match AppStore app.synap.fit'",
+      export_options: {
+        provisioningProfiles: {
+          'app.synap.fit' => 'match AppStore app.synap.fit',
+        },
+        signingStyle:    'manual',
+        teamID:          ENV['APPLE_TEAM_ID'],
+      },
+      clean:             true,
+    )
+
+    upload_to_testflight(
+      api_key:                           asc_api_key,
+      ipa:                               './build/SYNAP-Expo.ipa',
+      skip_waiting_for_build_processing: true,
+      distribute_external:               false,
+    )
+  end
+
 end

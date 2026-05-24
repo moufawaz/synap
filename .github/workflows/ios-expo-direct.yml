@@ -1,0 +1,103 @@
+name: iOS Expo Direct Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: Optional iOS build number. Leave empty to use 1000 + GitHub run number.
+        required: false
+        type: string
+
+concurrency:
+  group: ios-expo-direct-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-submit:
+    name: Build Expo IPA and upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Install mobile dependencies
+        working-directory: apps/mobile
+        run: npm ci
+
+      - name: Typecheck mobile app
+        run: npm run mobile:typecheck
+
+      - name: Validate Expo config
+        run: npm run mobile:config
+
+      - name: Generate Expo iOS project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: Install CocoaPods
+        working-directory: apps/mobile/ios
+        run: pod install --repo-update
+
+      - name: Show active Xcode version
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Write App Store Connect API key
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          echo "${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}" > "$RUNNER_TEMP/asc/AuthKey.p8"
+          echo "ASC_P8_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Fastlane Expo beta
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_P8_KEY_PATH: ${{ env.ASC_P8_KEY_PATH }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_TOKEN: ${{ secrets.MATCH_GIT_TOKEN }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_KEYCHAIN_PASSWORD: ${{ secrets.MATCH_KEYCHAIN_PASSWORD }}
+          IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: bundle exec fastlane ios expo_beta
+
+      - name: Upload IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synap-expo-ios-${{ github.run_number }}.ipa
+          path: build/SYNAP-Expo.ipa
+          retention-days: 14
+
+      - name: Print Xcode build log
+        if: failure()
+        run: |
+          LOG=$(ls -t ~/Library/Logs/gym/*.log 2>/dev/null | head -1 || true)
+          if [ -n "$LOG" ]; then
+            tail -300 "$LOG"
+          else
+            echo "No gym log found."
+          fi
+
