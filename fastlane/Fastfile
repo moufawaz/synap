@@ -1,3 +1,6 @@
+require 'base64'
+require 'tmpdir'
+
 # Fastlane Fastfile — SYNAP
 # ─────────────────────────────────────────────────────────────────────────────
 # Lanes:
@@ -202,77 +205,83 @@ platform :ios do
     end
   end
 
-  desc "Build Expo native IPA and upload to TestFlight"
+  desc "Build Expo native IPA and upload to TestFlight (uses imported .p12 cert — no cert creation)"
   lane :expo_beta do
     require 'json'
 
+    # ── 1. Validate required secrets ─────────────────────────────────────────
+    %w[
+      IOS_DIST_CERT_P12_BASE64
+      IOS_DIST_CERT_PASSWORD
+      IOS_PROVISION_PROFILE_BASE64
+      APPLE_TEAM_ID
+    ].each do |var|
+      UI.user_error!("Missing required secret: #{var}") if ENV[var].to_s.strip.empty?
+    end
+
+    # ── 2. Create a temporary keychain ───────────────────────────────────────
+    keychain_name     = 'synap_build'
+    keychain_password = 'synap_build_pw'
+    keychain_path     = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
+
     create_keychain(
-      name:            'fastlane_match',
-      password:        ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
+      name:             keychain_name,
+      password:         keychain_password,
       default_keychain: true,
-      unlock:          true,
-      timeout:         3600,
+      unlock:           true,
+      timeout:          3600,
       lock_when_sleeps: false,
     )
-    keychain_path = File.expand_path('~/Library/Keychains/fastlane_match-db')
 
-    begin
-      UI.message('SYNAP_SIGNING: starting Apple distribution certificate setup')
-      cert(
-        development:       false,
-        force:             true,
-        api_key:           asc_api_key,
-        team_id:           ENV['APPLE_TEAM_ID'],
-        keychain_path:     keychain_path,
-        keychain_password: ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
-      )
-      UI.message('SYNAP_SIGNING: certificate setup finished')
-    rescue => e
-      UI.error("SYNAP_SIGNING_ERROR: certificate setup failed: #{e.class}: #{e.message}")
-      UI.error(e.backtrace.first(20).join("\n")) if e.backtrace
-      raise
-    end
+    # ── 3. Decode and import the existing Distribution certificate ────────────
+    # The .p12 is stored base64-encoded in the GitHub secret IOS_DIST_CERT_P12_BASE64.
+    # This never calls Apple's API to create a new cert — it just installs the one you own.
+    p12_path = File.join(Dir.tmpdir, 'synap_dist.p12')
+    File.binwrite(p12_path, Base64.decode64(ENV['IOS_DIST_CERT_P12_BASE64']))
 
-    begin
-      UI.message('SYNAP_SIGNING: starting App Store provisioning profile setup')
-      sigh(
-        adhoc:          false,
-        force:          true,
-        app_identifier: 'app.synap.fit',
-        api_key:        asc_api_key,
-        team_id:        ENV['APPLE_TEAM_ID'],
-        output_path:    './build/profiles',
-        filename:       'Synap_AppStore.mobileprovision',
-      )
-      UI.message('SYNAP_SIGNING: provisioning profile setup finished')
-    rescue => e
-      UI.error("SYNAP_SIGNING_ERROR: provisioning profile setup failed: #{e.class}: #{e.message}")
-      UI.error(e.backtrace.first(20).join("\n")) if e.backtrace
-      raise
-    end
+    import_certificate(
+      certificate_path:     p12_path,
+      certificate_password: ENV['IOS_DIST_CERT_PASSWORD'],
+      keychain_name:        keychain_name,
+      keychain_password:    keychain_password,
+      log_output:           false,
+    )
+    UI.message('SYNAP_SIGNING: Distribution certificate imported into keychain')
 
-    profile_path = Actions.lane_context[SharedValues::SIGH_PROFILE_PATH]
-    UI.user_error!("Provisioning profile was not created at #{profile_path}.") unless profile_path && File.exist?(profile_path)
-    profile_xml = sh("security cms -D -i '#{profile_path}'", log: false)
+    # ── 4. Decode and install the provisioning profile ────────────────────────
+    # Stored base64-encoded in IOS_PROVISION_PROFILE_BASE64.
     FileUtils.mkdir_p('./build/profiles')
+    profile_path = File.expand_path('./build/profiles/Synap_AppStore.mobileprovision')
+    File.binwrite(profile_path, Base64.decode64(ENV['IOS_PROVISION_PROFILE_BASE64']))
+
+    # Install into ~/Library/MobileDevice/Provisioning Profiles
+    profiles_dir = File.expand_path('~/Library/MobileDevice/Provisioning Profiles')
+    FileUtils.mkdir_p(profiles_dir)
+    FileUtils.cp(profile_path, File.join(profiles_dir, 'Synap_AppStore.mobileprovision'))
+
+    # Extract the profile name from the decoded plist so we reference it exactly
+    profile_xml = sh("security cms -D -i '#{profile_path}'", log: false)
     File.write('./build/profiles/Synap_AppStore.plist', profile_xml)
     profile_name = sh("/usr/libexec/PlistBuddy -c 'Print :Name' './build/profiles/Synap_AppStore.plist'", log: false).strip
+    UI.message("SYNAP_SIGNING: Provisioning profile installed — '#{profile_name}'")
 
+    # ── 5. Find the generated Expo Xcode project ──────────────────────────────
     project_path = Dir['apps/mobile/ios/*.xcodeproj'].first
-    UI.user_error!('Expo iOS project was not generated. Run expo prebuild first.') unless project_path
+    UI.user_error!('Expo iOS project not found. expo prebuild must run before this lane.') unless project_path
 
     project_json = sh("xcodebuild -list -json -project '#{project_path}'", log: false)
     schemes = JSON.parse(project_json).dig('project', 'schemes') || []
     scheme = schemes.include?('SYNAP') ? 'SYNAP' : schemes.first
     UI.user_error!("No Xcode scheme found in #{project_path}.") unless scheme
+    UI.message("SYNAP_SIGNING: Using scheme '#{scheme}' in #{project_path}")
 
+    # ── 6. Bump build number ──────────────────────────────────────────────────
     requested_build_number = ENV['IOS_BUILD_NUMBER'].to_s.strip
     build_number = requested_build_number.empty? ? (1000 + (ENV['GITHUB_RUN_NUMBER'] || '1').to_i).to_s : requested_build_number
-    increment_build_number(
-      build_number: build_number,
-      xcodeproj:    project_path,
-    )
+    increment_build_number(build_number: build_number, xcodeproj: project_path)
+    UI.message("SYNAP_SIGNING: Build number set to #{build_number}")
 
+    # ── 7. Force manual signing in the Xcode project ─────────────────────────
     update_code_signing_settings(
       use_automatic_signing: false,
       path:                  project_path,
@@ -282,31 +291,33 @@ platform :ios do
       team_id:               ENV['APPLE_TEAM_ID'],
     )
 
+    # ── 8. Build the IPA ──────────────────────────────────────────────────────
     build_app(
-      project:           project_path,
-      scheme:            scheme,
-      configuration:     'Release',
-      sdk:               'iphoneos',
-      export_method:     'app-store',
-      output_directory:  './build',
-      output_name:       'SYNAP-Expo.ipa',
-      xcargs:            "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
+      project:          project_path,
+      scheme:           scheme,
+      configuration:    'Release',
+      sdk:              'iphoneos',
+      export_method:    'app-store',
+      output_directory: './build',
+      output_name:      'SYNAP-Expo.ipa',
+      xcargs:           "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
       export_options: {
-        provisioningProfiles: {
-          'app.synap.fit' => profile_name,
-        },
-        signingStyle:    'manual',
-        teamID:          ENV['APPLE_TEAM_ID'],
+        provisioningProfiles: { 'app.synap.fit' => profile_name },
+        signingStyle:         'manual',
+        teamID:               ENV['APPLE_TEAM_ID'],
       },
-      clean:             true,
+      clean: true,
     )
 
+    # ── 9. Upload to TestFlight ───────────────────────────────────────────────
     upload_to_testflight(
       api_key:                           asc_api_key,
       ipa:                               './build/SYNAP-Expo.ipa',
       skip_waiting_for_build_processing: true,
       distribute_external:               false,
     )
+
+    UI.message("✅ SYNAP-Expo build #{build_number} uploaded to TestFlight")
   end
 
 end

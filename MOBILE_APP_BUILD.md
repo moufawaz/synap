@@ -599,10 +599,45 @@ APP_STORE_CONNECT_ISSUER_ID
 APP_STORE_CONNECT_API_KEY_P8
 ```
 
-Recommended user action before the next code change:
+**Code fix applied (no more cert creation):**
 
-1. Export/download the existing iOS Distribution certificate as `.p12`.
-2. Download the App Store provisioning profile for bundle ID `app.synap.fit`.
-3. Convert both files to base64.
-4. Add them as GitHub repository secrets.
-5. Then update the GitHub workflow/Fastlane lane to import those files and build without trying to create a new Apple certificate.
+- Rewrote Fastlane `expo_beta` lane to import an existing `.p12` Distribution certificate from GitHub secrets instead of calling Apple's API to create a new one. Removed `cert(force: true)` and `sigh(force: true)` — these were the calls that hit the Apple certificate limit.
+- Updated `.github/workflows/ios-expo-direct.yml` to pass the new signing secrets to Fastlane.
+- Added `require 'base64'` and `require 'tmpdir'` to `Fastfile` (needed for P12 decoding).
+
+**User action required — 4 steps:**
+
+**Step 1 — Export your existing Distribution certificate (on your Mac)**
+1. Open **Keychain Access** → login keychain → My Certificates.
+2. Find `Apple Distribution: [your name]` or `iPhone Distribution: [your name]`.
+3. Right-click it → **Export** → save as `dist.p12`.
+4. Set a password when prompted (you'll need it in step 3).
+
+**Step 2 — Download the provisioning profile**
+1. Go to [developer.apple.com → Profiles](https://developer.apple.com/account/resources/profiles/list).
+2. Find the **App Store** profile for bundle ID `app.synap.fit`.
+3. Download it → save as `synap.mobileprovision`.
+
+**Step 3 — Base64 encode both files (Mac terminal)**
+```bash
+base64 -i dist.p12 | pbcopy
+# paste that into GitHub secret: IOS_DIST_CERT_P12_BASE64
+
+base64 -i synap.mobileprovision | pbcopy
+# paste that into GitHub secret: IOS_PROVISION_PROFILE_BASE64
+```
+
+**Step 4 — Add these secrets to GitHub**
+Go to: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+
+| Secret name | Value |
+|---|---|
+| `IOS_DIST_CERT_P12_BASE64` | Base64 output of dist.p12 |
+| `IOS_DIST_CERT_PASSWORD` | Password you set when exporting |
+| `IOS_PROVISION_PROFILE_BASE64` | Base64 output of synap.mobileprovision |
+| `APPLE_TEAM_ID` | Your 10-char Apple team ID (e.g. `ABC123DEFG`) |
+| `APP_STORE_CONNECT_API_KEY_ID` | Already added |
+| `APP_STORE_CONNECT_ISSUER_ID` | Already added |
+| `APP_STORE_CONNECT_API_KEY_P8` | Already added |
+
+After secrets are added, push any commit to `main` — the `iOS Expo Direct Build` workflow will trigger automatically.
