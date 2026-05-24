@@ -642,6 +642,24 @@ Go to: GitHub repo → Settings → Secrets and variables → Actions → New re
 
 After secrets are added, push any commit to `main` — the `iOS Expo Direct Build` workflow will trigger automatically.
 
+## Latest Progress - Build 65 Crash Fix — gesture-handler / reanimated worklet crash
+
+**Root cause of persistent crash (builds 58 → 64):**
+
+Gesture-handler 2.28.0 uses reanimated worklets (`runOnUI`) internally during gesture initialization. When `react-native-reanimated` was removed from `package.json` in build 64, the Babel plugin that transforms worklet functions was also removed. Reanimated 3.16.7 was still present in the lockfile as a peer dependency of gesture-handler. Result: gesture-handler tried to call reanimated worklet APIs that were never set up → fatal crash before any screen rendered.
+
+**Fix:**
+
+- Removed `react-native-gesture-handler` from `apps/mobile/package.json`. Expo Router already includes a compatible, correctly wired version of gesture-handler internally. The explicit 2.28.0 pinned version was overriding expo-router's own dep and pulling in reanimated as a peer.
+- Removed `import 'react-native-gesture-handler'` from `apps/mobile/app/_layout.tsx`. Expo Router wraps the root in `<GestureHandlerRootView>` automatically — the manual bare import is not needed and was causing double initialization.
+- Regenerated `apps/mobile/package-lock.json`. Both `react-native-gesture-handler` and `react-native-reanimated` are now only listed as optional peer deps, not installed. The native build will not link either module.
+
+**Verified:**
+- `npm run mobile:typecheck` — clean, 0 errors.
+- Lockfile: 0 installed copies of reanimated or gesture-handler as direct dependencies.
+
+**Build 65 expected result:** no gesture-handler worklet crash at startup. Expo Router's internal gesture-handler handles swipe navigation normally.
+
 ## Latest Progress - GitHub Build Path Corrected (No Mac Required)
 
 The direct Fastlane build path (`ios-expo-direct.yml`) requires a Mac to export a `.p12` certificate from Keychain Access. Since the machine is Windows-only, the correct build path is EAS.
