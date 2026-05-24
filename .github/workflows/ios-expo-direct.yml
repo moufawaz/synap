@@ -95,10 +95,7 @@ jobs:
         run: |
           if [ -f fastlane-expo.log ]; then
             perl -pe 's/\e\[[0-9;]*m//g' fastlane-expo.log > fastlane-expo.clean.log
-            grep -Ei "error|exception|missing|could not|couldn't|unable|failed|no profiles|no code signing|no matching|fatal|exit status|provision|certificate|match|user_error" fastlane-expo.clean.log | tail -25 > fastlane-expo.failure-lines.log || true
-            if [ ! -s fastlane-expo.failure-lines.log ]; then
-              tail -30 fastlane-expo.clean.log > fastlane-expo.failure-lines.log
-            fi
+            tail -80 fastlane-expo.clean.log > fastlane-expo.failure-lines.log
             while IFS= read -r LINE; do
               SAFE=$(printf '%s' "$LINE" | sed 's/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
               echo "::error title=Fastlane detail::$SAFE"
