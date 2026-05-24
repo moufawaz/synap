@@ -1,5 +1,7 @@
 name: iOS Expo Direct Build
 
+# Direct TestFlight build for the Expo-native iOS app.
+
 on:
   workflow_dispatch:
     inputs:
