@@ -664,3 +664,45 @@ git push → GitHub Actions (ubuntu-latest)
 ```
 
 **Only secret needed in GitHub:** `EXPO_TOKEN` (already added from earlier builds).
+
+## Latest Progress - EAS Build 61-63 Retry (2026-05-24)
+
+Goal: push the latest mobile update through EAS because EAS already has valid remote Apple signing credentials and does not require a Mac.
+
+Build attempts:
+
+- Build 61 was accepted by EAS and auto-bumped `expo.ios.buildNumber` from `60` to `61`, but failed during dependency install.
+- Build 62 was accepted by EAS and auto-bumped to `62`, but failed with the same dependency-install issue.
+
+Dependency-install root cause:
+
+```txt
+npm ci --include=dev can only install packages when package.json and package-lock.json are in sync.
+Missing: typescript@5.9.3 from lock file
+```
+
+Fix:
+
+- Regenerated `apps/mobile/package-lock.json` using the same npm version EAS uses: `npm@10.9.3`.
+- Verified locally with:
+
+```bash
+npx npm@10.9.3 ci --include=dev --dry-run
+```
+
+Follow-up build result:
+
+- Build 63 got past dependency install and failed later in Xcode.
+- Xcode root cause was `RNReanimated`:
+
+```txt
+react-native-reanimated/Common/cpp/reanimated/Fabric/ShadowTreeCloner.cpp
+fatal error: 'folly/coro/Coroutine.h' file not found
+```
+
+Decision:
+
+- Remove `react-native-reanimated` from the native mobile app before App Review.
+- Reason: Reanimated v4 crashes under the current JSC release path, and Reanimated v3.16.7 fails native compilation with React Native 0.81 new architecture on EAS.
+- This dependency was added for UI polish only; no native mobile feature currently depends on Reanimated APIs.
+- Keep `react-native-gesture-handler` because it is harmless and still useful for navigation/gesture compatibility.
