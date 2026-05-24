@@ -715,3 +715,6 @@ Final result:
 - EAS iOS production build `079716c8-a8bd-4181-8a1f-b7c23398fc6b` finished successfully from commit `eca8633b67c8f6398c648615d2eb9a1cbb6714ac`.
 - App build number: `64`.
 - IPA artifact: `https://expo.dev/artifacts/eas/WmYt5qhoH3HGCebXPf6aM.ipa`.
+- Submission scheduled for build `64` using EAS Submit and the EAS-managed App Store Connect API key.
+- Submission ID: `814515a6-3754-41ad-b071-de473a8ae0d7`.
+- Submission URL: `https://expo.dev/accounts/mou_hossam/projects/synap/submissions/814515a6-3754-41ad-b071-de473a8ae0d7`.
