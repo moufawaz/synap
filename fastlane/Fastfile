@@ -120,7 +120,10 @@ platform :ios do
       timeout:         3600,
       lock_when_sleeps: false,
     )
-    certs
+    # The GitHub runner needs a signing identity with a private key. If the
+    # match repo only has a certificate/profile pair without an importable
+    # identity, readonly sync fails with "no local code signing identities".
+    certs_create
 
     # 2. Bump build number
     build_number = (ENV['GITHUB_RUN_NUMBER'] || Time.now.to_i.to_s).to_i
