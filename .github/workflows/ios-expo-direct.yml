@@ -86,7 +86,19 @@ jobs:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_KEYCHAIN_PASSWORD: ${{ secrets.MATCH_KEYCHAIN_PASSWORD }}
           IOS_BUILD_NUMBER: ${{ inputs.build_number }}
-        run: bundle exec fastlane ios expo_beta
+        run: |
+          set -o pipefail
+          bundle exec fastlane ios expo_beta 2>&1 | tee fastlane-expo.log
+
+      - name: Expose Fastlane failure
+        if: failure()
+        run: |
+          if [ -f fastlane-expo.log ]; then
+            MESSAGE=$(tail -80 fastlane-expo.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=Fastlane Expo beta failed::$MESSAGE"
+          else
+            echo "::error title=Fastlane Expo beta failed::fastlane-expo.log was not created."
+          fi
 
       - name: Upload IPA artifact
         if: always()
@@ -95,6 +107,14 @@ jobs:
           name: synap-expo-ios-${{ github.run_number }}.ipa
           path: build/SYNAP-Expo.ipa
           retention-days: 14
+
+      - name: Upload Fastlane log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastlane-expo-log-${{ github.run_number }}
+          path: fastlane-expo.log
+          retention-days: 7
 
       - name: Print Xcode build log
         if: failure()
