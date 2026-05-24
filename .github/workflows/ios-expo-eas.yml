@@ -1,6 +1,12 @@
 name: iOS Expo EAS Build
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/mobile/**
+      - .github/workflows/ios-expo-eas.yml
   workflow_dispatch:
     inputs:
       profile:
@@ -61,7 +67,10 @@ jobs:
       - name: Build iOS app
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas-cli build --platform ios --profile "${{ inputs.profile }}" --non-interactive --no-wait
+        run: |
+          PROFILE="${{ inputs.profile }}"
+          PROFILE="${PROFILE:-production}"
+          npx eas-cli build --platform ios --profile "$PROFILE" --non-interactive --no-wait
 
       - name: Submit latest production build
         if: ${{ inputs.submit && inputs.profile == 'production' }}

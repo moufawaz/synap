@@ -641,3 +641,26 @@ Go to: GitHub repo → Settings → Secrets and variables → Actions → New re
 | `APP_STORE_CONNECT_API_KEY_P8` | Already added |
 
 After secrets are added, push any commit to `main` — the `iOS Expo Direct Build` workflow will trigger automatically.
+
+## Latest Progress - GitHub Build Path Corrected (No Mac Required)
+
+The direct Fastlane build path (`ios-expo-direct.yml`) requires a Mac to export a `.p12` certificate from Keychain Access. Since the machine is Windows-only, the correct build path is EAS.
+
+**What changed:**
+
+- `ios-expo-eas.yml` now triggers **automatically on every push to `main`** when any `apps/mobile/**` file changes. Previously it was manual-only.
+- `ios-expo-direct.yml` is now **manual-only** with a clear comment. It remains in the repo as a future option if Mac signing secrets are ever available.
+- EAS already holds the valid Apple Distribution certificate and provisioning profile from builds 9–60. No new cert needs to be created — no Apple limit issue.
+
+**How the build path works now:**
+
+```
+git push → GitHub Actions (ubuntu-latest)
+  → npm ci + typecheck + config validate
+  → eas build --platform ios --profile production --non-interactive --no-wait
+  → EAS cloud macOS runner builds IPA + handles signing
+  → IPA available at expo.dev/artifacts
+  → run eas submit manually or enable submit input in workflow_dispatch
+```
+
+**Only secret needed in GitHub:** `EXPO_TOKEN` (already added from earlier builds).
