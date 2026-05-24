@@ -94,8 +94,15 @@ jobs:
         if: failure()
         run: |
           if [ -f fastlane-expo.log ]; then
-            MESSAGE=$(tail -80 fastlane-expo.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
-            echo "::error title=Fastlane Expo beta failed::$MESSAGE"
+            perl -pe 's/\e\[[0-9;]*m//g' fastlane-expo.log > fastlane-expo.clean.log
+            grep -Ei "error|exception|missing|could not|couldn't|unable|failed|no profiles|no code signing|no matching|fatal|exit status|provision|certificate|match|user_error" fastlane-expo.clean.log | tail -25 > fastlane-expo.failure-lines.log || true
+            if [ ! -s fastlane-expo.failure-lines.log ]; then
+              tail -30 fastlane-expo.clean.log > fastlane-expo.failure-lines.log
+            fi
+            while IFS= read -r LINE; do
+              SAFE=$(printf '%s' "$LINE" | sed 's/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+              echo "::error title=Fastlane detail::$SAFE"
+            done < fastlane-expo.failure-lines.log
           else
             echo "::error title=Fastlane Expo beta failed::fastlane-expo.log was not created."
           fi
@@ -113,7 +120,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fastlane-expo-log-${{ github.run_number }}
-          path: fastlane-expo.log
+          path: |
+            fastlane-expo.log
+            fastlane-expo.clean.log
+            fastlane-expo.failure-lines.log
           retention-days: 7
 
       - name: Print Xcode build log
