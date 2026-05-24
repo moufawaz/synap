@@ -532,3 +532,77 @@ git push
 eas build --platform ios --profile production --non-interactive --no-wait
 eas submit --platform ios --profile production --latest --non-interactive
 ```
+
+## Latest Progress - Direct GitHub iOS Build Signing (2026-05-24)
+
+Goal: build the Expo-native iOS app directly from GitHub Actions so we are not blocked by EAS build limits.
+
+What was added:
+
+- Added direct GitHub Actions workflow `.github/workflows/ios-expo-direct.yml`.
+- Workflow performs:
+  - Checkout.
+  - Node install for root and `apps/mobile`.
+  - Mobile TypeScript check.
+  - Expo config validation.
+  - `npx expo prebuild --platform ios --clean --non-interactive`.
+  - CocoaPods install.
+  - Fastlane build and TestFlight upload attempt.
+- Added/updated Fastlane `ios expo_beta` lane to build the generated Expo iOS project.
+- Added public diagnostics so GitHub annotations show the real Fastlane signing failure even when raw logs are not accessible.
+- Normalized App Store Connect API key handling:
+  - Supports GitHub secret values with real newlines.
+  - Supports GitHub secret values with escaped `\n`.
+  - Validates that the full `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` block exists.
+  - Bypassed the fragile `app_store_connect_api_key` action by passing a Fastlane API-key hash directly to signing/upload actions.
+
+Verification from GitHub Actions:
+
+- Dependency install passed.
+- Mobile TypeScript check passed.
+- Expo config validation passed.
+- Expo iOS prebuild passed.
+- CocoaPods install passed.
+- App Store Connect API key is now being read.
+- The build is blocked at Apple Distribution certificate creation, not app code.
+
+Current blocker:
+
+```txt
+Could not create another Distribution certificate, reached the maximum number of available Distribution certificates.
+```
+
+Meaning:
+
+- GitHub/Fastlane authenticated with Apple successfully.
+- Fastlane tried to create a new Apple Distribution certificate.
+- Apple refused because the Apple Developer account already has the maximum allowed Distribution certificates.
+
+Safest next path:
+
+- Do not revoke certificates blindly.
+- Reuse an existing valid Apple Distribution certificate instead of creating a new one on every GitHub run.
+- Export the existing Distribution certificate as a `.p12`.
+- Add the `.p12` and matching provisioning profile to GitHub Actions secrets.
+- Update the workflow to import the existing certificate/profile into the GitHub runner keychain.
+- Remove `cert(force: true)` from the direct build lane.
+
+Secrets planned for the stable direct GitHub signing path:
+
+```txt
+IOS_DIST_CERT_P12_BASE64
+IOS_DIST_CERT_PASSWORD
+IOS_PROVISION_PROFILE_BASE64
+APPLE_TEAM_ID
+APP_STORE_CONNECT_API_KEY_ID
+APP_STORE_CONNECT_ISSUER_ID
+APP_STORE_CONNECT_API_KEY_P8
+```
+
+Recommended user action before the next code change:
+
+1. Export/download the existing iOS Distribution certificate as `.p12`.
+2. Download the App Store provisioning profile for bundle ID `app.synap.fit`.
+3. Convert both files to base64.
+4. Add them as GitHub repository secrets.
+5. Then update the GitHub workflow/Fastlane lane to import those files and build without trying to create a new Apple certificate.
