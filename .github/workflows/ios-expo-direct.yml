@@ -12,6 +12,7 @@ on:
       - main
     paths:
       - .github/workflows/ios-expo-direct.yml
+      - fastlane/Fastfile
 
 concurrency:
   group: ios-expo-direct-${{ github.ref }}
