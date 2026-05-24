@@ -216,24 +216,40 @@ platform :ios do
     )
     keychain_path = File.expand_path('~/Library/Keychains/fastlane_match-db')
 
-    cert(
-      development:       false,
-      force:             true,
-      api_key:           asc_api_key,
-      team_id:           ENV['APPLE_TEAM_ID'],
-      keychain_path:     keychain_path,
-      keychain_password: ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
-    )
+    begin
+      UI.message('SYNAP_SIGNING: starting Apple distribution certificate setup')
+      cert(
+        development:       false,
+        force:             true,
+        api_key:           asc_api_key,
+        team_id:           ENV['APPLE_TEAM_ID'],
+        keychain_path:     keychain_path,
+        keychain_password: ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
+      )
+      UI.message('SYNAP_SIGNING: certificate setup finished')
+    rescue => e
+      UI.error("SYNAP_SIGNING_ERROR: certificate setup failed: #{e.class}: #{e.message}")
+      UI.error(e.backtrace.first(20).join("\n")) if e.backtrace
+      raise
+    end
 
-    sigh(
-      adhoc:          false,
-      force:          true,
-      app_identifier: 'app.synap.fit',
-      api_key:        asc_api_key,
-      team_id:        ENV['APPLE_TEAM_ID'],
-      output_path:    './build/profiles',
-      filename:       'Synap_AppStore.mobileprovision',
-    )
+    begin
+      UI.message('SYNAP_SIGNING: starting App Store provisioning profile setup')
+      sigh(
+        adhoc:          false,
+        force:          true,
+        app_identifier: 'app.synap.fit',
+        api_key:        asc_api_key,
+        team_id:        ENV['APPLE_TEAM_ID'],
+        output_path:    './build/profiles',
+        filename:       'Synap_AppStore.mobileprovision',
+      )
+      UI.message('SYNAP_SIGNING: provisioning profile setup finished')
+    rescue => e
+      UI.error("SYNAP_SIGNING_ERROR: provisioning profile setup failed: #{e.class}: #{e.message}")
+      UI.error(e.backtrace.first(20).join("\n")) if e.backtrace
+      raise
+    end
 
     profile_path = Actions.lane_context[SharedValues::SIGH_PROFILE_PATH]
     UI.user_error!("Provisioning profile was not created at #{profile_path}.") unless profile_path && File.exist?(profile_path)

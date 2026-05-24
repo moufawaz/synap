@@ -127,6 +127,12 @@ jobs:
               SAFE=$(printf '%s' "$LINE" | sed 's/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
               echo "::error title=Fastlane detail::$SAFE"
             done < fastlane-expo.failure-lines.log
+            if [ -s fastlane-expo.error-lines.log ]; then
+              head -40 fastlane-expo.error-lines.log | while IFS= read -r LINE; do
+                SAFE=$(printf '%s' "$LINE" | sed 's/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+                echo "::error title=Fastlane matched error::$SAFE"
+              done
+            fi
           else
             echo "::error title=Fastlane Expo beta failed::fastlane-expo.log was not created."
           fi
