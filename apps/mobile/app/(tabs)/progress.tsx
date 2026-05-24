@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as Sharing from 'expo-sharing'
-import { captureRef } from 'react-native-view-shot'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
@@ -86,6 +85,7 @@ export default function ProgressScreen() {
   async function shareProgressCard() {
     if (!shareCardRef.current) return
     try {
+      const { captureRef } = await import('react-native-view-shot')
       const uri = await captureRef(shareCardRef, { format: 'png', quality: 1 })
       if (!(await Sharing.isAvailableAsync())) {
         Alert.alert('Sharing unavailable', 'Progress sharing is not available on this device.')

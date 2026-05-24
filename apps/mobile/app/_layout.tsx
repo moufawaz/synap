@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { Component, useEffect, type ReactNode } from 'react'
+import { Text, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { router } from 'expo-router'
 import * as Notifications from 'expo-notifications'
@@ -6,6 +7,24 @@ import { StatusBar } from 'expo-status-bar'
 import { AuthProvider } from '@/auth/AuthProvider'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(error: Error) {
+    return { error: error?.message || 'An unexpected error occurred.' }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#050507' }}>
+          <Text style={{ color: '#BB5CF6', fontSize: 16, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 }}>SYNAP</Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 15, textAlign: 'center', lineHeight: 22 }}>{this.state.error}</Text>
+        </View>
+      )
+    }
+    return this.props.children
+  }
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -62,12 +81,14 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <LanguageProvider>
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
-      </LanguageProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <RootNavigator />
+          </AuthProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }

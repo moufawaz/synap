@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "scheme": "synap",
     "jsEngine": "jsc",
+    "newArchEnabled": false,
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [

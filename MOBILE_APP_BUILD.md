@@ -642,6 +642,31 @@ Go to: GitHub repo → Settings → Secrets and variables → Actions → New re
 
 After secrets are added, push any commit to `main` — the `iOS Expo Direct Build` workflow will trigger automatically.
 
+## Latest Progress - Build 66 Root Cause Fix — New Architecture disabled
+
+**Actual root cause (present since build 9, never tested on device until build 58):**
+
+Expo SDK 54 enables New Architecture (Fabric renderer + TurboModules) by default for new projects. The `app.json` had no `"newArchEnabled": false` key, so every EAS build ran with New Architecture on. Two packages in the app use Old Architecture native APIs that are incompatible with Fabric:
+
+- `react-native-youtube-iframe` 2.4.1 — imports `react-native-webview` at module scope using Old Architecture bridge APIs. Under New Architecture these fail at native module init before any JS component renders.
+- `react-native-view-shot` 5.1.0 — same issue, Old Architecture view capture API.
+
+When JSC evaluates the full bundle at startup (JSC has no lazy module loading unlike Hermes), both packages try to initialize their native modules immediately → crash before the login screen ever renders.
+
+**All fixes applied for build 66:**
+
+1. **`app.json` — added `"newArchEnabled": false`**: Forces old bridge (most compatible with all packages including view-shot, webview, youtube-iframe, nitro-modules under JSC).
+
+2. **`progress.tsx` — made `react-native-view-shot` a lazy import**: `captureRef` is now loaded inside the share function via `await import(...)` instead of at module scope. If the native module has issues, it fails gracefully inside the share button handler, not at app startup.
+
+3. **`programme.tsx` — made `react-native-youtube-iframe` a lazy import**: `YoutubePlayer` is now loaded on demand when a user taps "Watch inside app". The module is not evaluated at bundle startup.
+
+4. **`_layout.tsx` — added root `ErrorBoundary`**: Any React render crash now shows a SYNAP-branded error screen instead of a silent crash to the iOS home screen. This is a permanent safety net.
+
+5. **Previous fix (build 65)** — removed `react-native-gesture-handler` direct dep and bare import. Expo Router provides gesture-handler internally; the explicit 2.28.0 pinned version was pulling in reanimated as a peer dep and crashing worklet initialization.
+
+**Verified:** `npm run mobile:typecheck` — clean, 0 errors.
+
 ## Latest Progress - Build 65 Crash Fix — gesture-handler / reanimated worklet crash
 
 **Root cause of persistent crash (builds 58 → 64):**
