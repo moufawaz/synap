@@ -199,7 +199,26 @@ platform :ios do
       timeout:         3600,
       lock_when_sleeps: false,
     )
-    certs
+    cert(
+      development:       false,
+      api_key:           asc_api_key,
+      keychain_path:     File.expand_path('~/Library/Keychains/fastlane_match-db'),
+      keychain_password: ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
+    )
+
+    profile_path = sigh(
+      adhoc:          false,
+      force:          true,
+      app_identifier: 'app.synap.fit',
+      api_key:        asc_api_key,
+      output_path:    './build/profiles',
+      filename:       'Synap_AppStore.mobileprovision',
+    )
+
+    profile_xml = sh("security cms -D -i '#{profile_path}'", log: false)
+    FileUtils.mkdir_p('./build/profiles')
+    File.write('./build/profiles/Synap_AppStore.plist', profile_xml)
+    profile_name = sh("/usr/libexec/PlistBuddy -c 'Print :Name' './build/profiles/Synap_AppStore.plist'", log: false).strip
 
     project_path = Dir['apps/mobile/ios/*.xcodeproj'].first
     UI.user_error!('Expo iOS project was not generated. Run expo prebuild first.') unless project_path
@@ -220,7 +239,7 @@ platform :ios do
       use_automatic_signing: false,
       path:                  project_path,
       bundle_identifier:     'app.synap.fit',
-      profile_name:          'match AppStore app.synap.fit',
+      profile_name:          profile_name,
       code_sign_identity:    'iPhone Distribution',
       team_id:               ENV['APPLE_TEAM_ID'],
     )
@@ -233,10 +252,10 @@ platform :ios do
       export_method:     'app-store',
       output_directory:  './build',
       output_name:       'SYNAP-Expo.ipa',
-      xcargs:            "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='match AppStore app.synap.fit'",
+      xcargs:            "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
       export_options: {
         provisioningProfiles: {
-          'app.synap.fit' => 'match AppStore app.synap.fit',
+          'app.synap.fit' => profile_name,
         },
         signingStyle:    'manual',
         teamID:          ENV['APPLE_TEAM_ID'],
