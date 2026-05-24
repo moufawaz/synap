@@ -41,7 +41,7 @@ jobs:
 
       - name: Install mobile dependencies
         working-directory: apps/mobile
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Typecheck mobile app
         run: npm run mobile:typecheck
