@@ -201,6 +201,7 @@ platform :ios do
     )
     cert(
       development:       false,
+      force:             true,
       api_key:           asc_api_key,
       keychain_path:     File.expand_path('~/Library/Keychains/fastlane_match-db'),
       keychain_password: ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
