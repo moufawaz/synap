@@ -206,7 +206,7 @@ platform :ios do
       keychain_password: ENV['MATCH_KEYCHAIN_PASSWORD'] || 'fastlane_match',
     )
 
-    profile_path = sigh(
+    sigh(
       adhoc:          false,
       force:          true,
       app_identifier: 'app.synap.fit',
@@ -215,6 +215,8 @@ platform :ios do
       filename:       'Synap_AppStore.mobileprovision',
     )
 
+    profile_path = Actions.lane_context[SharedValues::SIGH_PROFILE_PATH]
+    UI.user_error!("Provisioning profile was not created at #{profile_path}.") unless profile_path && File.exist?(profile_path)
     profile_xml = sh("security cms -D -i '#{profile_path}'", log: false)
     FileUtils.mkdir_p('./build/profiles')
     File.write('./build/profiles/Synap_AppStore.plist', profile_xml)
