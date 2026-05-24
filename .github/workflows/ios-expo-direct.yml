@@ -98,9 +98,22 @@ jobs:
         run: |
           if [ -f fastlane-expo.log ]; then
             perl -pe 's/\e\[[0-9;]*m//g' fastlane-expo.log > fastlane-expo.clean.log
+            grep -Ein "error|exception|fatal|invalid|missing|could not|certificate|keychain|profile|api key|\\[!\\]|undefined|wrong number|no such|unauthorized|forbidden|expired|permission|team" fastlane-expo.clean.log > fastlane-expo.error-lines.log || true
             tail -80 fastlane-expo.clean.log > fastlane-expo.failure-lines.log
             {
               echo "## Fastlane Expo failure"
+              echo ""
+              echo "### Matched error lines"
+              echo ""
+              echo '```text'
+              if [ -s fastlane-expo.error-lines.log ]; then
+                head -80 fastlane-expo.error-lines.log
+              else
+                echo "No matched error lines found."
+              fi
+              echo '```'
+              echo ""
+              echo "### Last 80 lines"
               echo ""
               echo '```text'
               cat fastlane-expo.failure-lines.log
@@ -130,6 +143,7 @@ jobs:
           path: |
             fastlane-expo.log
             fastlane-expo.clean.log
+            fastlane-expo.error-lines.log
             fastlane-expo.failure-lines.log
           retention-days: 7
 

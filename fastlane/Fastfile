@@ -215,7 +215,7 @@ platform :ios do
       timeout:         3600,
       lock_when_sleeps: false,
     )
-    keychain_path = Actions.lane_context[SharedValues::KEYCHAIN_PATH] || File.expand_path('~/Library/Keychains/fastlane_match-db')
+    keychain_path = File.expand_path('~/Library/Keychains/fastlane_match-db')
 
     cert(
       development:       false,
