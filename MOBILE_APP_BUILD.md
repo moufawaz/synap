@@ -761,3 +761,25 @@ Final result:
 - Submission scheduled for build `64` using EAS Submit and the EAS-managed App Store Connect API key.
 - Submission ID: `814515a6-3754-41ad-b071-de473a8ae0d7`.
 - Submission URL: `https://expo.dev/accounts/mou_hossam/projects/synap/submissions/814515a6-3754-41ad-b071-de473a8ae0d7`.
+
+## Latest Progress - Direct GitHub Xcode Compatibility (2026-05-25)
+
+Direct GitHub build progressed past signing, Expo prebuild, and CocoaPods after adding `cocoapods` to the root `Gemfile`.
+
+New blocker:
+
+```txt
+/Pods/fmt/include/fmt/format-inl.h:1394:33:
+error: call to consteval function ... is not a constant expression
+```
+
+Root cause:
+
+- The workflow was running on GitHub's `macos-26` image with Xcode `26.4.1`.
+- React Native 0.81 / Expo SDK 54 pods are not compiling cleanly on that bleeding-edge Xcode image.
+- This is a toolchain compatibility issue in native C++ pods (`fmt`), not a SYNAP app-code issue.
+
+Fix:
+
+- Switched `.github/workflows/ios-expo-direct.yml` from `runs-on: macos-26` to `runs-on: macos-15`.
+- Reason: `macos-15` uses the stable Xcode line expected by the current Expo/React Native toolchain, avoiding Xcode 26 C++/fmt compile failures.
