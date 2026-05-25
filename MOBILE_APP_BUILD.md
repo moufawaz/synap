@@ -779,7 +779,14 @@ Root cause:
 - React Native 0.81 / Expo SDK 54 pods are not compiling cleanly on that bleeding-edge Xcode image.
 - This is a toolchain compatibility issue in native C++ pods (`fmt`), not a SYNAP app-code issue.
 
-Fix:
+First attempted fix:
 
 - Switched `.github/workflows/ios-expo-direct.yml` from `runs-on: macos-26` to `runs-on: macos-15`.
-- Reason: `macos-15` uses the stable Xcode line expected by the current Expo/React Native toolchain, avoiding Xcode 26 C++/fmt compile failures.
+- Result: the archive built, but App Store Connect rejected upload because Apple now requires the iOS 26 SDK for all iOS/iPadOS uploads.
+
+Final fix:
+
+- Restored `.github/workflows/ios-expo-direct.yml` to `runs-on: macos-26`.
+- Added a Fastlane post-`pod install` patch for `Pods.xcodeproj`.
+- The patch adds `FMT_USE_CONSTEVAL=0` to pod preprocessor definitions so Xcode 26 can compile the React Native native pods.
+- The patch also raises generated pod deployment targets below iOS 12 to `12.0` to match the Xcode 26 supported range.

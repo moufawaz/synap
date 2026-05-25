@@ -20,10 +20,9 @@ concurrency:
 jobs:
   build-and-submit:
     name: Build Expo IPA and upload to TestFlight
-    # React Native 0.81 / Expo SDK 54 pods currently fail to compile on the
-    # bleeding-edge macos-26 image with Xcode 26.4 (fmt consteval errors).
-    # Use the stable macos-15 image for App Store archives.
-    runs-on: macos-15
+    # App Store Connect now requires uploads built with the iOS 26 SDK.
+    # Keep this on macos-26 / Xcode 26 and patch incompatible pods in Fastlane.
+    runs-on: macos-26
     timeout-minutes: 75
 
     steps:

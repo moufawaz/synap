@@ -284,6 +284,30 @@ platform :ios do
     UI.message('SYNAP_BUILD: Running pod install …')
     sh("cd '#{ios_dir}' && pod install --repo-update", log: true)
 
+    # Xcode 26 / iOS 26 SDK rejects the fmt compile-time format path used by
+    # React Native 0.81's native pods. Disabling fmt consteval keeps runtime
+    # formatting behavior while avoiding the Clang 26 archive failure.
+    pods_project_path = File.join(ios_dir, 'Pods', 'Pods.xcodeproj')
+    UI.user_error!("Pods project not found after pod install: #{pods_project_path}") unless File.exist?(pods_project_path)
+    UI.message('SYNAP_BUILD: Patching Pods project for Xcode 26 fmt compatibility')
+    require 'xcodeproj'
+    pods_project = Xcodeproj::Project.open(pods_project_path)
+    pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']
+        defs = ['$(inherited)'] if defs.nil?
+        defs = [defs] if defs.is_a?(String)
+        defs << 'FMT_USE_CONSTEVAL=0' unless defs.include?('FMT_USE_CONSTEVAL=0')
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
+
+        target_value = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_s
+        if target_value.empty? || Gem::Version.new(target_value) < Gem::Version.new('12.0')
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        end
+      end
+    end
+    pods_project.save
+
     # ── 6. Find the CocoaPods workspace (created by pod install) ─────────────
     # After pod install, build targets live in the .xcworkspace — using the
     # bare .xcodeproj would miss all pod framework links and fail at link time.
