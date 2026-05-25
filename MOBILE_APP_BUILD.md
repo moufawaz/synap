@@ -894,3 +894,7 @@ Required GitHub configuration:
 - Add `EXPO_PUBLIC_SUPABASE_URL` as a GitHub Actions secret or repository variable.
 - Add `EXPO_PUBLIC_SUPABASE_ANON_KEY` as a GitHub Actions secret or repository variable.
 - `EXPO_PUBLIC_API_BASE_URL` is optional because the workflow defaults it to `https://www.synapfit.app`.
+- The workflow also accepts the existing web names:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Do not expose or use `SUPABASE_SERVICE_ROLE_KEY` in the mobile build.
