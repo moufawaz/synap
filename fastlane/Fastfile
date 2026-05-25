@@ -323,6 +323,14 @@ platform :ios do
     File.write(fmt_core_header, fmt_core)
     UI.message('SYNAP_BUILD: Patched fmt core.h to disable consteval for Xcode 26')
 
+    fmt_format_inl_header = File.join(ios_dir, 'Pods', 'fmt', 'include', 'fmt', 'format-inl.h')
+    UI.user_error!("fmt format-inl header not found after pod install: #{fmt_format_inl_header}") unless File.exist?(fmt_format_inl_header)
+    File.chmod(0o644, fmt_format_inl_header)
+    fmt_format_inl = File.read(fmt_format_inl_header)
+    fmt_format_inl = fmt_format_inl.gsub('FMT_STRING(', 'fmt::runtime(')
+    File.write(fmt_format_inl_header, fmt_format_inl)
+    UI.message('SYNAP_BUILD: Patched fmt format-inl.h to avoid Xcode 26 consteval FMT_STRING errors')
+
     # ── 6. Find the CocoaPods workspace (created by pod install) ─────────────
     # After pod install, build targets live in the .xcworkspace — using the
     # bare .xcodeproj would miss all pod framework links and fail at link time.
