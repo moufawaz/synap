@@ -265,23 +265,38 @@ platform :ios do
     profile_name = sh("/usr/libexec/PlistBuddy -c 'Print :Name' './build/profiles/Synap_AppStore.plist'", log: false).strip
     UI.message("SYNAP_SIGNING: Provisioning profile installed — '#{profile_name}'")
 
-    # ── 5. Find the generated Expo Xcode project ──────────────────────────────
-    project_path = Dir['apps/mobile/ios/*.xcodeproj'].first
-    UI.user_error!('Expo iOS project not found. expo prebuild must run before this lane.') unless project_path
+    # ── 5. Run expo prebuild + pod install (idempotent: safe to re-run) ────────
+    # These steps are also in the workflow for CI visibility, but running them
+    # here ensures Fastlane always has the generated ios/ folder regardless of
+    # how the lane is invoked.
+    UI.message('SYNAP_BUILD: Running expo prebuild --platform ios --clean …')
+    sh('cd apps/mobile && npx expo prebuild --platform ios --clean --non-interactive', log: true)
+
+    UI.message('SYNAP_BUILD: Running pod install …')
+    sh('cd apps/mobile/ios && pod install --repo-update', log: true)
+
+    # ── 6. Find the CocoaPods workspace (created by pod install) ─────────────
+    # After pod install, build targets live in the .xcworkspace — using the
+    # bare .xcodeproj would miss all pod framework links and fail at link time.
+    workspace_path = Dir['apps/mobile/ios/*.xcworkspace'].first
+    project_path   = Dir['apps/mobile/ios/*.xcodeproj'].first
+
+    UI.user_error!('Expo iOS workspace not found after expo prebuild + pod install.') unless workspace_path
+    UI.user_error!('Expo iOS xcodeproj not found after expo prebuild.') unless project_path
 
     project_json = sh("xcodebuild -list -json -project '#{project_path}'", log: false)
     schemes = JSON.parse(project_json).dig('project', 'schemes') || []
-    scheme = schemes.include?('SYNAP') ? 'SYNAP' : schemes.first
+    scheme = schemes.include?('SYNAP') ? 'SYNAP' : (schemes.reject { |s| s.downcase.include?('test') }.first || schemes.first)
     UI.user_error!("No Xcode scheme found in #{project_path}.") unless scheme
-    UI.message("SYNAP_SIGNING: Using scheme '#{scheme}' in #{project_path}")
+    UI.message("SYNAP_BUILD: Using scheme '#{scheme}' — project #{project_path} — workspace #{workspace_path}")
 
-    # ── 6. Bump build number ──────────────────────────────────────────────────
+    # ── 7. Bump build number ──────────────────────────────────────────────────
     requested_build_number = ENV['IOS_BUILD_NUMBER'].to_s.strip
     build_number = requested_build_number.empty? ? (1000 + (ENV['GITHUB_RUN_NUMBER'] || '1').to_i).to_s : requested_build_number
     increment_build_number(build_number: build_number, xcodeproj: project_path)
-    UI.message("SYNAP_SIGNING: Build number set to #{build_number}")
+    UI.message("SYNAP_BUILD: Build number set to #{build_number}")
 
-    # ── 7. Force manual signing in the Xcode project ─────────────────────────
+    # ── 8. Force manual signing in the Xcode project ─────────────────────────
     update_code_signing_settings(
       use_automatic_signing: false,
       path:                  project_path,
@@ -291,9 +306,10 @@ platform :ios do
       team_id:               ENV['APPLE_TEAM_ID'],
     )
 
-    # ── 8. Build the IPA ──────────────────────────────────────────────────────
+    # ── 9. Build the IPA ──────────────────────────────────────────────────────
+    # workspace: is required when CocoaPods is used — it links all pod targets.
     build_app(
-      project:          project_path,
+      workspace:        workspace_path,
       scheme:           scheme,
       configuration:    'Release',
       sdk:              'iphoneos',
@@ -317,7 +333,7 @@ platform :ios do
       distribute_external:               false,
     )
 
-    UI.message("✅ SYNAP-Expo build #{build_number} uploaded to TestFlight")
+    UI.message("✅ SYNAP_BUILD: build #{build_number} uploaded to TestFlight")
   end
 
 end

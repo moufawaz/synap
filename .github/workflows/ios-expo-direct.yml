@@ -49,14 +49,6 @@ jobs:
       - name: Validate Expo config
         run: npm run mobile:config
 
-      - name: Generate Expo iOS project
-        working-directory: apps/mobile
-        run: npx expo prebuild --platform ios --clean --non-interactive
-
-      - name: Install CocoaPods
-        working-directory: apps/mobile/ios
-        run: pod install --repo-update
-
       - name: Show active Xcode version
         run: |
           xcode-select -p
