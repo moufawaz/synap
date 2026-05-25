@@ -9,6 +9,7 @@ export type ThemeColors = {
   muted: string
   dim: string
   spark: string
+  sparkLight: string
   sparkSoft: string
   pulse: string
   flame: string
@@ -27,6 +28,7 @@ export const colors: Record<ThemeMode, ThemeColors> = {
     muted: '#94A3B8',
     dim: '#64748B',
     spark: '#BB5CF6',
+    sparkLight: '#D88BFF',
     sparkSoft: 'rgba(187,92,246,0.16)',
     pulse: '#10B981',
     flame: '#F97316',
@@ -43,6 +45,7 @@ export const colors: Record<ThemeMode, ThemeColors> = {
     muted: '#475569',
     dim: '#64748B',
     spark: '#A855F7',
+    sparkLight: '#C084FC',
     sparkSoft: 'rgba(168,85,247,0.13)',
     pulse: '#0F766E',
     flame: '#EA580C',

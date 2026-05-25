@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -21,6 +22,28 @@ import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
+const QUICK_PROMPTS_EN = [
+  "How am I progressing?",
+  "Adjust my calories",
+  "I missed a workout",
+  "Explain my workout split",
+  "Best time to take protein?",
+  "I want to change my goal",
+  "I'm feeling sore",
+  "Feeling tired lately",
+]
+
+const QUICK_PROMPTS_AR = [
+  'كيف أتقدم؟',
+  'عدّل سعراتي',
+  'فاتني تمرين',
+  'اشرح تقسيم التمرين',
+  'أفضل وقت للبروتين؟',
+  'أريد تغيير هدفي',
+  'أشعر بآلام عضلية',
+  'أشعر بالتعب',
+]
+
 export default function ChatScreen() {
   const { color } = useTheme()
   const { text, isRtl } = useLanguage()
@@ -29,6 +52,7 @@ export default function ChatScreen() {
   const history = useAsyncData(() => getChatHistory(80), [])
   const messages = useMemo(() => [...(history.data?.messages ?? [])].reverse(), [history.data])
   const listRef = useRef<FlatList<ChatMessage>>(null)
+  const quickPrompts = isRtl ? QUICK_PROMPTS_AR : QUICK_PROMPTS_EN
 
   async function handleSend(nextMessage?: string) {
     const trimmed = (nextMessage ?? message).trim()
@@ -131,6 +155,26 @@ export default function ChatScreen() {
             </Card>
           ) : null}
         />
+        {/* Quick prompt chips — shown when no message typed yet */}
+        {!message.trim() && !sending ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.promptsRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}
+            keyboardShouldPersistTaps="handled"
+          >
+            {quickPrompts.map(prompt => (
+              <Pressable
+                key={prompt}
+                onPress={() => handleSend(prompt)}
+                style={[styles.promptChip, { backgroundColor: color.elevated, borderColor: color.border }]}
+              >
+                <Text style={[styles.promptText, { color: color.muted }]}>{prompt}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
         <View style={[styles.composer, { backgroundColor: color.surface, borderColor: color.border }]}>
           <TextInput
             value={message}
@@ -253,5 +297,20 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  promptsRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  promptChip: {
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  promptText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 })

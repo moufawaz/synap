@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router, type Href } from 'expo-router'
+import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
@@ -10,20 +11,22 @@ import { HealthSummary, requestHealthAccessAndRead } from '@/features/health'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
-const featureLinks: Array<[string, Href]> = [
-  ['Settings', '/settings'],
-  ['Plan', '/plan'],
-  ['Programme', '/programme'],
-  ['Measurements', '/measurements'],
-  ['Grocery list', '/grocery'],
-  ['Eating out', '/eating-out'],
-  ['Form check', '/form-check'],
-  ['Supplements', '/supplements'],
-  ['Macro adjustment', '/macro-adjustment'],
-  ['Reports', '/reports'],
-  ['Billing', '/billing'],
-  ['Notifications', '/notifications'],
-] as const
+type NavRow = { label: string; labelAr?: string; href: Href; icon: string; color?: string }
+
+const NAV_ROWS: NavRow[] = [
+  { label: 'Settings',         labelAr: 'الإعدادات',     href: '/settings',          icon: 'settings'      },
+  { label: 'Plan',             labelAr: 'الخطة',         href: '/plan',              icon: 'layers'        },
+  { label: 'Programme',        labelAr: 'البرنامج',      href: '/programme',         icon: 'list'          },
+  { label: 'Measurements',     labelAr: 'القياسات',      href: '/measurements',      icon: 'bar-chart-2'   },
+  { label: 'Reports',          labelAr: 'التقارير',      href: '/reports',           icon: 'file-text'     },
+  { label: 'Grocery list',     labelAr: 'قائمة التسوق',  href: '/grocery',           icon: 'shopping-bag'  },
+  { label: 'Eating out',       labelAr: 'الأكل خارجاً', href: '/eating-out',        icon: 'map-pin'       },
+  { label: 'Form check',       labelAr: 'تحقق الشكل',   href: '/form-check',        icon: 'camera'        },
+  { label: 'Supplements',      labelAr: 'المكملات',      href: '/supplements',       icon: 'package'       },
+  { label: 'Macro adjustment', labelAr: 'تعديل الماكرو', href: '/macro-adjustment',  icon: 'sliders'       },
+  { label: 'Billing',          labelAr: 'الفوترة',       href: '/billing',           icon: 'credit-card'   },
+  { label: 'Notifications',    labelAr: 'الإشعارات',     href: '/notifications',     icon: 'bell'          },
+]
 
 export default function MoreScreen() {
   const { signOut } = useAuth()
@@ -33,6 +36,8 @@ export default function MoreScreen() {
   const [healthLoading, setHealthLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const webBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.synapfit.app'
+  const align = isRtl ? 'right' : 'left'
+  const rowDir = isRtl ? 'row-reverse' : 'row'
 
   async function connectHealth() {
     setHealthLoading(true)
@@ -76,127 +81,217 @@ export default function MoreScreen() {
   return (
     <Screen>
       <IonPageHeader eyebrow="SETTINGS" title={text.more} subtitle={text.healthSubtitle} />
+
+      {/* Preferences */}
       <Card>
-        <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>{text.preferences}</Text>
-        <View style={styles.row}>
-          <Pressable onPress={toggleMode} style={[styles.action, { borderColor: color.border, backgroundColor: color.elevated }]}>
-            <Text style={[styles.actionText, { color: color.text }]}>{text.theme}: {mode}</Text>
+        <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{text.preferences}</Text>
+        <View style={[styles.prefRow, { flexDirection: rowDir }]}>
+          <Pressable
+            onPress={toggleMode}
+            style={[styles.prefChip, { borderColor: color.border, backgroundColor: color.elevated }]}
+          >
+            <Feather name={mode === 'dark' ? 'moon' : 'sun'} size={15} color={color.spark} />
+            <Text style={[styles.prefText, { color: color.text }]}>{text.theme}: {mode}</Text>
           </Pressable>
-          <Pressable onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')} style={[styles.action, { borderColor: color.border, backgroundColor: color.elevated }]}>
-            <Text style={[styles.actionText, { color: color.text }]}>{language === 'ar' ? 'English' : 'العربية'}</Text>
+          <Pressable
+            onPress={() => setLanguage(language === 'ar' ? 'en' : 'ar')}
+            style={[styles.prefChip, { borderColor: color.border, backgroundColor: color.elevated }]}
+          >
+            <Feather name="globe" size={15} color={color.spark} />
+            <Text style={[styles.prefText, { color: color.text }]}>{language === 'ar' ? 'English' : 'العربية'}</Text>
           </Pressable>
         </View>
-        <Pressable onPress={signOut} style={[styles.logout, { backgroundColor: color.sparkSoft, borderColor: color.spark }]}>
-          <Text style={[styles.logoutText, { color: color.spark }]}>{text.logout}</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/onboarding')} style={[styles.logout, { backgroundColor: color.elevated, borderColor: color.border }]}>
-          <Text style={[styles.logoutText, { color: color.text }]}>{text.rebuildPlan}</Text>
-        </Pressable>
-        <Pressable
+
+        <NavRowItem
+          icon="refresh-cw"
+          label={text.rebuildPlan}
+          color={color}
+          onPress={() => router.push('/onboarding')}
+          rowDir={rowDir}
+        />
+        <NavRowItem
+          icon="log-out"
+          label={text.logout}
+          color={{ ...color, spark: color.spark }}
+          onPress={signOut}
+          rowDir={rowDir}
+          accent={color.spark}
+        />
+        <NavRowItem
+          icon="trash-2"
+          label={text.deleteAccount}
+          color={color}
           onPress={confirmDeleteAccount}
-          style={[styles.logout, { backgroundColor: color.dangerSoft, borderColor: color.danger }]}
-          disabled={deleting}
-        >
-          {deleting ? <ActivityIndicator color={color.danger} /> : <Text style={[styles.logoutText, { color: color.danger }]}>{text.deleteAccount}</Text>}
-        </Pressable>
+          rowDir={rowDir}
+          accent={color.danger}
+          loading={deleting}
+        />
       </Card>
 
+      {/* Feature navigation */}
       <Card style={styles.section}>
-        <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>Features</Text>
-        <View style={styles.linkList}>
-          {featureLinks.map(([label, href]) => (
-            <Pressable key={String(href)} onPress={() => router.push(href)}>
-              <Text style={[styles.link, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{label}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>Features</Text>
+        {NAV_ROWS.map(row => (
+          <NavRowItem
+            key={String(row.href)}
+            icon={row.icon}
+            label={isRtl && row.labelAr ? row.labelAr : row.label}
+            color={color}
+            onPress={() => router.push(row.href)}
+            rowDir={rowDir}
+            showDivider
+          />
+        ))}
       </Card>
 
+      {/* Apple Health */}
       <Card style={styles.section}>
-        <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>{text.appleHealth}</Text>
-        <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
+        <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{text.appleHealth}</Text>
+        <Text style={[styles.body, { color: color.muted, textAlign: align, marginBottom: 12 }]}>
           {text.healthSubtitle}
         </Text>
-        <Pressable onPress={connectHealth} style={[styles.logout, { backgroundColor: color.sparkSoft, borderColor: color.spark }]} disabled={healthLoading}>
-          {healthLoading ? <ActivityIndicator color={color.spark} /> : <Text style={[styles.logoutText, { color: color.spark }]}>{text.connectAppleHealth}</Text>}
-        </Pressable>
+        <NavRowItem
+          icon="heart"
+          label={text.connectAppleHealth}
+          color={color}
+          onPress={connectHealth}
+          rowDir={rowDir}
+          accent={color.spark}
+          loading={healthLoading}
+        />
         {health ? (
-          <View style={styles.healthGrid}>
-            <Text style={[styles.healthText, { color: color.text }]}>Steps: {health.stepsToday ?? '-'}</Text>
-            <Text style={[styles.healthText, { color: color.text }]}>Active kcal: {health.activeEnergyToday ?? '-'}</Text>
-            <Text style={[styles.healthText, { color: color.text }]}>Weight: {health.latestWeightKg ? `${health.latestWeightKg.toFixed(1)} kg` : '-'}</Text>
-            <Text style={[styles.healthText, { color: color.text }]}>Resting HR: {health.restingHeartRate ? `${Math.round(health.restingHeartRate)} bpm` : '-'}</Text>
+          <View style={[styles.healthGrid, { flexDirection: rowDir }]}>
+            <HealthPill label="Steps" value={String(health.stepsToday ?? '—')} color={color} />
+            <HealthPill label="Kcal" value={String(health.activeEnergyToday ?? '—')} color={color} />
+            <HealthPill label="Weight" value={health.latestWeightKg ? `${health.latestWeightKg.toFixed(1)} kg` : '—'} color={color} />
+            <HealthPill label="HR" value={health.restingHeartRate ? `${Math.round(health.restingHeartRate)} bpm` : '—'} color={color} />
           </View>
         ) : null}
       </Card>
 
+      {/* Support links */}
       <Card style={styles.section}>
-        <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>{text.support}</Text>
-        <View style={styles.linkList}>
-          <Pressable onPress={() => Linking.openURL(`${webBaseUrl}/privacy`)}>
-            <Text style={[styles.link, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{text.privacy}</Text>
-          </Pressable>
-          <Pressable onPress={() => Linking.openURL(`${webBaseUrl}/terms`)}>
-            <Text style={[styles.link, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{text.terms}</Text>
-          </Pressable>
-          <Pressable onPress={() => Linking.openURL(`${webBaseUrl}/support`)}>
-            <Text style={[styles.link, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{text.support}</Text>
-          </Pressable>
-        </View>
+        <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{text.support}</Text>
+        <NavRowItem icon="shield" label={text.privacy} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/privacy`)} rowDir={rowDir} showDivider />
+        <NavRowItem icon="file-text" label={text.terms} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/terms`)} rowDir={rowDir} showDivider />
+        <NavRowItem icon="life-buoy" label={text.support} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/support`)} rowDir={rowDir} />
       </Card>
     </Screen>
   )
 }
 
+function NavRowItem({
+  icon, label, color, onPress, rowDir, accent, loading = false, showDivider = false,
+}: {
+  icon: string
+  label: string
+  color: any
+  onPress: () => void
+  rowDir: 'row' | 'row-reverse'
+  accent?: string
+  loading?: boolean
+  showDivider?: boolean
+}) {
+  const accentColor = accent ?? color.text
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.navRow, showDivider && { borderTopWidth: 1, borderTopColor: color.border }, pressed && { opacity: 0.7 }]}
+    >
+      <View style={[styles.navRowInner, { flexDirection: rowDir }]}>
+        <View style={[styles.navIcon, { backgroundColor: `${accentColor}14`, borderColor: `${accentColor}30` }]}>
+          <Feather name={icon as any} size={15} color={accentColor} />
+        </View>
+        {loading ? (
+          <ActivityIndicator color={accentColor} style={{ flex: 1 }} />
+        ) : (
+          <Text style={[styles.navLabel, { color: accentColor, flex: 1 }]}>{label}</Text>
+        )}
+        <Feather name="chevron-right" size={15} color={color.dim} />
+      </View>
+    </Pressable>
+  )
+}
+
+function HealthPill({ label, value, color }: { label: string; value: string; color: any }) {
+  return (
+    <View style={[styles.healthPill, { backgroundColor: color.elevated, borderColor: color.border }]}>
+      <Text style={[styles.healthLabel, { color: color.dim }]}>{label.toUpperCase()}</Text>
+      <Text style={[styles.healthValue, { color: color.text }]}>{value}</Text>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 22,
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: '900',
     marginBottom: 14,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  action: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    alignItems: 'center',
-  },
-  actionText: {
-    fontWeight: '800',
-  },
-  logout: {
-    marginTop: 14,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-  },
-  logoutText: {
-    fontWeight: '900',
-  },
-  section: {
-    marginTop: 14,
   },
   body: {
     fontSize: 15,
     lineHeight: 22,
   },
-  healthGrid: {
+  section: {
+    marginTop: 14,
+  },
+  prefRow: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  prefChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
   },
-  healthText: {
+  prefText: {
     fontWeight: '800',
+    fontSize: 13,
   },
-  linkList: {
+  navRow: {
+    paddingVertical: 12,
+  },
+  navRowInner: {
+    alignItems: 'center',
     gap: 12,
   },
-  link: {
-    fontSize: 16,
+  navIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  healthGrid: {
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  healthPill: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    minWidth: '22%',
+  },
+  healthLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+  },
+  healthValue: {
+    fontSize: 14,
     fontWeight: '900',
+    marginTop: 2,
   },
 })
