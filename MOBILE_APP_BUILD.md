@@ -899,6 +899,67 @@ Required GitHub configuration:
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - Do not expose or use `SUPABASE_SERVICE_ROLE_KEY` in the mobile build.
 
+## Latest Progress - UI Redesign & Web Parity Pass (2026-05-26)
+
+Full visual redesign of the five core mobile screens to close the gap with the web app design system.
+
+### Dashboard (index.tsx) — complete redesign
+
+Before: three plain cards (Access, Workout, Nutrition).
+
+After (matches web dashboard):
+
+- **Time-based greeting** — "GOOD MORNING / AFTERNOON / EVENING" in the brand spark colour, with the user's name in large text below.
+- **4 stat chips row**: Goal, Calories, Training, Weight — each with a Feather icon and colour-coded value. Matches the web's 2×2 stat grid.
+- **Ion last-message preview card** — tappable gradient card showing the latest Ion message with avatar, "ION SAYS" eyebrow, and chevron. Routes to Chat tab. Web parity.
+- **Today Workout card** — shows workout name, exercise preview rows (3 items + overflow count), rest-day state, and taps into Train. Has accent top-edge highlight (purple).
+- **Today Nutrition card** — shows calorie logged/target with a gradient progress bar, and meal count. Taps into Nutrition.
+- **Weight delta indicator** — shows +/– change from last measurement in appropriate color (pulse = good, flame = caution).
+- **Quick actions row** — three action chips: Ask Ion → Chat, Log Weight → Progress, Start Training → Train. Matches web's quick-action row.
+- **Ambient purple glow** — radial glow behind the hero header, matching the web's `radial-gradient` treatment.
+- **Access banner** — SYNAP logo + tier/access status at the bottom.
+
+### Chat (chat.tsx) — quick prompts added
+
+- **8 horizontal quick-prompt chips** (English + Arabic) shown in a scrollable row when the composer is empty.
+- Prompts: "How am I progressing?", "Adjust my calories", "I missed a workout", "Explain my workout split", "Best time to take protein?", "I want to change my goal", "I'm feeling sore", "Feeling tired lately".
+- Tapping a prompt sends it immediately without needing to type.
+- Matches the web chat's quick-prompt chip strip.
+
+### Progress (progress.tsx) — chart + measurement detail
+
+Before: list of weight/waist rows.
+
+After:
+
+- **Redesigned latest snapshot card** — large weight number, stat pills for Waist / Body Fat % / Muscle Mass (shown when available from InBody analysis).
+- **Inline weight-trend chart** — drawn with positioned Views (no extra native deps). Shows connecting lines between up to 8 measurements (oldest → newest), coloured green (pulse) for good trend or purple (spark) for neutral. Weight values labelled at start and end.
+- **Delta indicator** inside the snapshot card.
+- **Timeline history** — each measurement row has a colour dot (spark for latest, dim for older).
+
+### More (more.tsx) — navigation rows
+
+Before: plain text links in a flat list.
+
+After:
+
+- **Proper navigation rows** — each feature has an icon badge (coloured), label, and right chevron arrow. Matches iOS-native Settings visual pattern.
+- **Preference chips** with icons: sun/moon for theme toggle, globe for language.
+- **Rebuild Plan, Logout, Delete Account** moved to styled nav rows with appropriate accent colours.
+- **Apple Health stats** displayed as compact labelled pills (Steps, Kcal, Weight, HR).
+- **Support links** styled as nav rows with document/shield/life-buoy icons.
+
+### Design system additions
+
+- Added `sparkLight` colour token (`#D88BFF` dark / `#C084FC` light) to `colors.ts` and `ThemeColors` type — matches the web `sparkLight` used for accent text and gradient ends.
+- Upgraded `Card` component with a 1px top-edge inner highlight (white 5.5% opacity, or brand spark when `accent` prop is set) — approximates the web `glass-card` inner-glow treatment.
+
+### Verified
+
+- `npm run mobile:typecheck` — clean, 0 errors.
+
+---
+
 ## Latest Progress - Native Ion Identity Polish (2026-05-26)
 
 The TestFlight app is launching and authenticating again, so the next pass started closing the visual parity gap with the web app.
