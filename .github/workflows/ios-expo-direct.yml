@@ -24,6 +24,11 @@ jobs:
     # Keep this on macos-26 / Xcode 26 and patch incompatible pods in Fastlane.
     runs-on: macos-26
     timeout-minutes: 75
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL || vars.EXPO_PUBLIC_API_BASE_URL || 'https://www.synapfit.app' }}
 
     steps:
       - name: Checkout
@@ -44,6 +49,20 @@ jobs:
       - name: Install mobile dependencies
         working-directory: apps/mobile
         run: npm ci --legacy-peer-deps
+
+      - name: Validate mobile public runtime env
+        run: |
+          missing=0
+          for name in EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_API_BASE_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error title=Missing mobile runtime env::$name is required for the TestFlight app. Add it as a GitHub Actions secret or repository variable."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Mobile runtime env is present. Supabase URL host: $(node -e "console.log(new URL(process.env.EXPO_PUBLIC_SUPABASE_URL).host)")"
 
       - name: Typecheck mobile app
         run: npm run mobile:typecheck
@@ -168,3 +187,17 @@ jobs:
           else
             echo "No gym log found."
           fi
+
+      - name: Upload Xcode gym log artifact
+        if: always()
+        run: |
+          mkdir -p build/gym-logs
+          cp ~/Library/Logs/gym/*.log build/gym-logs/ 2>/dev/null || true
+
+      - name: Upload Xcode gym logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-gym-logs-${{ github.run_number }}
+          path: build/gym-logs
+          retention-days: 7

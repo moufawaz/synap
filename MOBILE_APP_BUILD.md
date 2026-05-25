@@ -865,3 +865,32 @@ Local verification:
 - `npm run mobile:typecheck` passed.
 - `npx expo-doctor` passed `18/18`.
 - `npx expo export --platform ios --clear` produced a Hermes bytecode bundle successfully.
+
+## Latest Progress - Mobile Network Runtime Env (2026-05-25)
+
+After the app launched, login showed:
+
+```txt
+Network request failed
+```
+
+Diagnosis:
+
+- The GitHub direct iOS workflow was not exporting Expo public runtime variables.
+- The local build had `.env.local`, but GitHub Actions did not pass:
+  - `EXPO_PUBLIC_SUPABASE_URL`
+  - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+  - `EXPO_PUBLIC_API_BASE_URL`
+- Without those values, the TestFlight bundle falls back to the placeholder Supabase URL and auth requests fail on-device.
+
+Fix:
+
+- Added the mobile public runtime env values to the direct iOS workflow job environment.
+- Added a workflow preflight step that fails before building if any required mobile runtime env value is missing.
+- Added Xcode gym log artifact upload so future native build failures include the complete archive log, not only clipped annotation lines.
+
+Required GitHub configuration:
+
+- Add `EXPO_PUBLIC_SUPABASE_URL` as a GitHub Actions secret or repository variable.
+- Add `EXPO_PUBLIC_SUPABASE_ANON_KEY` as a GitHub Actions secret or repository variable.
+- `EXPO_PUBLIC_API_BASE_URL` is optional because the workflow defaults it to `https://www.synapfit.app`.
