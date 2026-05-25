@@ -51,6 +51,10 @@ jobs:
       - name: Validate Expo config
         run: npm run mobile:config
 
+      - name: Validate Expo SDK dependency alignment
+        working-directory: apps/mobile
+        run: npx expo-doctor
+
       - name: Show active Xcode version
         run: |
           xcode-select -p

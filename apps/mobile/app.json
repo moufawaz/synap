@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "synap",
-    "jsEngine": "jsc",
+    "jsEngine": "hermes",
     "newArchEnabled": false,
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",

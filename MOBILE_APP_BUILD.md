@@ -807,6 +807,34 @@ Crash report finding:
 Fix:
 
 - Keep all app features in place.
-- Force Hermes off in the generated iOS `Podfile` after Expo prebuild and before `pod install`.
-- This ensures the native iOS archive uses JSC instead of Hermes.
 - Upload `SYNAP-Expo.app.dSYM.zip` as a GitHub Actions artifact for future symbolication.
+
+Follow-up build `1029` still crashed and still loaded `hermes.framework`.
+
+Updated diagnosis:
+
+- React Native `0.81.5` forces Hermes inside `react_native_pods.rb`.
+- The generated native project cannot be switched to JSC by editing the Podfile.
+- Keeping `app.json` on `jsEngine: "jsc"` created a misleading config/runtime mismatch.
+- `npx expo-doctor` found SDK 54 native dependency mismatches:
+  - `expo-device` was installed as `56.x` instead of `~8.0.10`.
+  - `expo-image-picker` was installed as `56.x` instead of `~17.0.11`.
+  - `expo-notifications` was installed as `56.x` instead of `~0.32.17`.
+  - `expo-sharing` was installed as `56.x` instead of `~14.0.8`.
+  - `react-native-view-shot` was installed as `5.x` instead of `4.0.3`.
+  - `babel-preset-expo`, `typescript`, `react-native-webview`, and `@types/react` also needed SDK alignment.
+
+Fix:
+
+- Keep all mobile app features in place.
+- Align the native app explicitly to Hermes because RN `0.81.5` requires it.
+- Install Expo SDK 54 compatible package versions with `npx expo install`.
+- Remove the obsolete Fastlane Podfile patch that tried to force Hermes off.
+- Add `npx expo-doctor` to the direct GitHub iOS workflow before Fastlane so bad native dependency versions fail before an IPA is uploaded.
+
+Local verification after the fix:
+
+- `npx expo-doctor` passed `18/18`.
+- `npm run mobile:typecheck` passed.
+- `npm run mobile:config` reports `jsEngine: "hermes"` and `newArchEnabled: false`.
+- `npx expo export --platform ios --clear` produced a Hermes bytecode bundle (`.hbc`) successfully.

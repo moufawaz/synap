@@ -281,14 +281,6 @@ platform :ios do
     UI.message('SYNAP_BUILD: Running expo prebuild --platform ios --clean …')
     sh("cd '#{mobile_dir}' && npx expo prebuild --platform ios --clean --non-interactive", log: true)
 
-    podfile_path = File.join(ios_dir, 'Podfile')
-    UI.user_error!("Expo iOS Podfile not found after prebuild: #{podfile_path}") unless File.exist?(podfile_path)
-    podfile = File.read(podfile_path)
-    podfile = podfile.gsub(/:hermes_enabled\s*=>\s*podfile_properties\['expo\.jsEngine'\]\s*==\s*nil\s*\|\|\s*podfile_properties\['expo\.jsEngine'\]\s*==\s*'hermes'/, ":hermes_enabled => false")
-    podfile = podfile.gsub(/:hermes_enabled\s*=>\s*[^,\n)]+/, ":hermes_enabled => false")
-    File.write(podfile_path, podfile)
-    UI.message('SYNAP_BUILD: Forced Hermes off in generated Podfile so iOS uses JSC')
-
     UI.message('SYNAP_BUILD: Running pod install …')
     sh("cd '#{ios_dir}' && pod install --repo-update", log: true)
 

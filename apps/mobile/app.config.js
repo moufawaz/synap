@@ -1,13 +1,10 @@
-const appJson = require('./app.json')
-
-module.exports = () => {
-  const expo = appJson.expo
+module.exports = ({ config }) => {
   const projectId = process.env.EAS_PROJECT_ID || '5fb169d2-85c2-48ef-990f-960a395e7c6a'
 
   return {
-    ...expo,
+    ...config,
     extra: {
-      ...expo.extra,
+      ...config.extra,
       eas: { projectId },
     },
   }
