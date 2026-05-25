@@ -16,16 +16,21 @@
       "bundleIdentifier": "app.synap.fit",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
+      "entitlements": {
+        "com.apple.developer.healthkit": true
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "SYNAP uses your camera to scan food and analyze training photos.",
         "NSPhotoLibraryUsageDescription": "SYNAP accesses your photo library so you can upload progress, food, and form photos.",
         "NSPhotoLibraryAddUsageDescription": "SYNAP saves progress share cards to your photo library.",
+        "NSHealthShareUsageDescription": "SYNAP reads Apple Health data so Ion can personalize coaching.",
+        "NSHealthUpdateUsageDescription": "SYNAP writes selected workouts and measurements to Apple Health.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
       },
-      "buildNumber": "65"
+      "buildNumber": "64"
     },
     "android": {
       "package": "app.synap.fit",
@@ -38,7 +43,15 @@
       "expo-router",
       "expo-secure-store",
       "expo-notifications",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "SYNAP reads Apple Health data so Ion can personalize coaching.",
+          "NSHealthUpdateUsageDescription": "SYNAP writes selected workouts and measurements to Apple Health.",
+          "background": true
+        }
+      ]
     ],
     "splash": {
       "image": "./assets/splash.png",
