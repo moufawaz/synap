@@ -792,3 +792,22 @@ Final fix:
 - The patch also makes the generated `Pods/fmt/include/fmt/core.h` writable and edits it to disable `FMT_CONSTEVAL` directly when the pod header still enables it.
 - The patch also makes the generated `Pods/fmt/include/fmt/format-inl.h` writable and rewrites `FMT_STRING(...)` to `fmt::runtime(...)`, avoiding the remaining Xcode 26 `consteval` failures in fmt's own implementation file.
 - The patch also raises generated pod deployment targets below iOS 12 to `12.0` to match the Xcode 26 supported range.
+
+## Latest Progress - Native Launch Stabilization (2026-05-25)
+
+Build `1027` uploaded successfully through the direct GitHub workflow, but still crashed on launch in TestFlight.
+
+Stabilization changes before the next build:
+
+- Removed `@kingstinct/react-native-healthkit` and `react-native-nitro-modules` from the mobile app.
+- Removed the HealthKit Expo config plugin and iOS HealthKit entitlement from `apps/mobile/app.json`.
+- Replaced the HealthKit reader with a safe no-native-module fallback that reports Apple Health unavailable.
+- Added mobile public env vars to the GitHub iOS direct workflow:
+  - `EXPO_PUBLIC_API_BASE_URL=https://www.synapfit.app`
+  - `EXPO_PUBLIC_SUPABASE_URL` from GitHub secrets, falling back to `NEXT_PUBLIC_SUPABASE_URL`
+  - `EXPO_PUBLIC_SUPABASE_ANON_KEY` from GitHub secrets, falling back to `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Reason:
+
+- The app must open reliably before adding optional native integrations.
+- HealthKit/Nitro is the highest-risk native startup crash source because it registers native code before React can render the error boundary.

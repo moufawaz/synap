@@ -24,6 +24,10 @@ jobs:
     # Keep this on macos-26 / Xcode 26 and patch incompatible pods in Fastlane.
     runs-on: macos-26
     timeout-minutes: 75
+    env:
+      EXPO_PUBLIC_API_BASE_URL: https://www.synapfit.app
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout
