@@ -838,3 +838,30 @@ Local verification after the fix:
 - `npm run mobile:typecheck` passed.
 - `npm run mobile:config` reports `jsEngine: "hermes"` and `newArchEnabled: false`.
 - `npx expo export --platform ios --clear` produced a Hermes bytecode bundle (`.hbc`) successfully.
+
+## Latest Progress - Login Runtime Error (2026-05-25)
+
+After build `1029` launched successfully, login showed:
+
+```txt
+Cannot assign to read-only property 'NONE'
+```
+
+Diagnosis:
+
+- The error matches React Native's internal DOM `Event` constants (`Event.NONE`).
+- The mobile Babel config was forcing loose class-property transforms globally.
+- That can rewrite React Native's own `Event` implementation so it attempts to assign read-only constants on event instances.
+- Login triggers network/auth events, which is why the error appeared when pressing `LOG IN`.
+
+Fix:
+
+- Removed the manual class-property/private-property Babel plugins from the mobile app.
+- Let `babel-preset-expo` choose the correct React Native / Hermes transforms.
+- Removed the now-unused Babel transform packages from the mobile app dependencies.
+
+Local verification:
+
+- `npm run mobile:typecheck` passed.
+- `npx expo-doctor` passed `18/18`.
+- `npx expo export --platform ios --clear` produced a Hermes bytecode bundle successfully.
