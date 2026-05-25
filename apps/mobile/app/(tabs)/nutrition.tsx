@@ -1,12 +1,18 @@
 import { useState } from 'react'
-import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, LayoutAnimation, Modal, Platform, Pressable, StyleSheet, Text, TextInput, UIManager, View } from 'react-native'
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker'
+import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { createMealLog, deleteMealLog, getBarcodeProduct, getHydration, getMealLogs, MealLog, saveHydration, scanFoodPhoto, updateMealLog } from '@/features/nutrition'
 import { getPlanHistory } from '@/features/workout'
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true)
+}
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -26,6 +32,12 @@ export default function NutritionScreen() {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [barcodeLocked, setBarcodeLocked] = useState(false)
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
+  const [expandedMeals, setExpandedMeals] = useState<Record<number, boolean>>({})
+
+  function toggleMealExpand(index: number) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+    setExpandedMeals(prev => ({ ...prev, [index]: !prev[index] }))
+  }
 
   async function handleSave() {
     const mealName = name.trim()
@@ -235,15 +247,82 @@ export default function NutritionScreen() {
       </Card>
       {plannedMeals.length ? (
         <Card style={styles.section}>
-          <Text style={[styles.title, { color: color.text }]}>Meal checklist</Text>
+          <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'قائمة الوجبات' : 'Meal checklist'}</Text>
           {plannedMeals.map((meal: any, index: number) => {
-            const done = (logs.data?.logs || []).some(log => (log.meal_name || '').toLowerCase().startsWith(String(meal.name || meal.meal_name || '').toLowerCase()))
+            const mealKey = String(meal.name || meal.meal_name || '').toLowerCase()
+            const done = (logs.data?.logs || []).some(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
+            const expanded = expandedMeals[index] ?? false
+
+            // Extract recipe details from meal object
+            const ingredients: string[] = Array.isArray(meal.ingredients)
+              ? meal.ingredients.map((ing: any) => typeof ing === 'string' ? ing : `${ing.name ?? ing.item ?? ''} ${ing.amount ?? ing.quantity ?? ''}`.trim())
+              : []
+            const recipe: string = meal.recipe || meal.instructions || meal.description || ''
+            const macros = {
+              protein: meal.protein_g ?? meal.protein ?? null,
+              carbs: meal.carbs_g ?? meal.carbs ?? null,
+              fat: meal.fat_g ?? meal.fats_g ?? meal.fat ?? null,
+            }
+            const hasDetails = ingredients.length > 0 || recipe || macros.protein != null
+
             return (
-              <Pressable key={index} onPress={() => logPlannedMeal(meal)} style={[styles.mealRow, { borderColor: done ? color.pulse : color.border }]}>
-                <Text style={[styles.itemTitle, { color: color.text }]}>{done ? '✓ ' : ''}{meal.name || meal.meal_name || `Meal ${index + 1}`}</Text>
-                <Text style={[styles.body, { color: color.muted }]}>{meal.time || ''} {meal.calories ? `- ${meal.calories} kcal` : ''}</Text>
-                <Text style={[styles.body, { color: done ? color.pulse : color.dim }]}>{done ? 'Tap to unlog' : 'Tap to log this planned meal'}</Text>
-              </Pressable>
+              <View key={index} style={[styles.mealRow, { borderColor: done ? color.pulse : color.border }]}>
+                {/* Main tap row: log/unlog */}
+                <Pressable onPress={() => logPlannedMeal(meal)} style={styles.mealMainRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.itemTitle, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>
+                      {done ? '✓ ' : ''}{meal.name || meal.meal_name || `Meal ${index + 1}`}
+                    </Text>
+                    <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
+                      {meal.time || meal.meal_time ? `${meal.time || meal.meal_time}  ·  ` : ''}
+                      {meal.calories ? `${meal.calories} kcal` : ''}
+                      {macros.protein != null ? `  ·  P ${macros.protein}g` : ''}
+                      {macros.carbs != null ? `  C ${macros.carbs}g` : ''}
+                      {macros.fat != null ? `  F ${macros.fat}g` : ''}
+                    </Text>
+                    <Text style={[styles.body, { color: done ? color.pulse : color.dim }]}>
+                      {done ? (isRtl ? 'اضغط لإلغاء التسجيل' : 'Tap to unlog') : (isRtl ? 'اضغط للتسجيل' : 'Tap to log')}
+                    </Text>
+                  </View>
+
+                  {hasDetails ? (
+                    <Pressable onPress={() => toggleMealExpand(index)} style={styles.expandBtn} hitSlop={8}>
+                      <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={color.muted} />
+                    </Pressable>
+                  ) : null}
+                </Pressable>
+
+                {/* Expanded recipe / ingredients */}
+                {expanded && hasDetails ? (
+                  <View style={[styles.recipeSection, { borderTopColor: color.border }]}>
+                    {ingredients.length > 0 ? (
+                      <>
+                        <Text style={[styles.recipeSectionTitle, { color: color.spark }]}>
+                          {isRtl ? 'المكوّنات' : 'Ingredients'}
+                        </Text>
+                        {ingredients.map((ing, i) => (
+                          <Text key={i} style={[styles.ingredientLine, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
+                            {'·  '}{ing}
+                          </Text>
+                        ))}
+                      </>
+                    ) : null}
+                    {recipe ? (
+                      <>
+                        <Text style={[styles.recipeSectionTitle, { color: color.spark, marginTop: ingredients.length > 0 ? 10 : 0 }]}>
+                          {isRtl ? 'طريقة التحضير' : 'Recipe'}
+                        </Text>
+                        <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>{recipe}</Text>
+                      </>
+                    ) : null}
+                    {macros.protein != null && ingredients.length === 0 && !recipe ? (
+                      <Text style={[styles.body, { color: color.muted }]}>
+                        P {macros.protein}g  ·  C {macros.carbs ?? '—'}g  ·  F {macros.fat ?? '—'}g
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
             )
           })}
         </Card>
@@ -374,8 +453,38 @@ const styles = StyleSheet.create({
   mealRow: {
     borderWidth: 1,
     borderRadius: 14,
-    padding: 12,
     marginTop: 10,
+    overflow: 'hidden',
+  },
+  mealMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  expandBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  recipeSection: {
+    borderTopWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  recipeSectionTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  ingredientLine: {
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '600',
   },
   itemTitle: {
     fontSize: 18,

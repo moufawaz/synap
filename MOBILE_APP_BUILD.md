@@ -138,6 +138,11 @@ apps/mobile
 - 2026-05-22: Expanded native Nutrition with planned meal checklist, macro progress, water tracking, barcode lookup, food photo scan, and edit/delete after logging.
 - 2026-05-22: Added native chat plan-edit preview controls that send apply/cancel messages back through Ion.
 - 2026-05-22: Updated supporting APIs for native bearer auth across grocery list, eating-out, meal recipes, form check, hydration, reports, checkout, billing cancel, and push notification.
+- 2026-05-26: UI redesign pass for web parity — dashboard greeting + stat chips + ambient glow, progress weight trend chart, nav rows in More, quick prompts in Chat, sparkLight color token, Card accent prop.
+- 2026-05-26: Chat — full session history bottom sheet (groups by 90-min gaps and day boundaries, Today/Yesterday labels, tap-to-view), rich message type rendering for all 9 types (workout_card, meal_card, milestone, alert, new_plan, plan_proposal, renewal_preview, suggestion, text), context-aware quick reply buttons per message type, Check-in button (triggers "Run my daily adaptation check"), plan modification window banner with colour-coded days remaining, message usage counter for Starter plan with Upgrade shortcut, displayChatContent() JSON-stripping for clean Ion replies.
+- 2026-05-26: Community — new tab screen at app/(tabs)/community.tsx: "Coming Soon" hero card with ambient glow, 4 upcoming feature cards (Training Threads, Weekly Challenges, Progress Showcase, Training Partners), Elite early access CTA linking to /pricing. Added `community` translation key (English + Arabic).
+- 2026-05-26: Nutrition — meal checklist rows now have expand/collapse toggle showing ingredients list, recipe/instructions, and macro breakdown when present in the plan JSON. Uses LayoutAnimation for smooth transitions.
+- 2026-05-26: Tab bar — added Community tab (users icon) between Progress and More, 7 tabs total.
 
 ## Current Status
 
@@ -205,27 +210,34 @@ Implemented in native:
 - Privacy, Terms, Support links.
 - Account deletion.
 
+Implemented in native (expanded as of 2026-05-26):
+
+- Ion chat session history sidebar (bottom sheet, grouped by day and 90-min gap).
+- Rich message type rendering in Chat: workout_card, meal_card, milestone, alert, new_plan, plan_proposal, renewal_preview, suggestion.
+- Check-in button in Chat header.
+- Plan modification window banner in Chat (colour-coded days left).
+- Message usage counter for Starter plan with Upgrade link.
+- Community screen (Coming Soon) with 4 feature cards and Elite early access CTA.
+- Meal recipe expand/collapse in Nutrition checklist (ingredients, recipe, macros).
+- Community tab added to bottom bar.
+
 Not yet 1:1 with web:
 
 - Landing/pricing/marketing pages are web-only.
 - Admin/business dashboards are web-only.
 - Full Plan page with diet/workout tabs is not native yet.
 - Full measurements form with all 13 fields and symmetry tabs is simplified to quick weight/waist plus history.
-- Nutrition does not yet show the full planned meal checklist/macro ring/water tracker/barcode live scanner exactly like web.
 - Workout programme browser, exercise video modal/YouTube playback, and detailed session timer are simplified.
-- Ion plan-edit confirmation cards, renewal preview/rollback UI, chat sessions sidebar, and structured action cards are not fully native yet.
-- Grocery list, eating-out mode, form-check, meal recipes, supplement recommendations, weekly/monthly reports, hydration, and subscription checkout/cancel flows are not native screens yet.
+- Grocery list, eating-out mode, form-check, supplement recommendations, weekly/monthly reports, and subscription checkout/cancel flows are not native screens yet.
 - Push notifications/OneSignal native wiring is not implemented in the Expo app yet.
 - In-app purchases are not implemented; web Lemon Squeezy billing remains on web.
 
-Recommended before calling the native app "full parity":
+Remaining items before calling the native app "full parity":
 
-1. Add native Plan screen.
-2. Add native programme browser/video playback.
-3. Add planned-meal checklist/macros/water in Nutrition.
-4. Add Ion structured action cards and plan-edit confirmations in Chat.
-5. Add native More entries for grocery list, eating-out mode, form check, reports, and billing/support links.
-6. Add native push notifications after TestFlight baseline is stable.
+1. Add native Plan screen with diet/workout tabs.
+2. Add native programme browser / exercise video playback.
+3. Add native push notifications after TestFlight baseline is stable.
+4. Add in-app purchase flow for iOS.
 
 ## Native Build Commands
 

@@ -27,6 +27,7 @@ export default function TabLayout() {
       <Tabs.Screen name="train" options={{ title: text.train, tabBarIcon: ({ color: iconColor }) => <Feather name="activity" color={iconColor} size={22} /> }} />
       <Tabs.Screen name="nutrition" options={{ title: text.nutrition, tabBarIcon: ({ color: iconColor }) => <Feather name="coffee" color={iconColor} size={22} /> }} />
       <Tabs.Screen name="progress" options={{ title: text.progress, tabBarIcon: ({ color: iconColor }) => <Feather name="trending-up" color={iconColor} size={22} /> }} />
+      <Tabs.Screen name="community" options={{ title: text.community ?? 'Community', tabBarIcon: ({ color: iconColor }) => <Feather name="users" color={iconColor} size={22} /> }} />
       <Tabs.Screen name="more" options={{ title: text.more, tabBarIcon: ({ color: iconColor }) => <Feather name="more-horizontal" color={iconColor} size={22} /> }} />
     </Tabs>
   )

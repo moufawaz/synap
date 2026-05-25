@@ -20,6 +20,7 @@ export type TranslationMap = {
   nutrition: string
   progress: string
   more: string
+  community: string
   launchAccess: string
   askIon: string
   todayWorkout: string
@@ -75,6 +76,7 @@ export const t: Record<Language, TranslationMap> = {
     nutrition: 'Nutrition',
     progress: 'Progress',
     more: 'More',
+    community: 'Community',
     launchAccess: 'Your current subscription controls access to premium coaching features.',
     askIon: 'Ask Ion anything...',
     todayWorkout: "Today's workout",
@@ -128,6 +130,7 @@ export const t: Record<Language, TranslationMap> = {
     nutrition: 'التغذية',
     progress: 'التقدم',
     more: 'المزيد',
+    community: 'المجتمع',
     launchAccess: 'اشتراكك الحالي يحدد الوصول إلى ميزات التدريب المدفوعة.',
     askIon: 'اسأل آيون أي شيء...',
     todayWorkout: 'تمرين اليوم',
