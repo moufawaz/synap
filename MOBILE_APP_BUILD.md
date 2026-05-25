@@ -792,3 +792,21 @@ Final fix:
 - The patch also makes the generated `Pods/fmt/include/fmt/core.h` writable and edits it to disable `FMT_CONSTEVAL` directly when the pod header still enables it.
 - The patch also makes the generated `Pods/fmt/include/fmt/format-inl.h` writable and rewrites `FMT_STRING(...)` to `fmt::runtime(...)`, avoiding the remaining Xcode 26 `consteval` failures in fmt's own implementation file.
 - The patch also raises generated pod deployment targets below iOS 12 to `12.0` to match the Xcode 26 supported range.
+
+## Latest Progress - TestFlight Crash Diagnosis (2026-05-25)
+
+Build `1028` crash report was inspected from `SYNAP-2026-05-25-214053.000.ips`.
+
+Crash report finding:
+
+- Exception: `EXC_CRASH`, `SIGABRT`, `Abort trap: 6`.
+- Faulting queue: `com.facebook.react.ExceptionsManagerQueue`.
+- This means React Native received a fatal startup exception and aborted the app.
+- The app binary still loaded `hermes.framework` and had a `hades` Hermes GC thread, even though `app.json` had `jsEngine: "jsc"`.
+
+Fix:
+
+- Keep all app features in place.
+- Force Hermes off in the generated iOS `Podfile` after Expo prebuild and before `pod install`.
+- This ensures the native iOS archive uses JSC instead of Hermes.
+- Upload `SYNAP-Expo.app.dSYM.zip` as a GitHub Actions artifact for future symbolication.

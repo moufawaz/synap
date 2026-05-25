@@ -135,6 +135,14 @@ jobs:
           path: build/SYNAP-Expo.ipa
           retention-days: 14
 
+      - name: Upload dSYM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synap-expo-ios-${{ github.run_number }}.dSYM
+          path: build/SYNAP-Expo.app.dSYM.zip
+          retention-days: 14
+
       - name: Upload Fastlane log artifact
         if: always()
         uses: actions/upload-artifact@v4
