@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { generateMobilePlan, MobileProfileInput, saveMobileProfile } from '@/features/onboarding'
 import { useLanguage } from '@/i18n/LanguageProvider'
@@ -23,6 +23,7 @@ const initialProfile: MobileProfileInput = {
   foods_loved: '',
   foods_hated: '',
   injuries: '',
+  ion_gender: 'male',
   language: 'en',
 }
 
@@ -58,7 +59,7 @@ export default function OnboardingScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="ONBOARDING" title="Build your plan" subtitle="Tell Ion the essentials so your diet and workout plan can be personalized." />
+      <IonPageHeader eyebrow="ONBOARDING" title="Build your plan" subtitle="Tell Ion the essentials so your diet and workout plan can be personalized." />
       <Card>
         <Field label="Name" value={profile.name} onChangeText={value => update('name', value)} />
         <View style={styles.row}>
@@ -78,6 +79,12 @@ export default function OnboardingScreen() {
           value={profile.gym_access}
           options={[['gym', 'Gym'], ['home', 'Home']]}
           onChange={value => update('gym_access', value as MobileProfileInput['gym_access'])}
+        />
+        <Segment
+          label="Ion avatar"
+          value={profile.ion_gender || 'male'}
+          options={[['male', 'Male'], ['female', 'Female']]}
+          onChange={value => update('ion_gender', value as MobileProfileInput['ion_gender'])}
         />
 
         <View style={styles.row}>

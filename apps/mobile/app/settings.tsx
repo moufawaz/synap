@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonAvatar } from '@/components/IonAvatar'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { getProfile, saveProfile } from '@/features/profile'
 import { useAsyncData } from '@/hooks/useAsyncData'
@@ -27,7 +28,7 @@ const fields = [
 
 export default function SettingsScreen() {
   const { color } = useTheme()
-  const { language, setLanguage } = useLanguage()
+  const { language, setLanguage, isRtl } = useLanguage()
   const profile = useAsyncData(getProfile, [])
   const [values, setValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -39,6 +40,7 @@ export default function SettingsScreen() {
       const value = profile.data?.profile?.[key]
       next[key] = value == null ? '' : Array.isArray(value) ? value.join(', ') : String(value)
     })
+    next.ion_gender = profile.data.profile.ion_gender || 'male'
     setValues(next)
   }, [profile.data])
 
@@ -54,7 +56,7 @@ export default function SettingsScreen() {
         language,
         gym_access: profile.data?.profile?.gym_access ? 'gym' : 'home',
         currently_training: profile.data?.profile?.training_experience === 'beginner' ? 'new' : 'already',
-        ion_gender: profile.data?.profile?.ion_gender || 'male',
+        ion_gender: values.ion_gender || profile.data?.profile?.ion_gender || 'male',
       })
       await profile.reload()
       Alert.alert('Settings', 'Profile saved.')
@@ -67,7 +69,7 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="SETTINGS" title="Profile Settings" subtitle="Keep Ion's coaching data accurate across web and iOS." />
+      <IonPageHeader eyebrow="SETTINGS" title="Profile Settings" subtitle="Keep Ion's coaching data accurate across web and iOS." />
       {profile.loading ? <ActivityIndicator color={color.spark} /> : null}
       {profile.error ? <Text style={[styles.body, { color: color.danger }]}>{profile.error}</Text> : null}
 
@@ -79,6 +81,25 @@ export default function SettingsScreen() {
               <Text style={[styles.choiceText, { color: language === item ? color.spark : color.text }]}>{item === 'ar' ? 'العربية' : 'English'}</Text>
             </Pressable>
           ))}
+        </View>
+      </Card>
+
+      <Card style={styles.cardGap}>
+        <Text style={[styles.title, { color: color.text }]}>Ion avatar</Text>
+        <View style={[styles.avatarRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
+          <IonAvatar size="md" />
+          <View style={styles.avatarText}>
+            <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
+              Choose how Ion appears across coaching surfaces.
+            </Text>
+            <View style={[styles.row, { marginTop: 10 }]}>
+              {(['male', 'female'] as const).map(item => (
+                <Pressable key={item} onPress={() => update('ion_gender', item)} style={[styles.choice, { borderColor: values.ion_gender === item ? color.spark : color.border, backgroundColor: values.ion_gender === item ? color.sparkSoft : color.elevated }]}>
+                  <Text style={[styles.choiceText, { color: values.ion_gender === item ? color.spark : color.text }]}>{item === 'male' ? 'Male' : 'Female'}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         </View>
       </Card>
 
@@ -108,6 +129,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '900', marginBottom: 12 },
   body: { fontSize: 15, lineHeight: 23, fontWeight: '700' },
   row: { flexDirection: 'row', gap: 10 },
+  avatarRow: { alignItems: 'center', gap: 12 },
+  avatarText: { flex: 1 },
   choice: { flex: 1, borderWidth: 1, borderRadius: 14, minHeight: 50, alignItems: 'center', justifyContent: 'center' },
   choiceText: { fontWeight: '900' },
   input: { minHeight: 50, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, marginBottom: 10, fontWeight: '800' },

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router, type Href } from 'expo-router'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { useAuth } from '@/auth/AuthProvider'
 import { deleteAccount } from '@/features/account'
@@ -75,7 +75,7 @@ export default function MoreScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="SETTINGS" title={text.more} subtitle={text.healthSubtitle} />
+      <IonPageHeader eyebrow="SETTINGS" title={text.more} subtitle={text.healthSubtitle} />
       <Card>
         <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>{text.preferences}</Text>
         <View style={styles.row}>

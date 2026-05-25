@@ -898,3 +898,22 @@ Required GitHub configuration:
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - Do not expose or use `SUPABASE_SERVICE_ROLE_KEY` in the mobile build.
+
+## Latest Progress - Native Ion Identity Polish (2026-05-26)
+
+The TestFlight app is launching and authenticating again, so the next pass started closing the visual parity gap with the web app.
+
+Changes:
+
+- Added native `IonAvatar` using the existing SYNAP Ion avatar asset.
+- Added native `SynapLogo` using the existing SYNAP icon asset.
+- Added shared `IonPageHeader` so core native screens use consistent Ion/avatar presentation.
+- Replaced plain auth brand text on login, signup, and reset screens with the SYNAP logo treatment.
+- Added Ion avatar headers to Dashboard, Chat, Plan, Nutrition, Train, Progress, Programme, More, Settings, and Onboarding.
+- Added Ion avatar selection to native Settings and Onboarding, saving `ion_gender` with the profile data.
+- Added `ion_gender` to the native onboarding profile type.
+
+Local verification:
+
+- `npm run typecheck` passed inside `apps/mobile`.
+- `npx expo export --platform ios --clear` passed and produced a Hermes bytecode bundle.

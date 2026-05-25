@@ -1,9 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { getMealLogs } from '@/features/nutrition'
+import { getProfile } from '@/features/profile'
 import { getSubscriptionStatus } from '@/features/subscription'
 import { getPlanHistory } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
@@ -16,7 +17,9 @@ export default function DashboardScreen() {
   const subscription = useAsyncData(getSubscriptionStatus, [])
   const plan = useAsyncData(getPlanHistory, [])
   const meals = useAsyncData(getMealLogs, [])
+  const profile = useAsyncData(getProfile, [])
   const tier = subscription.data?.tier ?? 'starter'
+  const name = profile.data?.profile?.name || 'Athlete'
   const workout = plan.data?.todayWorkout
   const mealLogs = meals.data?.logs ?? []
   const activeDiet = plan.data?.activeDietPlan?.plan_json
@@ -29,7 +32,7 @@ export default function DashboardScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="SYNAP" title={text.dashboard} subtitle={text.launchAccess} />
+      <IonPageHeader eyebrow="SYNAP" title={`${text.dashboard}, ${name}`} subtitle={text.launchAccess} />
       <View style={styles.grid}>
         <Card style={{ borderColor: tier === 'elite' ? color.spark : color.border }}>
           <Text style={[styles.label, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>Access</Text>

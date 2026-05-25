@@ -13,6 +13,7 @@ import {
 } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
+import { IonAvatar } from '@/components/IonAvatar'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
 import { ChatMessage, getChatHistory, sendChatMessage } from '@/features/chat'
@@ -68,6 +69,7 @@ export default function ChatScreen() {
     const isUser = item.role === 'user'
     return (
       <View style={[styles.messageRow, isUser ? styles.userRow : styles.ionRow]}>
+        {!isUser ? <IonAvatar size="sm" showStatus={false} /> : null}
         <View style={[
           styles.bubble,
           {
@@ -104,7 +106,12 @@ export default function ChatScreen() {
         style={styles.root}
       >
         <View style={styles.header}>
-          <PageHeader eyebrow="ION" title={text.chat} subtitle="Ion remembers your profile, plans, meals, workouts, measurements, and previous coaching context." />
+          <View style={styles.headerRow}>
+            <IonAvatar size="md" />
+            <View style={styles.headerText}>
+              <PageHeader eyebrow="ION" title={text.chat} subtitle="Ion remembers your profile, plans, meals, workouts, measurements, and previous coaching context." />
+            </View>
+          </View>
         </View>
         {history.loading ? <ActivityIndicator color={color.spark} /> : null}
         {history.error ? <Text style={[styles.error, { color: color.danger }]}>{history.error}</Text> : null}
@@ -164,6 +171,8 @@ const styles = StyleSheet.create({
   },
   messageRow: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
   },
   userRow: {
     justifyContent: 'flex-end',
@@ -211,6 +220,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 12,
     fontWeight: '700',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  headerText: {
+    flex: 1,
   },
   composer: {
     marginHorizontal: 16,

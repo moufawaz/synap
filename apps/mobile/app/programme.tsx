@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { getPlanHistory } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
@@ -36,7 +36,7 @@ export default function ProgrammeScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="PROGRAMME" title={workout?.program_name || workout?.name || 'Programme'} subtitle={plan.data?.timing?.workout?.label || 'Full workout browser'} />
+      <IonPageHeader eyebrow="PROGRAMME" title={workout?.program_name || workout?.name || 'Programme'} subtitle={plan.data?.timing?.workout?.label || 'Full workout browser'} />
       {plan.loading ? <ActivityIndicator color={color.spark} /> : null}
       {videoId && YoutubePlayer ? (
         <Card style={styles.videoCard}>

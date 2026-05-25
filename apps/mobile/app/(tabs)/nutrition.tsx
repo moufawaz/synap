@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, TextInput
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { createMealLog, deleteMealLog, getBarcodeProduct, getHydration, getMealLogs, MealLog, saveHydration, scanFoodPhoto, updateMealLog } from '@/features/nutrition'
 import { getPlanHistory } from '@/features/workout'
@@ -206,7 +206,7 @@ export default function NutritionScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="NUTRITION" title={text.nutrition} subtitle={`${totalCalories}/${targets.calories || '-'} kcal - P:${Math.round(totalProtein)}/${targets.protein || '-'} C:${Math.round(totalCarbs)}/${targets.carbs || '-'} F:${Math.round(totalFat)}/${targets.fat || '-'}`} />
+      <IonPageHeader eyebrow="NUTRITION" title={text.nutrition} subtitle={`${totalCalories}/${targets.calories || '-'} kcal - P:${Math.round(totalProtein)}/${targets.protein || '-'} C:${Math.round(totalCarbs)}/${targets.carbs || '-'} F:${Math.round(totalFat)}/${targets.fat || '-'}`} />
       <Card>
         <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>Macro progress</Text>
         {[

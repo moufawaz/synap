@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { generateMealRecipe } from '@/features/nutrition'
 import { applyRenewalPreview, getPlanHistory, renewPlan, rollbackPlan } from '@/features/workout'
@@ -102,7 +102,7 @@ export default function PlanScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="PLAN" title="Current Plan" subtitle={activeTiming?.label || 'Diet and workout cycles with history and rollback.'} />
+      <IonPageHeader eyebrow="PLAN" title="Current Plan" subtitle={activeTiming?.label || 'Diet and workout cycles with history and rollback.'} />
       {plan.loading ? <ActivityIndicator color={color.spark} /> : null}
       {plan.error ? <Text style={[styles.body, { color: color.danger }]}>{plan.error}</Text> : null}
 

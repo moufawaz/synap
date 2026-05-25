@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
+import { SynapLogo } from '@/components/SynapLogo'
 import { useAuth } from '@/auth/AuthProvider'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -33,7 +34,9 @@ export default function ResetScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: color.bg }]}>
       <View style={[styles.card, { backgroundColor: color.surface, borderColor: color.border }]}>
-        <Text style={[styles.brand, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{text.appName}</Text>
+        <View style={[styles.logo, { alignItems: isRtl ? 'flex-end' : 'flex-start' }]}>
+          <SynapLogo size="md" showTagline />
+        </View>
         <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>{text.forgotPassword}</Text>
         <Text style={[styles.subtitle, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
           Enter your email and we will send a secure reset link.
@@ -76,11 +79,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 22,
   },
-  brand: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 5,
-    textTransform: 'uppercase',
+  logo: {
     marginBottom: 20,
   },
   title: {

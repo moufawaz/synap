@@ -16,6 +16,7 @@ export type MobileProfileInput = {
   foods_hated: string
   injuries: string
   language: 'en' | 'ar'
+  ion_gender: 'male' | 'female'
 }
 
 export async function saveMobileProfile(profile: MobileProfileInput) {

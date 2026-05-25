@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { getPlanHistory, getWorkoutSession, logWorkout, saveWorkoutSession, TodayWorkout } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
@@ -105,7 +105,7 @@ export default function TrainScreen() {
 
   return (
     <Screen>
-      <PageHeader
+      <IonPageHeader
         eyebrow="WORKOUT"
         title={text.train}
         subtitle={plan.data?.timing?.workout?.label ?? 'Today session and exercise tracking.'}

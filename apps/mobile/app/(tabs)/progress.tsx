@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View 
 import * as ImagePicker from 'expo-image-picker'
 import * as Sharing from 'expo-sharing'
 import { Card } from '@/components/Card'
-import { PageHeader } from '@/components/PageHeader'
+import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { analyzeInBodyPhoto, createMeasurement, getMeasurements } from '@/features/measurements'
 import { useAsyncData } from '@/hooks/useAsyncData'
@@ -107,7 +107,7 @@ export default function ProgressScreen() {
 
   return (
     <Screen>
-      <PageHeader eyebrow="PROGRESS" title={text.progress} subtitle="Measurement history synced through Supabase." />
+      <IonPageHeader eyebrow="PROGRESS" title={text.progress} subtitle="Measurement history synced through Supabase." />
 
       {measurements.loading ? (
         <ActivityIndicator color={color.spark} />
