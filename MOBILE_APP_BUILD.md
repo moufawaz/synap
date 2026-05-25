@@ -789,5 +789,5 @@ Final fix:
 - Restored `.github/workflows/ios-expo-direct.yml` to `runs-on: macos-26`.
 - Added a Fastlane post-`pod install` patch for `Pods.xcodeproj`.
 - The patch adds `FMT_USE_CONSTEVAL=0` to pod preprocessor definitions and C++ flags so Xcode 26 can compile the React Native native pods.
-- The patch also edits the generated `Pods/fmt/include/fmt/core.h` header to disable `FMT_CONSTEVAL` directly when the pod header still enables it.
+- The patch also makes the generated `Pods/fmt/include/fmt/core.h` writable and edits it to disable `FMT_CONSTEVAL` directly when the pod header still enables it.
 - The patch also raises generated pod deployment targets below iOS 12 to `12.0` to match the Xcode 26 supported range.

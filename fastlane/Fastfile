@@ -316,6 +316,7 @@ platform :ios do
 
     fmt_core_header = File.join(ios_dir, 'Pods', 'fmt', 'include', 'fmt', 'core.h')
     UI.user_error!("fmt core header not found after pod install: #{fmt_core_header}") unless File.exist?(fmt_core_header)
+    File.chmod(0o644, fmt_core_header)
     fmt_core = File.read(fmt_core_header)
     fmt_core = fmt_core.gsub(/#(\s*)define FMT_USE_CONSTEVAL 1/, '#\1define FMT_USE_CONSTEVAL 0')
     fmt_core = fmt_core.gsub(/#(\s*)define FMT_CONSTEVAL consteval/, '#\1define FMT_CONSTEVAL')
