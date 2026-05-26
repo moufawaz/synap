@@ -7,9 +7,11 @@ on:
   # IOS_PROVISION_PROFILE_BASE64, and APPLE_TEAM_ID secrets.
   # Use ios-expo-eas.yml for automatic builds — it requires only EXPO_TOKEN.
   workflow_dispatch:
-
-permissions:
-  contents: read
+    inputs:
+      build_number:
+        description: Optional iOS build number. Leave empty to use 1000 + GitHub run number.
+        required: false
+        type: string
 
 concurrency:
   group: ios-expo-direct-${{ github.ref }}
@@ -103,7 +105,7 @@ jobs:
           IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
           IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
-          IOS_BUILD_NUMBER: ''
+          IOS_BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -o pipefail
           bundle exec fastlane ios expo_beta 2>&1 | tee fastlane-expo.log
