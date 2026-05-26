@@ -194,8 +194,8 @@ export default function BillingScreen() {
               onPress={() => Alert.alert(
                 isRtl ? 'الدعم' : 'Support',
                 isRtl
-                  ? 'للمساعدة راسلنا على:\nsupport@synapfit.app'
-                  : 'For help, email us at:\nsupport@synapfit.app',
+                  ? 'للمساعدة راسلنا على:\nion@synapfit.app'
+                  : 'For help, email us at:\nion@synapfit.app',
                 [{ text: 'OK' }],
               )}
             >
@@ -269,8 +269,8 @@ export default function BillingScreen() {
               onPress={() => Alert.alert(
                 isRtl ? 'الدعم' : 'Support',
                 isRtl
-                  ? 'للمساعدة راسلنا على:\nsupport@synapfit.app'
-                  : 'For help, email us at:\nsupport@synapfit.app',
+                  ? 'للمساعدة راسلنا على:\nion@synapfit.app'
+                  : 'For help, email us at:\nion@synapfit.app',
                 [{ text: 'OK' }],
               )}
             >

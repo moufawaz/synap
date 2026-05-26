@@ -5,9 +5,11 @@ import {
   Users, MessageCircle, Crown, DollarSign,
   TrendingUp, Zap, Activity, ExternalLink as ExternalLinkIcon,
   XCircle, BarChart3, Dumbbell, CheckCircle2, AlertCircle, Clock,
-  Flag, Shield, RefreshCw as RefreshCwIcon,
+  Flag, Shield, RefreshCw as RefreshCwIcon, Mail,
 } from 'lucide-react'
 import { estimateAnthropicCostUsd, formatUsd, TOKEN_PRICING } from '@/lib/token-cost'
+import { AdminEmailComposer } from './AdminEmailComposer'
+import { AdminUserActions } from './AdminUserActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +40,7 @@ const GOAL_LABELS: Record<string, string> = {
   be_healthier:    'Health',
 }
 
-type AdminTab = 'overview' | 'usage' | 'health' | 'errors' | 'flags' | 'users' | 'billing'
+type AdminTab = 'overview' | 'usage' | 'health' | 'errors' | 'flags' | 'users' | 'billing' | 'email'
 
 function getPlanTier(s: any): 'elite' | 'pro' | 'starter' {
   const p = (s.plan_type || s.plan_name || '').toLowerCase()
@@ -48,7 +50,7 @@ function getPlanTier(s: any): 'elite' | 'pro' | 'starter' {
 }
 
 function getAdminTab(tab?: string): AdminTab {
-  return tab === 'usage' || tab === 'health' || tab === 'errors' || tab === 'flags' || tab === 'users' || tab === 'billing' ? tab : 'overview'
+  return tab === 'usage' || tab === 'health' || tab === 'errors' || tab === 'flags' || tab === 'users' || tab === 'billing' || tab === 'email' ? tab : 'overview'
 }
 
 function estimateTokensFromText(text?: string | null) {
@@ -552,6 +554,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
           { id: 'flags' as const, label: 'Flags' },
           { id: 'users' as const, label: 'Users' },
           { id: 'billing' as const, label: 'Billing' },
+          { id: 'email' as const, label: 'Email' },
         ].map(tab => (
           <Link key={tab.id} href={`/admin?tab=${tab.id}`}
             className="px-3 py-2 rounded-lg font-heading text-xs font-bold tracking-wider whitespace-nowrap"
@@ -1028,6 +1031,35 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
         </div>
       </div>
 
+      {/* ── Email composer ───────────────────────────────────────── */}
+      <div id="email" className={`${activeTab === 'email' ? 'block' : 'hidden'} scroll-mt-4`}>
+        <div className="glass-card overflow-hidden">
+          <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <Mail size={14} style={{ color: '#BB5CF6' }} />
+              <SectionTitle>SEND EMAIL</SectionTitle>
+            </div>
+            <p className="font-heading text-[10px] -mt-3" style={{ color: '#475569' }}>
+              Send template or custom emails to individual users or bulk filtered segments. Uses Resend via ion@synapfit.app.
+            </p>
+          </div>
+          <div className="p-5">
+            <AdminEmailComposer
+              users={authUsers.map((u: any) => {
+                const p = profiles.find((pr: any) => pr.user_id === u.id)
+                const s = subs.find((sub: any) => sub.user_id === u.id)
+                return {
+                  id: u.id,
+                  email: u.email,
+                  name: p?.name,
+                  tier: s?.plan_name || 'free',
+                }
+              })}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* ── Onboarding health ─────────────────────────────────────── */}
       {activeTab === 'users' && noPlanUsers.length > 0 && (
         <div className="glass-card p-5">
@@ -1143,7 +1175,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
           <table className="w-full">
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                {['EMAIL', 'NAME', 'GOAL', 'PLAN', 'HAS PLAN', 'MSGS', 'LAST ACTIVE', 'JOINED'].map(h => (
+                {['EMAIL', 'NAME', 'GOAL', 'PLAN', 'HAS PLAN', 'MSGS', 'LAST ACTIVE', 'JOINED', 'ACTIONS'].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-heading text-[10px] tracking-widest whitespace-nowrap" style={{ color: '#475569' }}>{h}</th>
                 ))}
               </tr>
@@ -1217,6 +1249,15 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
                       <p className="font-heading text-xs whitespace-nowrap" style={{ color: '#475569' }}>
                         {new Date(u.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
                       </p>
+                    </td>
+                    <td className="px-4 py-3 relative">
+                      <AdminUserActions
+                        userId={u.id}
+                        email={u.email || ''}
+                        name={profiles.find((p: any) => p.user_id === u.id)?.name}
+                        currentTier={tier}
+                        currentStatus={sub?.status || 'free'}
+                      />
                     </td>
                   </tr>
                 )
