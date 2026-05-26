@@ -221,23 +221,42 @@ Implemented in native (expanded as of 2026-05-26):
 - Meal recipe expand/collapse in Nutrition checklist (ingredients, recipe, macros).
 - Community tab added to bottom bar.
 
+Implemented in native (expanded as of 2026-05-26 — Phase 2):
+
+- Runtime crash fix for plan JSON objects rendered as React children (`safeText` + `safeIngredient` helpers).
+- Nutrition calorie ring (SVG-style circle progress, no extra native deps).
+- Nutrition macro progress bars (protein / carbs / fat with numeric targets).
+- Nutrition water tracker with individual glass buttons.
+- Grocery List and Eating Out Mode quick action buttons in Nutrition tab.
+- Meal food items / ingredients / recipe details in expanded meal card.
+- Pre/post workout note banners in Nutrition.
+- Meal timing note banner in Nutrition.
+- YouTube video buttons per exercise in Train tab (opens YouTube app or browser).
+- Exercise expand/collapse with form tips, progression notes, and video button.
+- Session progress bar in Train tab.
+- Muscle group tag badge per exercise.
+- Train quick links to Programme, Measurements, Form Check.
+
 Not yet 1:1 with web:
 
 - Landing/pricing/marketing pages are web-only.
 - Admin/business dashboards are web-only.
-- Full Plan page with diet/workout tabs is not native yet.
-- Full measurements form with all 13 fields and symmetry tabs is simplified to quick weight/waist plus history.
-- Workout programme browser, exercise video modal/YouTube playback, and detailed session timer are simplified.
-- Grocery list, eating-out mode, form-check, supplement recommendations, weekly/monthly reports, and subscription checkout/cancel flows are not native screens yet.
+- **Grocery list** — mobile shows items in a read-only list; web has checkable items (tap to tick off), shopping progress bar (N/total), and copy/share list to clipboard/native share.
+- **Progress tab** — mobile shows weight chart only; web has a 5-metric selector (Weight, Waist, Chest, Bicep, Body Fat %) plus workout log history, streak counter, coach timeline, and expandable weekly reports (Elite).
+- **Train tab** — mobile always shows today's workout; web has a 7-day week browser to navigate to any day's workout.
+- **Settings** — mobile has profile + language + Ion avatar; web also has a Billing section (subscription status, cancel flow) and a Notifications section (toggle preferences per reminder type, scheduling).
+- **Reports** — mobile has monthly summary + weekly reports list; web additionally shows workout logs as a visual timeline and has expandable report cards.
 - Push notifications/OneSignal native wiring is not implemented in the Expo app yet.
 - In-app purchases are not implemented; web Lemon Squeezy billing remains on web.
 
 Remaining items before calling the native app "full parity":
 
-1. Add native Plan screen with diet/workout tabs.
-2. Add native programme browser / exercise video playback.
-3. Add native push notifications after TestFlight baseline is stable.
-4. Add in-app purchase flow for iOS.
+1. Grocery list — add checkable items with progress bar and native share.
+2. Progress tab — add 5-metric chart selector, workout logs section, streak display, coach timeline.
+3. Train tab — add 7-day week selector to browse any day's workout.
+4. Settings — add Billing section and per-type Notification preferences.
+5. Add native push notifications after TestFlight baseline is stable.
+6. Add in-app purchase flow for iOS.
 
 ## Native Build Commands
 
@@ -969,6 +988,99 @@ After:
 ### Verified
 
 - `npm run mobile:typecheck` — clean, 0 errors.
+
+---
+
+## Latest Progress - Nutrition/Train Crash Fix & Full Web Parity (2026-05-26)
+
+### Runtime crash fix — "Objects are not valid as a React child"
+
+**Root cause:** The plan JSON can contain `meal.recipe` as a nested object `{title, steps, instructions, tips, prep_time_min, cook_time_min}` and `meal.instructions` / `meal.description` as arrays or objects. Rendering these as React text children crashed with `Objects are not valid as a React child (found: object with keys {tips, steps, title, ingredients, cook_time_min, prep_time_min})`.
+
+**Fix — `safeText()` helper in `nutrition.tsx`:**
+
+```typescript
+function safeText(val: unknown): string {
+  if (!val) return ''
+  if (typeof val === 'string') return val.trim()
+  if (Array.isArray(val)) {
+    return val.map((v: unknown) => (typeof v === 'string' ? v : safeText(v))).filter(Boolean).join('\n')
+  }
+  if (typeof val === 'object') {
+    const r = val as Record<string, unknown>
+    const parts: string[] = []
+    if (r.title && typeof r.title === 'string') parts.push(r.title)
+    if (r.steps) parts.push(safeText(r.steps))
+    if (r.instructions) parts.push(safeText(r.instructions))
+    if (r.tips) parts.push('Tips: ' + safeText(r.tips))
+    if (r.prep_time_min) parts.push(`Prep: ${r.prep_time_min} min`)
+    if (r.cook_time_min) parts.push(`Cook: ${r.cook_time_min} min`)
+    if (parts.length === 0) {
+      Object.values(r).forEach(v => { if (typeof v === 'string' && v) parts.push(v) })
+    }
+    return parts.filter(Boolean).join('\n')
+  }
+  return String(val)
+}
+```
+
+**Fix — `safeIngredient()` helper in `nutrition.tsx`:**
+
+```typescript
+function safeIngredient(ing: unknown): string {
+  if (typeof ing === 'string') return ing.trim()
+  if (ing && typeof ing === 'object') {
+    const o = ing as Record<string, unknown>
+    const name = o.name ?? o.item ?? o.food ?? ''
+    const amount = o.amount ?? o.quantity ?? o.serving ?? ''
+    const cal = o.calories ? ` · ${o.calories} kcal` : ''
+    return `${name}${amount ? '  ' + amount : ''}${cal}`.trim()
+  }
+  return String(ing ?? '')
+}
+```
+
+All `meal.recipe`, `meal.instructions`, `meal.description`, and ingredient fields now route through these helpers before rendering.
+
+### Nutrition tab — web parity additions
+
+- **`CalorieRing`** — SVG-style circle progress ring (drawn with positioned `View` components, no `react-native-svg` dep) showing calories consumed vs. target.
+- **`MacroBar`** — labelled progress bars for protein / carbs / fat with numeric targets.
+- **Water tracker** — individual glass buttons (8-glass grid), each tap fills the next glass.
+- **Grocery List quick action** — tappable card that routes to `app/grocery.tsx`.
+- **Eating Out Mode quick action** — tappable card that routes to `app/eating-out.tsx`.
+- **Meal food list** — when a planned meal is expanded it now shows `meal.foods` / `meal.items` as individual food rows with portion and calorie info.
+- **Ingredients list** — expanded meal also shows `meal.ingredients` formatted via `safeIngredient()`.
+- **Recipe/instructions panel** — shows `meal.recipe` and `meal.instructions` rendered via `safeText()`.
+- **Pre/post workout note banners** — shown when `meal.tags` contains `pre_workout` or `post_workout`.
+- **Meal timing note** — shown when `meal.timing_note` or `meal.meal_type` is present.
+- **Collapsible log food panel** — manual log form now collapses when not in use; tapping "+ Log Food" expands it.
+- **RTL localisation** — all new layout elements respect `isRtl` direction.
+
+### Train tab — web parity additions
+
+- **YouTube video button (per exercise)** — exercises with a `video_id` field show a red YouTube icon button. Tapping it opens the YouTube app if installed, otherwise falls back to the browser.
+
+  ```typescript
+  function openVideo(videoId: string | null | undefined) {
+    if (!videoId) return
+    const appUrl = `youtube://www.youtube.com/watch?v=${videoId}`
+    const webUrl  = `https://www.youtube.com/watch?v=${videoId}`
+    Linking.canOpenURL(appUrl)
+      .then(supported => Linking.openURL(supported ? appUrl : webUrl))
+      .catch(() => Linking.openURL(webUrl))
+  }
+  ```
+
+- **Exercise expand/collapse** — tap an exercise name or the chevron to expand it. Expanded view shows form tips, progression note, and a full-width "Watch exercise video" button.
+- **Progress bar in session card** — shows `completed / total exercises` as a horizontal fill bar.
+- **Muscle group tag** — shown as a pill badge next to each exercise name when `exercise.muscle_group` is present.
+- **`TrainLink` quick navigation** — three tap targets at the top of the tab: Programme, Measurements, Form Check. Each navigates to the corresponding secondary screen.
+- **RTL localisation** — all layout elements respect `isRtl` direction.
+
+### Commit
+
+All changes pushed as commit `92d1eac` — `fix(mobile): crash fix + full nutrition/train web parity`.
 
 ---
 
