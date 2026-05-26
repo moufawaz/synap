@@ -208,69 +208,91 @@ export default function SettingsScreen() {
       {activeSection === 'billing' ? (
         <>
           <Card style={styles.cardGap}>
-            <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'الاشتراك الحالي' : 'Current plan'}</Text>
+            <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'اشتراكك' : 'Your plan'}</Text>
             {subscription.loading ? <ActivityIndicator color={color.spark} /> : null}
             {subscription.error ? <Text style={[styles.body, { color: color.danger }]}>{subscription.error}</Text> : null}
+
             {!subscription.loading && sub ? (
               <>
+                {/* Plan badge */}
                 <View style={[styles.planBadge, { backgroundColor: `${tierColor}15`, borderColor: `${tierColor}33` }]}>
+                  <Feather name="award" size={13} color={tierColor} />
                   <Text style={[styles.planBadgeText, { color: tierColor }]}>{tierLabel}</Text>
                 </View>
 
+                {/* Access status */}
                 {sub.access ? (
                   <View style={[styles.accessRow, { borderColor: color.border }]}>
                     <Feather name="check-circle" size={15} color={color.pulse} />
-                    <Text style={[styles.body, { color: color.pulse }]}>
-                      {isRtl ? 'وصول نشط' : 'Access active'}
+                    <Text style={[styles.accessRowText, { color: color.pulse }]}>
+                      {isRtl ? 'وصول نشط' : 'Active access'}
                     </Text>
                   </View>
                 ) : (
                   <View style={[styles.accessRow, { borderColor: color.border }]}>
-                    <Feather name="alert-circle" size={15} color={color.danger} />
-                    <Text style={[styles.body, { color: color.danger }]}>
+                    <Feather name="lock" size={15} color={color.muted} />
+                    <Text style={[styles.accessRowText, { color: color.muted }]}>
                       {isRtl ? 'لا يوجد وصول نشط' : 'No active access'}
                     </Text>
                   </View>
                 )}
 
+                {/* Dates */}
                 {sub.renewal_date ? (
                   <Text style={[styles.subMeta, { color: color.muted, textAlign: align }]}>
                     {isRtl ? `التجديد: ${sub.renewal_date.slice(0, 10)}` : `Renews: ${sub.renewal_date.slice(0, 10)}`}
                   </Text>
                 ) : null}
-
                 {sub.trial_ends_at ? (
                   <Text style={[styles.subMeta, { color: color.flame, textAlign: align }]}>
                     {isRtl ? `تنتهي الفترة التجريبية: ${sub.trial_ends_at.slice(0, 10)}` : `Trial ends: ${sub.trial_ends_at.slice(0, 10)}`}
                   </Text>
                 ) : null}
-
                 {sub.status ? (
                   <Text style={[styles.subMeta, { color: color.dim, textAlign: align }]}>
                     {isRtl ? `الحالة: ${sub.status}` : `Status: ${sub.status}`}
                   </Text>
                 ) : null}
+
+                {/* Upgrade prompt — shown only when no active access, Apple-compliant plain text */}
+                {!sub.access ? (
+                  <View style={[styles.upgradeBox, { backgroundColor: color.elevated, borderColor: color.border }]}>
+                    <Feather name="star" size={18} color={color.spark} style={{ marginBottom: 8 }} />
+                    <Text style={[styles.upgradeTitle, { color: color.text, textAlign: 'center' }]}>
+                      {isRtl ? 'أطلق العنان لتدريبك' : 'Unlock full coaching'}
+                    </Text>
+                    <Text style={[styles.upgradeBody, { color: color.muted, textAlign: 'center' }]}>
+                      {isRtl
+                        ? 'للحصول على وصول كامل إلى خطط التغذية الشخصية وبرامج التمرين وكوتش آيون، قم بزيارة synapfit.app من متصفح الويب.'
+                        : 'To get full access to personalised nutrition plans, workout programmes, and your Ion coach, visit synapfit.app from a web browser.'}
+                    </Text>
+                    <Text style={[styles.upgradeWebsite, { color: color.spark }]}>synapfit.app</Text>
+                  </View>
+                ) : null}
               </>
             ) : null}
           </Card>
 
+          {/* Support */}
           <Card style={styles.cardGap}>
-            <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'إدارة الاشتراك' : 'Manage subscription'}</Text>
-            <Text style={[styles.body, { color: color.muted, textAlign: align }]}>
+            <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'الدعم' : 'Support'}</Text>
+            <Text style={[styles.body, { color: color.muted, textAlign: align, marginBottom: 12 }]}>
               {isRtl
-                ? 'لتغيير الاشتراك أو إلغائه، يرجى زيارة صفحة الأسعار على موقع SYNAP أو التواصل مع الدعم.'
-                : 'To change or cancel your subscription, visit the SYNAP pricing page or contact support.'}
+                ? 'هل لديك سؤال حول اشتراكك؟ تواصل مع فريق الدعم وسنساعدك.'
+                : 'Have a question about your account? Our support team is happy to help.'}
             </Text>
             <Pressable
-              style={[styles.secondaryBtn, { borderColor: color.border, backgroundColor: color.elevated, marginTop: 12 }]}
+              style={[styles.supportBtn, { borderColor: color.border, backgroundColor: color.elevated }]}
               onPress={() => Alert.alert(
-                isRtl ? 'إدارة الاشتراك' : 'Manage subscription',
-                isRtl ? 'لإدارة اشتراكك، يرجى التواصل مع فريق الدعم.' : 'To manage your subscription, please contact our support team.',
-                [{ text: 'OK' }]
+                isRtl ? 'الدعم' : 'Support',
+                isRtl
+                  ? 'للتواصل مع فريق الدعم، راسلنا عبر: support@synapfit.app'
+                  : 'Contact our support team at:\nsupport@synapfit.app',
+                [{ text: isRtl ? 'حسناً' : 'OK' }],
               )}
             >
-              <Feather name="external-link" size={14} color={color.spark} />
-              <Text style={[styles.secondaryBtnText, { color: color.spark }]}>
+              <Feather name="message-circle" size={14} color={color.text} />
+              <Text style={[styles.supportBtnText, { color: color.text }]}>
                 {isRtl ? 'التواصل مع الدعم' : 'Contact support'}
               </Text>
             </Pressable>
@@ -363,12 +385,17 @@ const styles = StyleSheet.create({
   primary: { minHeight: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   primaryText: { color: '#fff', fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   // Billing
-  planBadge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 12 },
+  planBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 12 },
   planBadgeText: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   accessRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  accessRowText: { fontSize: 14, fontWeight: '800' },
   subMeta: { fontSize: 13, fontWeight: '700', marginTop: 6 },
-  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, borderRadius: 14, borderWidth: 1 },
-  secondaryBtnText: { fontSize: 14, fontWeight: '900' },
+  upgradeBox: { marginTop: 16, borderWidth: 1, borderRadius: 16, padding: 20, alignItems: 'center' },
+  upgradeTitle: { fontSize: 17, fontWeight: '900', marginBottom: 8 },
+  upgradeBody: { fontSize: 13, lineHeight: 20, fontWeight: '600', marginBottom: 12 },
+  upgradeWebsite: { fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
+  supportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, borderRadius: 14, borderWidth: 1 },
+  supportBtnText: { fontSize: 14, fontWeight: '900' },
   // Notifications
   notifRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   notifIcon: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
