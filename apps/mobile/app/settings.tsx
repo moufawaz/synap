@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
+import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonAvatar } from '@/components/IonAvatar'
@@ -207,6 +208,7 @@ export default function SettingsScreen() {
       {/* ═══ Billing section ═══════════════════════════════════════════════════ */}
       {activeSection === 'billing' ? (
         <>
+          {/* Current plan status */}
           <Card style={styles.cardGap}>
             <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'اشتراكك' : 'Your plan'}</Text>
             {subscription.loading ? <ActivityIndicator color={color.spark} /> : null}
@@ -220,7 +222,7 @@ export default function SettingsScreen() {
                   <Text style={[styles.planBadgeText, { color: tierColor }]}>{tierLabel}</Text>
                 </View>
 
-                {/* Access status */}
+                {/* Access status indicator */}
                 {sub.access ? (
                   <View style={[styles.accessRow, { borderColor: color.border }]}>
                     <Feather name="check-circle" size={15} color={color.pulse} />
@@ -237,7 +239,7 @@ export default function SettingsScreen() {
                   </View>
                 )}
 
-                {/* Dates */}
+                {/* Renewal / trial dates */}
                 {sub.renewal_date ? (
                   <Text style={[styles.subMeta, { color: color.muted, textAlign: align }]}>
                     {isRtl ? `التجديد: ${sub.renewal_date.slice(0, 10)}` : `Renews: ${sub.renewal_date.slice(0, 10)}`}
@@ -248,55 +250,23 @@ export default function SettingsScreen() {
                     {isRtl ? `تنتهي الفترة التجريبية: ${sub.trial_ends_at.slice(0, 10)}` : `Trial ends: ${sub.trial_ends_at.slice(0, 10)}`}
                   </Text>
                 ) : null}
-                {sub.status ? (
-                  <Text style={[styles.subMeta, { color: color.dim, textAlign: align }]}>
-                    {isRtl ? `الحالة: ${sub.status}` : `Status: ${sub.status}`}
-                  </Text>
-                ) : null}
-
-                {/* Upgrade prompt — shown only when no active access, Apple-compliant plain text */}
-                {!sub.access ? (
-                  <View style={[styles.upgradeBox, { backgroundColor: color.elevated, borderColor: color.border }]}>
-                    <Feather name="star" size={18} color={color.spark} style={{ marginBottom: 8 }} />
-                    <Text style={[styles.upgradeTitle, { color: color.text, textAlign: 'center' }]}>
-                      {isRtl ? 'أطلق العنان لتدريبك' : 'Unlock full coaching'}
-                    </Text>
-                    <Text style={[styles.upgradeBody, { color: color.muted, textAlign: 'center' }]}>
-                      {isRtl
-                        ? 'للحصول على وصول كامل إلى خطط التغذية الشخصية وبرامج التمرين وكوتش آيون، قم بزيارة synapfit.app من متصفح الويب.'
-                        : 'To get full access to personalised nutrition plans, workout programmes, and your Ion coach, visit synapfit.app from a web browser.'}
-                    </Text>
-                    <Text style={[styles.upgradeWebsite, { color: color.spark }]}>synapfit.app</Text>
-                  </View>
-                ) : null}
               </>
             ) : null}
           </Card>
 
-          {/* Support */}
-          <Card style={styles.cardGap}>
-            <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'الدعم' : 'Support'}</Text>
-            <Text style={[styles.body, { color: color.muted, textAlign: align, marginBottom: 12 }]}>
+          {/* Full details / upgrade CTA — navigates to the dedicated billing screen */}
+          <Pressable
+            style={[styles.billingNavBtn, { backgroundColor: color.spark, flexDirection: isRtl ? 'row-reverse' : 'row' }]}
+            onPress={() => router.push('/billing')}
+          >
+            <Feather name="star" size={16} color="#fff" />
+            <Text style={styles.billingNavBtnText}>
               {isRtl
-                ? 'هل لديك سؤال حول اشتراكك؟ تواصل مع فريق الدعم وسنساعدك.'
-                : 'Have a question about your account? Our support team is happy to help.'}
+                ? (sub?.access ? 'تفاصيل الاشتراك والميزات' : 'كيفية الاشتراك في SYNAP')
+                : (sub?.access ? 'View plan details & features' : 'How to subscribe to SYNAP')}
             </Text>
-            <Pressable
-              style={[styles.supportBtn, { borderColor: color.border, backgroundColor: color.elevated }]}
-              onPress={() => Alert.alert(
-                isRtl ? 'الدعم' : 'Support',
-                isRtl
-                  ? 'للتواصل مع فريق الدعم، راسلنا عبر: support@synapfit.app'
-                  : 'Contact our support team at:\nsupport@synapfit.app',
-                [{ text: isRtl ? 'حسناً' : 'OK' }],
-              )}
-            >
-              <Feather name="message-circle" size={14} color={color.text} />
-              <Text style={[styles.supportBtnText, { color: color.text }]}>
-                {isRtl ? 'التواصل مع الدعم' : 'Contact support'}
-              </Text>
-            </Pressable>
-          </Card>
+            <Feather name={isRtl ? 'arrow-left' : 'arrow-right'} size={16} color="#fff" />
+          </Pressable>
         </>
       ) : null}
 
@@ -390,12 +360,16 @@ const styles = StyleSheet.create({
   accessRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
   accessRowText: { fontSize: 14, fontWeight: '800' },
   subMeta: { fontSize: 13, fontWeight: '700', marginTop: 6 },
-  upgradeBox: { marginTop: 16, borderWidth: 1, borderRadius: 16, padding: 20, alignItems: 'center' },
-  upgradeTitle: { fontSize: 17, fontWeight: '900', marginBottom: 8 },
-  upgradeBody: { fontSize: 13, lineHeight: 20, fontWeight: '600', marginBottom: 12 },
-  upgradeWebsite: { fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
-  supportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 50, borderRadius: 14, borderWidth: 1 },
-  supportBtnText: { fontSize: 14, fontWeight: '900' },
+  billingNavBtn: {
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    minHeight: 54,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    marginTop: 10,
+  },
+  billingNavBtnText: { flex: 1, color: '#fff', fontSize: 14, fontWeight: '900' },
   // Notifications
   notifRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   notifIcon: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

@@ -213,13 +213,33 @@ export default function DashboardScreen() {
         <QuickAction icon="zap" label={isRtl ? 'ابدأ التمرين' : 'START'} color={color.flame} bg="rgba(249,115,22,0.12)" onPress={() => router.push('/(tabs)/train')} />
       </View>
 
-      {/* Subscription / access banner */}
-      <View style={[styles.accessBanner, { backgroundColor: color.elevated, borderColor: color.border }]}>
-        <SynapLogo size="sm" />
-        <Text style={[styles.accessText, { color: color.muted }]}>
-          {subscription.loading ? 'Checking access…' : `${tier.toUpperCase()} — ${subscription.data?.planName || text.launchAccess}`}
-        </Text>
-      </View>
+      {/* Subscription banner — upgrade CTA for starters, plan badge for subscribers */}
+      {!subscription.loading && subscription.data?.tier === 'starter' ? (
+        <Pressable
+          onPress={() => router.push('/billing')}
+          style={[styles.upgradeBanner, { backgroundColor: color.sparkSoft, borderColor: 'rgba(187,92,246,0.25)', flexDirection: rowDir }]}
+        >
+          <View style={[styles.upgradeBannerIcon, { backgroundColor: 'rgba(187,92,246,0.15)' }]}>
+            <Feather name="star" size={16} color={color.spark} />
+          </View>
+          <View style={styles.upgradeBannerText}>
+            <Text style={[styles.upgradeBannerTitle, { color: color.text, textAlign: align }]}>
+              {isRtl ? 'أطلق العنان للتجربة الكاملة' : 'Unlock the full experience'}
+            </Text>
+            <Text style={[styles.upgradeBannerSub, { color: color.muted, textAlign: align }]}>
+              {isRtl ? 'زر synapfit.app للاشتراك' : 'Visit synapfit.app to subscribe'}
+            </Text>
+          </View>
+          <Feather name={isRtl ? 'arrow-left' : 'arrow-right'} size={14} color={color.spark} />
+        </Pressable>
+      ) : !subscription.loading && subscription.data ? (
+        <View style={[styles.accessBanner, { backgroundColor: color.elevated, borderColor: color.border, flexDirection: rowDir }]}>
+          <SynapLogo size="sm" />
+          <Text style={[styles.accessText, { color: color.muted }]}>
+            {`${tier.toUpperCase()} — ${subscription.data.planName || text.launchAccess}`}
+          </Text>
+        </View>
+      ) : null}
     </Screen>
   )
 }
@@ -444,7 +464,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   accessBanner: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
@@ -455,4 +474,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  // Upgrade CTA banner (starter users)
+  upgradeBanner: {
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 4,
+  },
+  upgradeBannerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  upgradeBannerText: { flex: 1, gap: 2 },
+  upgradeBannerTitle: { fontSize: 14, fontWeight: '900' },
+  upgradeBannerSub: { fontSize: 12, fontWeight: '600' },
 })
