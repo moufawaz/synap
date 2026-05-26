@@ -3,17 +3,6 @@ name: iOS Expo Direct Build
 # Direct TestFlight build for the Expo-native iOS app.
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - apps/mobile/**
-      - fastlane/**
-      - Gemfile
-      - Gemfile.lock
-      - package.json
-      - package-lock.json
-      - .github/workflows/ios-expo-direct.yml
   # Manual-only. Requires IOS_DIST_CERT_P12_BASE64, IOS_DIST_CERT_PASSWORD,
   # IOS_PROVISION_PROFILE_BASE64, and APPLE_TEAM_ID secrets.
   # Use ios-expo-eas.yml for automatic builds — it requires only EXPO_TOKEN.
