@@ -1126,6 +1126,38 @@ All changes pushed as commit `92d1eac` — `fix(mobile): crash fix + full nutrit
 
 ---
 
+## Latest Progress - Pre-Build 1037 Verification (2026-05-26)
+
+### Package cleanup
+
+- Removed `react-native-youtube-iframe` from `apps/mobile/package.json`.
+  - Zero imports of the package existed in any source file (replaced by `VideoModal` WebView approach in a previous commit).
+  - The package still linked its Old Architecture native code at CocoaPods install time even when unused, which is a startup crash risk on any Hermes + `newArchEnabled: false` build.
+  - Removing it eliminates the crash risk entirely with no feature loss.
+- Regenerated `apps/mobile/package-lock.json` using `npm@10.9.3` (the exact version EAS CI uses for `npm ci`). Lockfile now has zero sync errors.
+
+### Full pre-build verification results
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | ✅ 0 errors |
+| `npx expo-doctor` | ✅ 18/18 checks passed |
+| `npx expo config --type public` | ✅ `jsEngine: hermes`, `newArchEnabled: false`, `bundleIdentifier: app.synap.fit` |
+| `npx expo export:embed --platform ios --dev false` | ✅ 1285 modules, 0 errors, Hermes bundle produced |
+| `npx npm@10.9.3 ci --dry-run` | ✅ No sync errors |
+| Bundle: `youtube-iframe` | ✅ clean (not present) |
+| Bundle: `YoutubePlayer` | ✅ clean |
+| Bundle: `reanimated` | ✅ harmless — 2 comment strings inside expo-router internals, no `require()` |
+| Bundle: `webpackIgnore` | ✅ clean |
+| Bundle: `@opentelemetry` | ✅ clean |
+| Bundle: `OTEL_PKG` | ✅ clean |
+
+### Commit
+
+`4c3061c` — `fix(mobile): remove react-native-youtube-iframe (replaced by VideoModal WebView), regen lockfile`
+
+---
+
 ## Latest Progress - Full Web Parity, Focus Refresh Fixes & Billing System (2026-05-26)
 
 ### Grocery list — full web parity
