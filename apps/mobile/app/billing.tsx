@@ -1,4 +1,4 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
@@ -12,42 +12,13 @@ import { useTheme } from '@/theme/ThemeProvider'
 // ── Feature list ──────────────────────────────────────────────────────────────
 
 const FEATURES = [
-  { icon: 'message-circle', label: 'Ion AI Coach',        labelAr: 'كوتش آيون',       desc: 'Unlimited coaching chat',  descAr: 'محادثة غير محدودة' },
-  { icon: 'coffee',         label: 'Nutrition Plans',     labelAr: 'خطط التغذية',      desc: 'Daily meals & macros',     descAr: 'وجبات ومغذيات يومية' },
-  { icon: 'activity',       label: 'Workout Programmes',  labelAr: 'برامج التمرين',    desc: 'Built for your goals',     descAr: 'مصممة لأهدافك' },
-  { icon: 'trending-up',    label: 'Progress Tracking',   labelAr: 'تتبع التقدم',      desc: 'Charts & body metrics',    descAr: 'رسوم بيانية وقياسات' },
-  { icon: 'map-pin',        label: 'Eating Out Guide',    labelAr: 'دليل الأكل بالخارج', desc: 'AI food logging anywhere', descAr: 'تسجيل الطعام بالذكاء' },
-  { icon: 'list',           label: 'Grocery Lists',       labelAr: 'قوائم التسوق',     desc: 'Auto-generated weekly',    descAr: 'تُولَّد أسبوعياً تلقائياً' },
+  { icon: 'message-circle', label: 'Ion AI Coach',       labelAr: 'كوتش آيون',          desc: 'Unlimited coaching chat',  descAr: 'محادثة غير محدودة' },
+  { icon: 'coffee',         label: 'Nutrition Plans',    labelAr: 'خطط التغذية',         desc: 'Daily meals & macros',     descAr: 'وجبات ومغذيات يومية' },
+  { icon: 'activity',       label: 'Workout Programme',  labelAr: 'برامج التمرين',       desc: 'Built for your goals',     descAr: 'مصممة لأهدافك' },
+  { icon: 'trending-up',    label: 'Progress Tracking',  labelAr: 'تتبع التقدم',         desc: 'Charts & body metrics',    descAr: 'رسوم بيانية وقياسات' },
+  { icon: 'map-pin',        label: 'Eating Out Guide',   labelAr: 'دليل الأكل بالخارج', desc: 'AI food logging anywhere', descAr: 'تسجيل الطعام بالذكاء' },
+  { icon: 'list',           label: 'Grocery Lists',      labelAr: 'قوائم التسوق',        desc: 'Auto-generated weekly',    descAr: 'تُولَّد أسبوعياً تلقائياً' },
 ] as const
-
-// ── How-to steps ──────────────────────────────────────────────────────────────
-
-const STEPS = [
-  {
-    n: '1',
-    icon: 'globe' as const,
-    title: 'Open synapfit.app',
-    titleAr: 'افتح synapfit.app',
-    desc: 'Type the address into any browser on your phone, tablet, or computer.',
-    descAr: 'اكتب العنوان في أي متصفح على هاتفك أو حاسوبك.',
-  },
-  {
-    n: '2',
-    icon: 'star' as const,
-    title: 'Choose your plan',
-    titleAr: 'اختر خطتك',
-    desc: 'Pick Pro or Elite and complete sign-up in a couple of minutes.',
-    descAr: 'اختر Pro أو Elite وأكمل التسجيل في دقيقتين.',
-  },
-  {
-    n: '3',
-    icon: 'unlock' as const,
-    title: 'Come back here',
-    titleAr: 'عد إلى التطبيق',
-    desc: 'Log in with the same email address — your access activates instantly.',
-    descAr: 'سجّل الدخول بنفس البريد الإلكتروني، يُفعَّل وصولك فوراً.',
-  },
-]
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -70,9 +41,21 @@ export default function BillingScreen() {
   const align = isRtl ? 'right' : 'left'
   const dir   = isRtl ? 'row-reverse' : 'row'
 
+  // Opens the iOS native share sheet — includes "Copy" as a standard option.
+  // Using Share instead of Linking.openURL keeps us Apple-compliant (no external URL button).
+  function shareWebsite() {
+    Share.share({
+      message: isRtl
+        ? 'اشترك في SYNAP على: synapfit.app'
+        : 'Subscribe to SYNAP at: synapfit.app',
+      url: 'https://synapfit.app',
+    }).catch(() => {})
+  }
+
   return (
     <Screen>
-      {/* ── Back button ─────────────────────────────────────────────────── */}
+
+      {/* ── Back ────────────────────────────────────────────────────────── */}
       <Pressable
         onPress={() => router.back()}
         style={[styles.backBtn, { flexDirection: dir }]}
@@ -84,250 +67,320 @@ export default function BillingScreen() {
         </Text>
       </Pressable>
 
-      {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <LinearGradient
-        colors={['rgba(187,92,246,0.18)', 'rgba(187,92,246,0.04)', 'transparent']}
-        style={styles.hero}
-      >
-        <IonAvatar size="xl" />
-        <View style={styles.heroText}>
-          <Text style={[styles.eyebrow, { color: color.spark }]}>
-            {isRtl ? 'سيناب بريميوم' : 'SYNAP PREMIUM'}
-          </Text>
-          <Text style={[styles.heroTitle, { color: color.text }]}>
-            {isRtl
-              ? 'مدربك الشخصي\nبالذكاء الاصطناعي'
-              : 'Your personal AI\nfitness coach'}
-          </Text>
-          <Text style={[styles.heroSub, { color: color.muted }]}>
-            {isRtl
-              ? 'تغذية ذكية · تمارين مخصصة · كوتش لا يتوقف'
-              : 'Smart nutrition · Custom training · Always-on coach'}
-          </Text>
-        </View>
-
-        {/* Active plan badge — only shown when subscribed */}
-        {hasAccess && tierLabel ? (
-          <View style={[styles.activeBadge, { backgroundColor: `${tierColor}20`, borderColor: `${tierColor}40` }]}>
-            <Feather name="check-circle" size={13} color={tierColor} />
-            <Text style={[styles.activeBadgeText, { color: tierColor }]}>
-              {isRtl ? `مشترك — ${tierLabel}` : `Subscribed — ${tierLabel}`}
-            </Text>
-          </View>
-        ) : null}
-      </LinearGradient>
-
-      {/* ── Feature grid ────────────────────────────────────────────────── */}
-      <Text style={[styles.sectionLabel, { color: color.dim, textAlign: align }]}>
-        {isRtl ? 'ما الذي تحصل عليه' : 'WHAT YOU GET'}
-      </Text>
-
-      <View style={styles.featureGrid}>
-        {FEATURES.map((f) => (
-          <View
-            key={f.icon}
-            style={[styles.featureCard, { backgroundColor: color.surface, borderColor: color.border }]}
+      {/* ══════════════════════════════════════════════════════════════════
+          NON-SUBSCRIBER VIEW — subscribe CTA is the very first thing
+      ══════════════════════════════════════════════════════════════════ */}
+      {!hasAccess ? (
+        <>
+          {/* Main subscribe card */}
+          <LinearGradient
+            colors={['rgba(187,92,246,0.22)', 'rgba(187,92,246,0.06)']}
+            style={[styles.subscribeCard, { borderColor: 'rgba(187,92,246,0.30)' }]}
           >
-            <View style={[styles.featureIconWrap, { backgroundColor: color.sparkSoft }]}>
-              <Feather name={f.icon as any} size={17} color={color.spark} />
-            </View>
-            <Text style={[styles.featureTitle, { color: color.text, textAlign: align }]}>
-              {isRtl ? f.labelAr : f.label}
-            </Text>
-            <Text style={[styles.featureDesc, { color: color.muted, textAlign: align }]}>
-              {isRtl ? f.descAr : f.desc}
-            </Text>
-          </View>
-        ))}
-      </View>
+            <IonAvatar size="lg" />
 
-      {/* ── How to subscribe ─────────────────────────────────────────────── */}
-      <Text style={[styles.sectionLabel, { color: color.dim, textAlign: align, marginTop: 28 }]}>
-        {isRtl ? 'كيفية الاشتراك' : 'HOW TO SUBSCRIBE'}
-      </Text>
+            <Text style={[styles.subscribeTitle, { color: color.text }]}>
+              {isRtl ? 'اشترك في SYNAP' : 'Subscribe to SYNAP'}
+            </Text>
+            <Text style={[styles.subscribeSub, { color: color.muted }]}>
+              {isRtl
+                ? 'احصل على وصول كامل لكوتش آيون، خطط التغذية، وبرامج التمرين المخصصة.'
+                : 'Get full access to your Ion coach, personalised nutrition plans, and custom workout programmes.'}
+            </Text>
 
-      <View style={[styles.stepsCard, { backgroundColor: color.surface, borderColor: color.border }]}>
-        {STEPS.map((step, i) => (
-          <View
-            key={step.n}
-            style={[styles.stepRow, { flexDirection: dir, borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth, borderTopColor: color.border }]}
-          >
-            {/* Step number circle */}
-            <View style={[styles.stepCircle, { backgroundColor: color.sparkSoft, borderColor: `${color.spark}33` }]}>
-              <Text style={[styles.stepNum, { color: color.spark }]}>{step.n}</Text>
+            {/* Website address — big and obvious */}
+            <View style={[styles.urlDisplay, { backgroundColor: 'rgba(0,0,0,0.25)', borderColor: 'rgba(187,92,246,0.40)' }]}>
+              <Feather name="globe" size={16} color={color.sparkLight} />
+              <Text style={[styles.urlDisplayText, { color: '#fff' }]}>synapfit.app</Text>
             </View>
 
-            {/* Connector line — not on last item */}
-            <View style={styles.stepContent}>
-              <View style={[styles.stepTitleRow, { flexDirection: dir }]}>
-                <Feather name={step.icon} size={14} color={color.spark} />
-                <Text style={[styles.stepTitle, { color: color.text }]}>
-                  {isRtl ? step.titleAr : step.title}
+            {/* Copy address — opens native share sheet (includes Copy option) */}
+            <Pressable
+              style={[styles.copyBtn, { backgroundColor: color.spark }]}
+              onPress={shareWebsite}
+            >
+              <Feather name="copy" size={15} color="#fff" />
+              <Text style={styles.copyBtnText}>
+                {isRtl ? 'نسخ عنوان الموقع' : 'Copy website address'}
+              </Text>
+            </Pressable>
+
+            {/* Plain-text flow instruction */}
+            <Text style={[styles.flowHint, { color: color.muted }]}>
+              {isRtl
+                ? 'انسخ العنوان ← افتح Safari ← الصق العنوان ← اختر خطتك ← عد وسجّل الدخول'
+                : 'Copy ← open Safari ← paste the address ← choose a plan ← log in here'}
+            </Text>
+          </LinearGradient>
+
+          {/* What you get */}
+          <Text style={[styles.sectionLabel, { color: color.dim, textAlign: align }]}>
+            {isRtl ? 'ما الذي تحصل عليه' : 'WHAT YOU GET'}
+          </Text>
+          <View style={styles.featureGrid}>
+            {FEATURES.map((f) => (
+              <View key={f.icon} style={[styles.featureCard, { backgroundColor: color.surface, borderColor: color.border }]}>
+                <View style={[styles.featureIconWrap, { backgroundColor: color.sparkSoft }]}>
+                  <Feather name={f.icon as any} size={17} color={color.spark} />
+                </View>
+                <Text style={[styles.featureTitle, { color: color.text, textAlign: align }]}>
+                  {isRtl ? f.labelAr : f.label}
+                </Text>
+                <Text style={[styles.featureDesc, { color: color.muted, textAlign: align }]}>
+                  {isRtl ? f.descAr : f.desc}
                 </Text>
               </View>
-              <Text style={[styles.stepDesc, { color: color.muted, textAlign: align }]}>
-                {isRtl ? step.descAr : step.desc}
+            ))}
+          </View>
+
+          {/* Steps */}
+          <Text style={[styles.sectionLabel, { color: color.dim, textAlign: align, marginTop: 24 }]}>
+            {isRtl ? 'الخطوات' : 'HOW IT WORKS'}
+          </Text>
+          <View style={[styles.stepsCard, { backgroundColor: color.surface, borderColor: color.border }]}>
+            {[
+              {
+                n: '1', icon: 'globe' as const,
+                en: 'Go to synapfit.app in any browser and choose your plan.',
+                ar: 'افتح synapfit.app في أي متصفح واختر خطتك.',
+              },
+              {
+                n: '2', icon: 'user-check' as const,
+                en: 'Complete sign-up in a couple of minutes.',
+                ar: 'أكمل إنشاء حسابك في دقيقتين.',
+              },
+              {
+                n: '3', icon: 'unlock' as const,
+                en: 'Come back to this app and log in — your access activates instantly.',
+                ar: 'عد إلى التطبيق وسجّل الدخول — يُفعَّل وصولك فوراً.',
+              },
+            ].map((step, i, arr) => (
+              <View
+                key={step.n}
+                style={[
+                  styles.stepRow,
+                  { flexDirection: dir },
+                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border },
+                ]}
+              >
+                <View style={[styles.stepCircle, { backgroundColor: color.sparkSoft, borderColor: `${color.spark}40` }]}>
+                  <Text style={[styles.stepNum, { color: color.spark }]}>{step.n}</Text>
+                </View>
+                <View style={[styles.stepBody, { flexDirection: dir, gap: 8, flex: 1 }]}>
+                  <Feather name={step.icon} size={14} color={color.spark} style={{ marginTop: 2 }} />
+                  <Text style={[styles.stepDesc, { color: color.text, flex: 1, textAlign: align }]}>
+                    {isRtl ? step.ar : step.en}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Already subscribed? */}
+          <View style={[styles.restoreCard, { backgroundColor: color.surface, borderColor: color.border }]}>
+            <View style={[styles.restoreRow, { flexDirection: dir }]}>
+              <Feather name="refresh-cw" size={14} color={color.muted} />
+              <Text style={[styles.restoreTitle, { color: color.text }]}>
+                {isRtl ? 'اشتركت بالفعل؟' : 'Already subscribed?'}
               </Text>
             </View>
+            <Text style={[styles.restoreBody, { color: color.muted, textAlign: align }]}>
+              {isRtl
+                ? 'سجّل الخروج من التطبيق ثم سجّل الدخول مرة أخرى بنفس البريد الإلكتروني — يُفعَّل وصولك تلقائياً.'
+                : 'Log out of the app then log back in with the same email address — your access will activate automatically.'}
+            </Text>
+            <Pressable
+              style={[styles.supportBtn, { borderColor: color.border, backgroundColor: color.elevated }]}
+              onPress={() => Alert.alert(
+                isRtl ? 'الدعم' : 'Support',
+                isRtl
+                  ? 'للمساعدة راسلنا على:\nsupport@synapfit.app'
+                  : 'For help, email us at:\nsupport@synapfit.app',
+                [{ text: 'OK' }],
+              )}
+            >
+              <Feather name="message-circle" size={14} color={color.dim} />
+              <Text style={[styles.supportBtnText, { color: color.dim }]}>
+                {isRtl ? 'تواصل مع الدعم' : 'Contact support'}
+              </Text>
+            </Pressable>
           </View>
-        ))}
+        </>
+      ) : (
 
-        {/* Website display — prominent, non-tappable */}
-        <View style={[styles.urlBox, { backgroundColor: color.elevated, borderColor: `${color.spark}30` }]}>
-          <Feather name="globe" size={14} color={color.spark} />
-          <Text style={[styles.urlText, { color: color.spark }]}>synapfit.app</Text>
-        </View>
-        <Text style={[styles.urlCaption, { color: color.dim, textAlign: 'center' }]}>
-          {isRtl
-            ? 'اكتب هذا العنوان في متصفح الويب للاشتراك'
-            : 'Type this address into your web browser to subscribe'}
-        </Text>
-      </View>
+        /* ════════════════════════════════════════════════════════════════
+           SUBSCRIBER VIEW — show their plan + features
+        ════════════════════════════════════════════════════════════════ */
+        <>
+          {/* Active plan hero */}
+          <LinearGradient
+            colors={[`${tierColor}22`, `${tierColor}06`, 'transparent']}
+            style={[styles.planHero, { borderColor: `${tierColor}30` }]}
+          >
+            <IonAvatar size="lg" />
+            <View style={[styles.planBadge, { backgroundColor: `${tierColor}20`, borderColor: `${tierColor}40` }]}>
+              <Feather name="check-circle" size={14} color={tierColor} />
+              <Text style={[styles.planBadgeText, { color: tierColor }]}>
+                {isRtl ? `مشترك — ${tierLabel}` : `Subscribed — ${tierLabel}`}
+              </Text>
+            </View>
+            <Text style={[styles.planHeroTitle, { color: color.text }]}>
+              {isRtl ? 'وصول كامل مفعّل' : 'Full access active'}
+            </Text>
+            <Text style={[styles.planHeroSub, { color: color.muted }]}>
+              {isRtl
+                ? 'يمكنك الاستمتاع بجميع ميزات SYNAP بما فيها كوتش آيون وخطط التغذية والتمرين.'
+                : 'You have full access to all SYNAP features including your Ion coach, nutrition plans, and workout programme.'}
+            </Text>
+          </LinearGradient>
 
-      {/* ── Already subscribed / restore access ─────────────────────────── */}
-      <View style={[styles.restoreCard, { backgroundColor: color.surface, borderColor: color.border }]}>
-        <View style={[styles.restoreHeader, { flexDirection: dir }]}>
-          <Feather name="refresh-cw" size={15} color={color.muted} />
-          <Text style={[styles.restoreTitle, { color: color.text }]}>
-            {isRtl ? 'مشترك بالفعل؟' : 'Already subscribed?'}
+          {/* What's included */}
+          <Text style={[styles.sectionLabel, { color: color.dim, textAlign: align }]}>
+            {isRtl ? 'ما يتضمنه اشتراكك' : 'INCLUDED IN YOUR PLAN'}
           </Text>
-        </View>
-        <Text style={[styles.restoreBody, { color: color.muted, textAlign: align }]}>
-          {isRtl
-            ? 'إذا اشتركت مسبقاً من موقع synapfit.app، فقط سجّل الخروج ثم سجّل الدخول مجدداً بنفس البريد الإلكتروني وسيتم تفعيل وصولك تلقائياً.'
-            : 'If you already subscribed at synapfit.app, log out then log back in with the same email address — your access will activate automatically.'}
-        </Text>
-        <Pressable
-          style={[styles.supportBtn, { borderColor: color.border, backgroundColor: color.elevated }]}
-          onPress={() => Alert.alert(
-            isRtl ? 'الدعم' : 'Support',
-            isRtl
-              ? 'هل تحتاج مساعدة؟ راسلنا على:\nsupport@synapfit.app'
-              : 'Need help? Reach us at:\nsupport@synapfit.app',
-            [{ text: isRtl ? 'حسناً' : 'OK' }],
-          )}
-        >
-          <Feather name="message-circle" size={14} color={color.muted} />
-          <Text style={[styles.supportBtnText, { color: color.muted }]}>
-            {isRtl ? 'تواصل مع الدعم' : 'Contact support'}
-          </Text>
-        </Pressable>
-      </View>
+          <View style={styles.featureGrid}>
+            {FEATURES.map((f) => (
+              <View key={f.icon} style={[styles.featureCard, { backgroundColor: color.surface, borderColor: color.border }]}>
+                <View style={[styles.featureIconWrap, { backgroundColor: color.sparkSoft }]}>
+                  <Feather name={f.icon as any} size={17} color={color.spark} />
+                </View>
+                <Text style={[styles.featureTitle, { color: color.text, textAlign: align }]}>
+                  {isRtl ? f.labelAr : f.label}
+                </Text>
+                <Text style={[styles.featureDesc, { color: color.muted, textAlign: align }]}>
+                  {isRtl ? f.descAr : f.desc}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Manage / support */}
+          <View style={[styles.restoreCard, { backgroundColor: color.surface, borderColor: color.border }]}>
+            <Text style={[styles.restoreTitle, { color: color.text, textAlign: align }]}>
+              {isRtl ? 'إدارة الاشتراك' : 'Manage subscription'}
+            </Text>
+            <Text style={[styles.restoreBody, { color: color.muted, textAlign: align }]}>
+              {isRtl
+                ? 'لإلغاء الاشتراك أو تغيير خطتك، قم بزيارة synapfit.app من متصفح الويب.'
+                : 'To cancel or change your plan, visit synapfit.app from a web browser.'}
+            </Text>
+            <Pressable
+              style={[styles.supportBtn, { borderColor: color.border, backgroundColor: color.elevated }]}
+              onPress={() => Alert.alert(
+                isRtl ? 'الدعم' : 'Support',
+                isRtl
+                  ? 'للمساعدة راسلنا على:\nsupport@synapfit.app'
+                  : 'For help, email us at:\nsupport@synapfit.app',
+                [{ text: 'OK' }],
+              )}
+            >
+              <Feather name="message-circle" size={14} color={color.dim} />
+              <Text style={[styles.supportBtnText, { color: color.dim }]}>
+                {isRtl ? 'تواصل مع الدعم' : 'Contact support'}
+              </Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
   // Back
-  backBtn: { alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 4 },
+  backBtn: { alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 8 },
   backText: { fontSize: 14, fontWeight: '700' },
 
-  // Hero
-  hero: {
-    borderRadius: 20,
+  // Subscribe card (non-subscriber hero)
+  subscribeCard: {
+    borderRadius: 24,
+    borderWidth: 1,
     padding: 24,
     alignItems: 'center',
     gap: 12,
-    marginTop: 4,
-    marginBottom: 24,
+    marginBottom: 28,
   },
-  heroText: { alignItems: 'center', gap: 6 },
-  eyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase' },
-  heroTitle: { fontSize: 28, fontWeight: '900', textAlign: 'center', lineHeight: 34 },
-  heroSub: { fontSize: 13, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
-  activeBadge: {
+  subscribeTitle: { fontSize: 24, fontWeight: '900', textAlign: 'center' },
+  subscribeSub: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
+
+  // URL display inside subscribe card
+  urlDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginTop: 4,
-  },
-  activeBadgeText: { fontSize: 13, fontWeight: '900' },
-
-  // Section label
-  sectionLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 12 },
-
-  // Feature grid
-  featureGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  featureCard: {
-    width: '47.5%',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
-    gap: 6,
-  },
-  featureIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  featureTitle: { fontSize: 13, fontWeight: '900' },
-  featureDesc: { fontSize: 11, fontWeight: '600', lineHeight: 16 },
-
-  // Steps
-  stepsCard: { borderWidth: 1, borderRadius: 20, padding: 20, gap: 0 },
-  stepRow: {
-    alignItems: 'flex-start',
-    gap: 14,
-    paddingVertical: 16,
-  },
-  stepCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 1,
-  },
-  stepNum: { fontSize: 15, fontWeight: '900' },
-  stepContent: { flex: 1, gap: 4 },
-  stepTitleRow: { alignItems: 'center', gap: 7 },
-  stepTitle: { fontSize: 15, fontWeight: '900' },
-  stepDesc: { fontSize: 13, fontWeight: '600', lineHeight: 19 },
-
-  // URL box
-  urlBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 20,
-    marginTop: 8,
+    marginTop: 4,
+    width: '100%',
+    justifyContent: 'center',
   },
-  urlText: { fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-  urlCaption: { fontSize: 12, fontWeight: '600', lineHeight: 18, marginTop: 8 },
+  urlDisplayText: { fontSize: 20, fontWeight: '900', letterSpacing: 0.5 },
 
-  // Restore / support
-  restoreCard: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 20,
-    marginTop: 14,
-    gap: 10,
-  },
-  restoreHeader: { alignItems: 'center', gap: 8 },
-  restoreTitle: { fontSize: 16, fontWeight: '900' },
-  restoreBody: { fontSize: 13, fontWeight: '600', lineHeight: 20 },
-  supportBtn: {
+  // Copy button
+  copyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    minHeight: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginTop: 4,
+    width: '100%',
+    minHeight: 52,
+    borderRadius: 16,
+  },
+  copyBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+
+  // Flow hint
+  flowHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginTop: 2,
+  },
+
+  // Section labels
+  sectionLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 12 },
+
+  // Feature grid
+  featureGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 4 },
+  featureCard: { width: '47.5%', borderWidth: 1, borderRadius: 16, padding: 14, gap: 6 },
+  featureIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  featureTitle: { fontSize: 13, fontWeight: '900' },
+  featureDesc: { fontSize: 11, fontWeight: '600', lineHeight: 16 },
+
+  // Steps
+  stepsCard: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 },
+  stepRow: { alignItems: 'flex-start', gap: 14, paddingVertical: 14 },
+  stepCircle: {
+    width: 34, height: 34, borderRadius: 17, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  stepNum: { fontSize: 14, fontWeight: '900' },
+  stepBody: { alignItems: 'flex-start' },
+  stepDesc: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
+
+  // Restore / already subscribed card
+  restoreCard: { borderWidth: 1, borderRadius: 20, padding: 20, marginTop: 14, gap: 10 },
+  restoreRow: { alignItems: 'center', gap: 8 },
+  restoreTitle: { fontSize: 16, fontWeight: '900' },
+  restoreBody: { fontSize: 13, fontWeight: '600', lineHeight: 20 },
+  supportBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, minHeight: 46, borderRadius: 14, borderWidth: 1, marginTop: 2,
   },
   supportBtnText: { fontSize: 13, fontWeight: '900' },
+
+  // Subscriber plan hero
+  planHero: {
+    borderRadius: 24, borderWidth: 1, padding: 24,
+    alignItems: 'center', gap: 10, marginBottom: 24,
+  },
+  planBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6,
+  },
+  planBadgeText: { fontSize: 13, fontWeight: '900' },
+  planHeroTitle: { fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  planHeroSub: { fontSize: 13, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
 })
