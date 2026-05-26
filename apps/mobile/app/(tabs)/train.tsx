@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
@@ -10,7 +10,7 @@ import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
-// ── Day helpers (mirrors web workout-days.ts) ─────────────────────────────────
+// ── Day helpers ───────────────────────────────────────────────────────────────
 
 const CANONICAL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const
 type CanonicalDay = typeof CANONICAL_DAYS[number]
@@ -86,7 +86,17 @@ function buildTodayWorkout(dayData: any): TodayWorkout | null {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Timer helpers ─────────────────────────────────────────────────────────────
+
+function formatTime(secs: number): string {
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+// ── Misc helpers ──────────────────────────────────────────────────────────────
 
 function todayKey() { return new Date().toISOString().slice(0, 10) }
 
@@ -107,7 +117,7 @@ function openVideo(videoId: string | null | undefined) {
     .catch(() => Linking.openURL(webUrl))
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── TrainLink sub-component ───────────────────────────────────────────────────
 
 function TrainLink({ icon, label, labelAr, color: c, accentColor, onPress, isRtl }: {
   icon: string; label: string; labelAr?: string; color: any; accentColor: string; onPress: () => void; isRtl: boolean
@@ -130,31 +140,45 @@ export default function TrainScreen() {
   const { text, isRtl } = useLanguage()
   const plan = useAsyncData(getPlanHistory, [])
 
-  // Figure out today's canonical day
   const todayCanonical = CANONICAL_DAYS[new Date().getDay()] as CanonicalDay
-
-  // Selected day state — defaults to today
   const [selectedDay, setSelectedDay] = useState<CanonicalDay>(todayCanonical)
-
-  // Per-day session state
   const [completed, setCompleted] = useState<number[]>([])
   const [performance, setPerformance] = useState<Record<string, { weight?: string; reps?: string }>>({})
   const [expanded, setExpanded] = useState<Record<number, boolean>>({})
   const [saving, setSaving] = useState(false)
 
+  // ── Timer state ──────────────────────────────────────────
+  const [timerState, setTimerState] = useState<'idle' | 'running' | 'paused'>('idle')
+  const [elapsed, setElapsed] = useState(0)   // seconds
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const startTimeRef = useRef<number>(0)        // timestamp when timer last (re)started
+
   const date = todayKey()
   const align = isRtl ? 'right' : 'left'
 
-  // Build the workout for the selected day from plan_json
+  // Reload session when the tab comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      getWorkoutSession(date)
+        .then(({ session }) => {
+          setCompleted(session?.completedExercises ?? [])
+          setPerformance((session?.exercisePerformance as Record<string, { weight?: string; reps?: string }>) ?? {})
+        })
+        .catch(() => {})
+    }, [date])
+  )
+
+  // Clean up interval on unmount
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current) }, [])
+
+  // ── Plan / workout derivation ─────────────────────────────
   const planJson = plan.data?.activeWorkoutPlan?.plan_json ?? null
   const workout: TodayWorkout | null = useMemo(() => {
     if (!planJson) return plan.data?.todayWorkout ?? null
-    // For today, prefer the API-resolved todayWorkout; for other days, parse from plan_json
     if (selectedDay === todayCanonical) return plan.data?.todayWorkout ?? buildTodayWorkout(getDayWorkout(planJson, selectedDay))
     return buildTodayWorkout(getDayWorkout(planJson, selectedDay))
   }, [plan.data, planJson, selectedDay, todayCanonical])
 
-  // Determine which days have workouts
   const workoutDays = useMemo(() => {
     if (!planJson) return []
     return getPlanDays(planJson)
@@ -162,21 +186,46 @@ export default function TrainScreen() {
       .filter((d): d is CanonicalDay => d !== null)
   }, [planJson])
 
-  // Load session for today
-  useEffect(() => {
-    getWorkoutSession(date)
-      .then(({ session }) => {
-        setCompleted(session?.completedExercises ?? [])
-        setPerformance((session?.exercisePerformance as Record<string, { weight?: string; reps?: string }>) ?? {})
-      })
-      .catch(() => {})
-  }, [date])
-
   const completedSet = useMemo(() => new Set(completed), [completed])
   const totalExercises = workout?.exercises.length ?? 0
   const completedCount = completed.length
+  const allDone = totalExercises > 0 && completedCount >= totalExercises
+
+  // ── Timer controls ────────────────────────────────────────
+
+  function startTimer() {
+    if (timerState === 'running') return
+    startTimeRef.current = Date.now() - elapsed * 1000
+    intervalRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+    }, 500)
+    setTimerState('running')
+  }
+
+  function pauseTimer() {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+    setTimerState('paused')
+  }
+
+  function resumeTimer() {
+    startTimeRef.current = Date.now() - elapsed * 1000
+    intervalRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+    }, 500)
+    setTimerState('running')
+  }
+
+  function resetTimer() {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+    setElapsed(0)
+    setTimerState('idle')
+  }
+
+  // ── Exercise actions ──────────────────────────────────────
 
   async function toggleExercise(index: number) {
+    // Auto-start timer on first checkbox tap
+    if (timerState === 'idle') startTimer()
     const next = completedSet.has(index) ? completed.filter(i => i !== index) : [...completed, index]
     setCompleted(next)
     if (workout && selectedDay === todayCanonical) {
@@ -199,9 +248,10 @@ export default function TrainScreen() {
   function selectDay(day: CanonicalDay) {
     setSelectedDay(day)
     setExpanded({})
-    // Reset completion state when browsing other days
-    if (day !== todayCanonical) { setCompleted([]); setPerformance({}) }
-    else {
+    if (day !== todayCanonical) {
+      setCompleted([])
+      setPerformance({})
+    } else {
       getWorkoutSession(date)
         .then(({ session }) => {
           setCompleted(session?.completedExercises ?? [])
@@ -213,12 +263,14 @@ export default function TrainScreen() {
 
   async function finishWorkout() {
     if (!workout || totalExercises === 0 || selectedDay !== todayCanonical) return
+    if (timerState === 'running') pauseTimer()
     setSaving(true)
     try {
+      const durationMin = elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : (workout.duration_min ?? 0)
       await logWorkout({
         date,
         day_name: workout.day_name,
-        duration_min: workout.duration_min ?? 0,
+        duration_min: durationMin,
         exercises_completed: completed.length,
         total_exercises: totalExercises,
         exercises: workout.exercises.map(ex => ({
@@ -229,10 +281,19 @@ export default function TrainScreen() {
         exercisePerformance: performance,
         notes: workout.muscle_focus,
       })
-      Alert.alert(isRtl ? 'تم حفظ التمرين' : 'Workout saved', isRtl ? 'تم تسجيل جلستك بنجاح.' : 'Your session was logged successfully.')
+      resetTimer()
+      Alert.alert(
+        isRtl ? '🏁 تم حفظ التمرين' : '🏁 Workout saved',
+        isRtl
+          ? `تمارين مكتملة: ${completed.length}/${totalExercises}  ·  المدة: ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
+          : `${completed.length}/${totalExercises} exercises  ·  ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
+      )
     } catch (error) {
       Alert.alert(isRtl ? 'تعذر حفظ التمرين' : 'Could not save workout', error instanceof Error ? error.message : 'Try again.')
-    } finally { setSaving(false) }
+      if (timerState === 'paused') resumeTimer()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const isBrowsing = selectedDay !== todayCanonical
@@ -286,7 +347,7 @@ export default function TrainScreen() {
             <View style={[styles.browsingBanner, { backgroundColor: `${color.spark}15`, borderColor: `${color.spark}30` }]}>
               <Feather name="calendar" size={13} color={color.spark} />
               <Text style={[styles.browsingText, { color: color.spark }]}>
-                {isRtl ? `عرض ${selectedDay} — اقتراحات فقط` : `Viewing ${selectedDay} — read-only preview`}
+                {isRtl ? `عرض ${selectedDay} — معاينة فقط` : `Viewing ${selectedDay} — preview only`}
               </Text>
               <Pressable onPress={() => selectDay(todayCanonical)}>
                 <Text style={[styles.browsingBack, { color: color.spark }]}>{isRtl ? 'اليوم' : 'Today'}</Text>
@@ -303,34 +364,99 @@ export default function TrainScreen() {
             </Card>
           ) : (
             <>
-              {/* Summary card */}
+              {/* ── Summary / timer card ─────────────────── */}
               <Card accent>
                 <Text style={[styles.eyebrow, { color: color.spark }]}>
                   {isBrowsing ? selectedDay.toUpperCase() : 'TODAY'}
                 </Text>
                 <Text style={[styles.title, { color: color.text, textAlign: align }]}>{workout.day_name}</Text>
-                <Text style={[styles.body, { color: color.muted, textAlign: align }]}>
-                  {workout.muscle_focus || (workout.is_rest_day ? (isRtl ? 'يوم تعافي' : 'Recovery day') : (isRtl ? 'يوم تدريب' : 'Training day'))}
-                </Text>
+                {workout.muscle_focus ? (
+                  <Text style={[styles.body, { color: color.muted, textAlign: align, marginBottom: 10 }]}>
+                    {workout.muscle_focus}
+                  </Text>
+                ) : null}
+
+                {/* Stats row */}
                 <View style={[styles.stats, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
                   {!workout.is_rest_day ? (
-                    <View style={[styles.statChip, { backgroundColor: `${color.spark}1A`, borderColor: `${color.spark}33` }]}>
-                      <Feather name="check-circle" size={13} color={color.spark} />
-                      <Text style={[styles.statText, { color: color.spark }]}>
-                        {isBrowsing ? totalExercises : `${completedCount}/${totalExercises}`}
+                    <View style={[styles.statChip, {
+                      backgroundColor: allDone ? `${color.pulse}1A` : `${color.spark}1A`,
+                      borderColor: allDone ? `${color.pulse}33` : `${color.spark}33`,
+                    }]}>
+                      <Feather name={allDone ? 'check-circle' : 'circle'} size={13} color={allDone ? color.pulse : color.spark} />
+                      <Text style={[styles.statText, { color: allDone ? color.pulse : color.spark }]}>
+                        {isBrowsing ? `${totalExercises} exercises` : `${completedCount}/${totalExercises}`}
                       </Text>
                     </View>
                   ) : null}
                   {workout.duration_min ? (
                     <View style={[styles.statChip, { backgroundColor: color.elevated, borderColor: color.border }]}>
                       <Feather name="clock" size={13} color={color.muted} />
-                      <Text style={[styles.statText, { color: color.muted }]}>{workout.duration_min} min</Text>
+                      <Text style={[styles.statText, { color: color.muted }]}>{workout.duration_min} min plan</Text>
                     </View>
                   ) : null}
                 </View>
+
+                {/* Progress bar */}
                 {!isBrowsing && !workout.is_rest_day && totalExercises > 0 ? (
                   <View style={[styles.progressBarTrack, { backgroundColor: color.elevated, marginTop: 12 }]}>
-                    <View style={[styles.progressBarFill, { width: `${(completedCount / totalExercises) * 100}%`, backgroundColor: color.spark }]} />
+                    <View style={[styles.progressBarFill, {
+                      width: `${(completedCount / totalExercises) * 100}%`,
+                      backgroundColor: allDone ? color.pulse : color.spark,
+                    }]} />
+                  </View>
+                ) : null}
+
+                {/* ── Timer ────────────────────────────────── */}
+                {!isBrowsing && !workout.is_rest_day ? (
+                  <View style={[styles.timerSection, { borderTopColor: color.border }]}>
+                    {/* Elapsed display */}
+                    <View style={styles.timerRow}>
+                      <View style={styles.timerDisplay}>
+                        <Text style={[styles.timerValue, { color: timerState === 'running' ? color.spark : color.text }]}>
+                          {formatTime(elapsed)}
+                        </Text>
+                        <Text style={[styles.timerLabel, { color: color.dim }]}>
+                          {timerState === 'idle'
+                            ? (isRtl ? 'لم يبدأ' : 'NOT STARTED')
+                            : timerState === 'paused'
+                              ? (isRtl ? 'متوقف مؤقتاً' : 'PAUSED')
+                              : (isRtl ? 'جارٍ التمرين' : 'IN PROGRESS')}
+                        </Text>
+                      </View>
+
+                      {/* Timer controls */}
+                      <View style={styles.timerControls}>
+                        {timerState === 'idle' ? (
+                          <Pressable onPress={startTimer} style={[styles.timerBtn, { backgroundColor: color.spark }]}>
+                            <Feather name="play" size={16} color="#fff" />
+                            <Text style={styles.timerBtnText}>{isRtl ? 'ابدأ' : 'Start'}</Text>
+                          </Pressable>
+                        ) : timerState === 'running' ? (
+                          <Pressable onPress={pauseTimer} style={[styles.timerBtn, { backgroundColor: color.elevated, borderWidth: 1, borderColor: color.border }]}>
+                            <Feather name="pause" size={16} color={color.text} />
+                            <Text style={[styles.timerBtnText, { color: color.text }]}>{isRtl ? 'إيقاف مؤقت' : 'Pause'}</Text>
+                          </Pressable>
+                        ) : (
+                          <View style={styles.pausedControls}>
+                            <Pressable onPress={resumeTimer} style={[styles.timerBtnSmall, { backgroundColor: color.spark }]}>
+                              <Feather name="play" size={14} color="#fff" />
+                              <Text style={styles.timerBtnText}>{isRtl ? 'استمر' : 'Resume'}</Text>
+                            </Pressable>
+                            <Pressable onPress={() => Alert.alert(
+                              isRtl ? 'إعادة ضبط الوقت' : 'Reset timer',
+                              isRtl ? 'هل تريد إعادة ضبط الوقت إلى الصفر؟' : 'Reset the timer back to zero?',
+                              [
+                                { text: isRtl ? 'إلغاء' : 'Cancel', style: 'cancel' },
+                                { text: isRtl ? 'إعادة' : 'Reset', onPress: resetTimer, style: 'destructive' },
+                              ]
+                            )} style={[styles.timerBtnSmall, { backgroundColor: color.elevated, borderWidth: 1, borderColor: color.danger + '66' }]}>
+                              <Feather name="rotate-ccw" size={14} color={color.danger} />
+                            </Pressable>
+                          </View>
+                        )}
+                      </View>
+                    </View>
                   </View>
                 ) : null}
               </Card>
@@ -351,110 +477,150 @@ export default function TrainScreen() {
                   </Text>
                 </Card>
               ) : (
-                workout.exercises.map(exercise => {
-                  const done = !isBrowsing && completedSet.has(exercise.index)
-                  const isExpandedEx = expanded[exercise.index] ?? false
-                  const hasVideo = !!exercise.video_id
+                <>
+                  {workout.exercises.map(exercise => {
+                    const done = !isBrowsing && completedSet.has(exercise.index)
+                    const isExpandedEx = expanded[exercise.index] ?? false
+                    const hasVideo = !!exercise.video_id
 
-                  return (
-                    <View key={`${exercise.index}-${exercise.name}`} style={[styles.exerciseCard, { backgroundColor: color.surface, borderColor: done ? color.pulse : color.border }]}>
-                      <View style={[styles.exerciseRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
-                        {!isBrowsing ? (
-                          <Pressable onPress={() => toggleExercise(exercise.index)} style={[styles.check, { borderColor: done ? color.pulse : color.dim, backgroundColor: done ? color.pulse : 'transparent' }]}>
-                            {done ? <Feather name="check" size={13} color="#FFFFFF" /> : null}
-                          </Pressable>
-                        ) : (
-                          <View style={[styles.check, { borderColor: color.border, backgroundColor: 'transparent' }]}>
-                            <Text style={{ fontSize: 10, color: color.dim }}>{exercise.index + 1}</Text>
-                          </View>
-                        )}
-
-                        <Pressable onPress={() => toggleExpand(exercise.index)} style={styles.exerciseText}>
-                          <Text style={[styles.exerciseName, { color: color.text, textAlign: align }]}>{exercise.name}</Text>
-                          <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{exerciseMeta(exercise)}</Text>
-                          {exercise.weight_guidance ? (
-                            <Text style={[styles.body, { color: color.spark, textAlign: align }]}>{exercise.weight_guidance}</Text>
-                          ) : null}
-                          {exercise.muscle_group ? (
-                            <Text style={[styles.muscleTag, { color: color.dim }]}>{exercise.muscle_group}</Text>
-                          ) : null}
-                        </Pressable>
-
-                        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                          {hasVideo ? (
-                            <Pressable onPress={() => openVideo(exercise.video_id)} style={[styles.videoBtn, { backgroundColor: '#FF000018', borderColor: '#FF000033' }]}>
-                              <Feather name="youtube" size={14} color="#FF4444" />
-                            </Pressable>
-                          ) : null}
-                          <Pressable onPress={() => toggleExpand(exercise.index)} style={styles.chevronBtn}>
-                            <Feather name={isExpandedEx ? 'chevron-up' : 'chevron-down'} size={15} color={color.dim} />
-                          </Pressable>
-                        </View>
-                      </View>
-
-                      {isExpandedEx ? (
-                        <View style={[styles.expandSection, { borderTopColor: color.border }]}>
-                          {exercise.form_tip ? (
-                            <View style={[styles.formTipBox, { backgroundColor: `${color.spark}0D`, borderColor: `${color.spark}26` }]}>
-                              <Feather name="info" size={12} color={color.sparkLight} />
-                              <Text style={[styles.body, { color: color.muted, flex: 1, lineHeight: 18 }]}>{exercise.form_tip}</Text>
-                            </View>
-                          ) : null}
-                          {exercise.progression_note ? (
-                            <View style={[styles.formTipBox, { backgroundColor: `${color.pulse}0D`, borderColor: `${color.pulse}26`, marginTop: 6 }]}>
-                              <Feather name="trending-up" size={12} color={color.pulse} />
-                              <Text style={[styles.body, { color: color.muted, flex: 1, lineHeight: 18 }]}>{exercise.progression_note}</Text>
-                            </View>
-                          ) : null}
+                    return (
+                      <View key={`${exercise.index}-${exercise.name}`} style={[
+                        styles.exerciseCard,
+                        { backgroundColor: color.surface, borderColor: done ? color.pulse : color.border },
+                      ]}>
+                        {/* Main row */}
+                        <View style={[styles.exerciseRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
+                          {/* Checkbox / number */}
                           {!isBrowsing ? (
-                            <View style={styles.performanceRow}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.perfLabel, { color: color.dim }]}>{isRtl ? 'الوزن (كغ)' : 'Weight (kg)'}</Text>
-                                <TextInput
-                                  value={performance[exercise.index]?.weight || ''}
-                                  onChangeText={val => updatePerformance(exercise.index, 'weight', val)}
-                                  placeholder="—"
-                                  placeholderTextColor={color.dim}
-                                  keyboardType="decimal-pad"
-                                  style={[styles.performanceInput, { color: color.text, borderColor: color.border, backgroundColor: color.elevated }]}
-                                />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.perfLabel, { color: color.dim }]}>{isRtl ? 'التكرارات' : 'Reps'}</Text>
-                                <TextInput
-                                  value={performance[exercise.index]?.reps || ''}
-                                  onChangeText={val => updatePerformance(exercise.index, 'reps', val)}
-                                  placeholder="—"
-                                  placeholderTextColor={color.dim}
-                                  keyboardType="number-pad"
-                                  style={[styles.performanceInput, { color: color.text, borderColor: color.border, backgroundColor: color.elevated }]}
-                                />
-                              </View>
-                            </View>
-                          ) : null}
-                          {hasVideo ? (
-                            <Pressable onPress={() => openVideo(exercise.video_id)} style={[styles.watchVideoBtn, { borderColor: '#FF444433', backgroundColor: '#FF44441A' }]}>
-                              <Feather name="youtube" size={15} color="#FF4444" />
-                              <Text style={[styles.watchVideoText, { color: '#FF4444' }]}>{isRtl ? 'شاهد الفيديو التعليمي' : 'Watch exercise video'}</Text>
+                            <Pressable
+                              onPress={() => toggleExercise(exercise.index)}
+                              style={[styles.check, {
+                                borderColor: done ? color.pulse : color.dim,
+                                backgroundColor: done ? color.pulse : 'transparent',
+                              }]}
+                            >
+                              {done ? <Feather name="check" size={13} color="#FFFFFF" /> : null}
                             </Pressable>
-                          ) : null}
-                        </View>
-                      ) : null}
-                    </View>
-                  )
-                })
-              )}
+                          ) : (
+                            <View style={[styles.check, { borderColor: color.border, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }]}>
+                              <Text style={{ fontSize: 10, color: color.dim, fontWeight: '700' }}>{exercise.index + 1}</Text>
+                            </View>
+                          )}
 
-              {!isBrowsing && !workout.is_rest_day && totalExercises > 0 ? (
-                <Pressable style={[styles.finishButton, { backgroundColor: color.spark }]} onPress={finishWorkout} disabled={saving}>
-                  {saving ? <ActivityIndicator color="#FFFFFF" /> : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <Feather name="check-circle" size={18} color="#FFFFFF" />
-                      <Text style={styles.finishText}>{isRtl ? 'إنهاء وتسجيل التمرين' : 'Finish and log workout'}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              ) : null}
+                          {/* Exercise info — tap to expand */}
+                          <Pressable onPress={() => toggleExpand(exercise.index)} style={styles.exerciseText}>
+                            <Text style={[styles.exerciseName, {
+                              color: done ? color.pulse : color.text,
+                              textAlign: align,
+                              textDecorationLine: done ? 'line-through' : 'none',
+                            }]}>{exercise.name}</Text>
+                            <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{exerciseMeta(exercise)}</Text>
+                            {exercise.weight_guidance ? (
+                              <Text style={[styles.body, { color: color.spark, textAlign: align }]}>{exercise.weight_guidance}</Text>
+                            ) : null}
+                            {exercise.muscle_group ? (
+                              <Text style={[styles.muscleTag, { color: color.dim }]}>{exercise.muscle_group}</Text>
+                            ) : null}
+                          </Pressable>
+
+                          {/* Right buttons */}
+                          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                            {hasVideo ? (
+                              <Pressable onPress={() => openVideo(exercise.video_id)} style={[styles.videoBtn, { backgroundColor: '#FF000018', borderColor: '#FF000033' }]}>
+                                <Feather name="youtube" size={14} color="#FF4444" />
+                              </Pressable>
+                            ) : null}
+                            <Pressable onPress={() => toggleExpand(exercise.index)} style={styles.chevronBtn}>
+                              <Feather name={isExpandedEx ? 'chevron-up' : 'chevron-down'} size={15} color={color.dim} />
+                            </Pressable>
+                          </View>
+                        </View>
+
+                        {/* Expanded section */}
+                        {isExpandedEx ? (
+                          <View style={[styles.expandSection, { borderTopColor: color.border }]}>
+                            {exercise.form_tip ? (
+                              <View style={[styles.tipBox, { backgroundColor: `${color.spark}0D`, borderColor: `${color.spark}26` }]}>
+                                <Feather name="info" size={12} color={color.sparkLight} />
+                                <Text style={[styles.body, { color: color.muted, flex: 1, lineHeight: 18 }]}>{exercise.form_tip}</Text>
+                              </View>
+                            ) : null}
+                            {exercise.progression_note ? (
+                              <View style={[styles.tipBox, { backgroundColor: `${color.pulse}0D`, borderColor: `${color.pulse}26` }]}>
+                                <Feather name="trending-up" size={12} color={color.pulse} />
+                                <Text style={[styles.body, { color: color.muted, flex: 1, lineHeight: 18 }]}>{exercise.progression_note}</Text>
+                              </View>
+                            ) : null}
+
+                            {/* Performance inputs — today only */}
+                            {!isBrowsing ? (
+                              <View style={styles.performanceRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.perfLabel, { color: color.dim }]}>{isRtl ? 'الوزن (كغ)' : 'Weight (kg)'}</Text>
+                                  <TextInput
+                                    value={performance[exercise.index]?.weight || ''}
+                                    onChangeText={val => updatePerformance(exercise.index, 'weight', val)}
+                                    placeholder="—"
+                                    placeholderTextColor={color.dim}
+                                    keyboardType="decimal-pad"
+                                    style={[styles.performanceInput, { color: color.text, borderColor: color.border, backgroundColor: color.elevated }]}
+                                  />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.perfLabel, { color: color.dim }]}>{isRtl ? 'التكرارات' : 'Reps done'}</Text>
+                                  <TextInput
+                                    value={performance[exercise.index]?.reps || ''}
+                                    onChangeText={val => updatePerformance(exercise.index, 'reps', val)}
+                                    placeholder="—"
+                                    placeholderTextColor={color.dim}
+                                    keyboardType="number-pad"
+                                    style={[styles.performanceInput, { color: color.text, borderColor: color.border, backgroundColor: color.elevated }]}
+                                  />
+                                </View>
+                              </View>
+                            ) : null}
+
+                            {hasVideo ? (
+                              <Pressable onPress={() => openVideo(exercise.video_id)} style={[styles.watchVideoBtn, { borderColor: '#FF444433', backgroundColor: '#FF44441A' }]}>
+                                <Feather name="youtube" size={15} color="#FF4444" />
+                                <Text style={[styles.watchVideoText, { color: '#FF4444' }]}>{isRtl ? 'شاهد الفيديو التعليمي' : 'Watch exercise video'}</Text>
+                              </Pressable>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+                    )
+                  })}
+
+                  {/* ── Finish button ─────────────────────── */}
+                  {!isBrowsing && totalExercises > 0 ? (
+                    <Pressable
+                      style={[styles.finishButton, {
+                        backgroundColor: allDone ? color.pulse : color.spark,
+                        opacity: saving ? 0.7 : 1,
+                      }]}
+                      onPress={finishWorkout}
+                      disabled={saving}
+                    >
+                      {saving ? <ActivityIndicator color="#FFFFFF" /> : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <Feather name={allDone ? 'award' : 'check-circle'} size={18} color="#FFFFFF" />
+                          <View>
+                            <Text style={styles.finishText}>
+                              {allDone
+                                ? (isRtl ? 'أنهيت كل التمارين! سجّل التمرين' : 'All done! Save workout')
+                                : (isRtl ? 'إنهاء وتسجيل التمرين' : 'Finish and log workout')}
+                            </Text>
+                            {elapsed > 0 ? (
+                              <Text style={styles.finishSub}>{formatTime(elapsed)}</Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      )}
+                    </Pressable>
+                  ) : null}
+                </>
+              )}
             </>
           )}
         </>
@@ -477,12 +643,23 @@ const styles = StyleSheet.create({
   browsingBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 12, borderWidth: 1, marginBottom: 8 },
   browsingText: { flex: 1, fontSize: 12, fontWeight: '700' },
   browsingBack: { fontSize: 12, fontWeight: '900', textDecorationLine: 'underline' },
-  // summary card
-  stats: { gap: 8, marginTop: 14 },
+  // summary card stats
+  stats: { gap: 8, marginTop: 10 },
   statChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   statText: { fontSize: 13, fontWeight: '800' },
   progressBarTrack: { height: 5, borderRadius: 999, overflow: 'hidden' },
   progressBarFill: { height: '100%', borderRadius: 999 },
+  // timer
+  timerSection: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 14 },
+  timerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timerDisplay: {},
+  timerValue: { fontSize: 32, fontWeight: '900', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
+  timerLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 },
+  timerControls: { alignItems: 'flex-end' },
+  timerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+  timerBtnText: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  pausedControls: { flexDirection: 'row', gap: 8 },
+  timerBtnSmall: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
   // quick links
   quickLinks: { marginTop: 10, gap: 6 },
   trainLink: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1 },
@@ -499,12 +676,14 @@ const styles = StyleSheet.create({
   chevronBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   // expanded
   expandSection: { borderTopWidth: 1, padding: 12, gap: 8 },
-  formTipBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, borderWidth: 1 },
+  tipBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, borderWidth: 1 },
   performanceRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   perfLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 5, textTransform: 'uppercase' },
   performanceInput: { borderWidth: 1, borderRadius: 12, minHeight: 46, paddingHorizontal: 12, fontSize: 16, fontWeight: '800', textAlign: 'center' },
   watchVideoBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, borderRadius: 12, borderWidth: 1, marginTop: 4 },
   watchVideoText: { fontSize: 13, fontWeight: '900' },
+  // finish
   finishButton: { marginTop: 18, borderRadius: 18, padding: 18, alignItems: 'center', justifyContent: 'center' },
   finishText: { color: 'white', fontSize: 16, fontWeight: '900' },
+  finishSub: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '700', textAlign: 'center', marginTop: 2 },
 })
