@@ -1,11 +1,13 @@
+import { useCallback } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { router } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonAvatar } from '@/components/IonAvatar'
 import { Screen } from '@/components/Screen'
 import { SynapLogo } from '@/components/SynapLogo'
+import { getChatHistory } from '@/features/chat'
 import { getMealLogs } from '@/features/nutrition'
 import { getProfile } from '@/features/profile'
 import { getSubscriptionStatus } from '@/features/subscription'
@@ -27,6 +29,18 @@ export default function DashboardScreen() {
   const plan = useAsyncData(getPlanHistory, [])
   const meals = useAsyncData(getMealLogs, [])
   const profile = useAsyncData(getProfile, [])
+  const chat = useAsyncData(() => getChatHistory(10), [])
+
+  // Refresh meal logs and plan whenever the dashboard comes into focus
+  // so calorie/meal counts stay in sync with what was logged in Nutrition
+  // Refresh on focus: meal logs change in Nutrition, Ion message changes in Chat
+  useFocusEffect(
+    useCallback(() => {
+      meals.reload()
+      plan.reload()
+      chat.reload()
+    }, [])
+  )
 
   const tier = subscription.data?.tier ?? 'launch'
   const name = profile.data?.profile?.name || 'Athlete'
@@ -52,8 +66,18 @@ export default function DashboardScreen() {
     recomposition: 'Recomp', improve_fitness: 'Fitness', be_healthier: 'Health',
   }
 
-  // Ion last message: available if plan history API surfaces it, else skip preview
-  const lastIonMessage: string | null = (plan.data as any)?.lastIonMessage ?? null
+  // Last Ion/assistant message from chat history for the preview card
+  const lastIonMessage: string | null = (() => {
+    const msgs = chat.data?.messages ?? []
+    const last = [...msgs].reverse().find(m => m.role === 'assistant' || m.role === 'ion')
+    if (!last) return null
+    try {
+      const parsed = JSON.parse(last.content)
+      return parsed.message ?? parsed.reply ?? parsed.content ?? null
+    } catch {
+      return last.content.replace(/^```json\s*/i, '').replace(/```$/i, '').trim() || null
+    }
+  })()
 
   const align = isRtl ? 'right' : 'left'
   const rowDir = isRtl ? 'row-reverse' : 'row'

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
+import { VideoModal } from '@/components/VideoModal'
 import { getPlanHistory, getWorkoutSession, logWorkout, saveWorkoutSession, TodayWorkout } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
@@ -108,15 +109,6 @@ function exerciseMeta(exercise: TodayWorkout['exercises'][number]) {
   return parts.join('  ·  ')
 }
 
-function openVideo(videoId: string | null | undefined) {
-  if (!videoId) return
-  const appUrl = `youtube://www.youtube.com/watch?v=${videoId}`
-  const webUrl = `https://www.youtube.com/watch?v=${videoId}`
-  Linking.canOpenURL(appUrl)
-    .then(supported => Linking.openURL(supported ? appUrl : webUrl))
-    .catch(() => Linking.openURL(webUrl))
-}
-
 // ── TrainLink sub-component ───────────────────────────────────────────────────
 
 function TrainLink({ icon, label, labelAr, color: c, accentColor, onPress, isRtl }: {
@@ -146,6 +138,9 @@ export default function TrainScreen() {
   const [performance, setPerformance] = useState<Record<string, { weight?: string; reps?: string }>>({})
   const [expanded, setExpanded] = useState<Record<number, boolean>>({})
   const [saving, setSaving] = useState(false)
+
+  // ── Video modal ──────────────────────────────────────────
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null)
 
   // ── Timer state ──────────────────────────────────────────
   const [timerState, setTimerState] = useState<'idle' | 'running' | 'paused'>('idle')
@@ -300,6 +295,8 @@ export default function TrainScreen() {
 
   return (
     <Screen>
+      <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
+
       <IonPageHeader
         eyebrow="WORKOUT"
         title={text.train}
@@ -526,7 +523,7 @@ export default function TrainScreen() {
                           {/* Right buttons */}
                           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
                             {hasVideo ? (
-                              <Pressable onPress={() => openVideo(exercise.video_id)} style={[styles.videoBtn, { backgroundColor: '#FF000018', borderColor: '#FF000033' }]}>
+                              <Pressable onPress={() => setActiveVideoId(exercise.video_id ?? null)} style={[styles.videoBtn, { backgroundColor: '#FF000018', borderColor: '#FF000033' }]}>
                                 <Feather name="youtube" size={14} color="#FF4444" />
                               </Pressable>
                             ) : null}
@@ -581,7 +578,7 @@ export default function TrainScreen() {
                             ) : null}
 
                             {hasVideo ? (
-                              <Pressable onPress={() => openVideo(exercise.video_id)} style={[styles.watchVideoBtn, { borderColor: '#FF444433', backgroundColor: '#FF44441A' }]}>
+                              <Pressable onPress={() => setActiveVideoId(exercise.video_id ?? null)} style={[styles.watchVideoBtn, { borderColor: '#FF444433', backgroundColor: '#FF44441A' }]}>
                                 <Feather name="youtube" size={15} color="#FF4444" />
                                 <Text style={[styles.watchVideoText, { color: '#FF4444' }]}>{isRtl ? 'شاهد الفيديو التعليمي' : 'Watch exercise video'}</Text>
                               </Pressable>
