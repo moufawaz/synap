@@ -7,6 +7,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - apps/mobile/**
+      - fastlane/**
+      - Gemfile
+      - Gemfile.lock
+      - package.json
+      - package-lock.json
+      - .github/workflows/ios-expo-direct.yml
   # Manual-only. Requires IOS_DIST_CERT_P12_BASE64, IOS_DIST_CERT_PASSWORD,
   # IOS_PROVISION_PROFILE_BASE64, and APPLE_TEAM_ID secrets.
   # Use ios-expo-eas.yml for automatic builds — it requires only EXPO_TOKEN.
@@ -28,9 +36,9 @@ jobs:
     timeout-minutes: 75
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-      EXPO_PUBLIC_API_BASE_URL: https://www.synapfit.app
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || vars.EXPO_PUBLIC_SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_API_BASE_URL: ${{ secrets.EXPO_PUBLIC_API_BASE_URL || vars.EXPO_PUBLIC_API_BASE_URL || 'https://www.synapfit.app' }}
 
     steps:
       - name: Checkout
