@@ -1126,35 +1126,29 @@ All changes pushed as commit `92d1eac` — `fix(mobile): crash fix + full nutrit
 
 ---
 
-## Latest Progress - Pre-Build 1037 Verification (2026-05-26)
+## Latest Progress - Builds 1037 → 1039 (2026-05-26)
 
-### Package cleanup
+### Changes shipped in builds 1037 – 1039
 
-- Removed `react-native-youtube-iframe` from `apps/mobile/package.json`.
-  - Zero imports of the package existed in any source file (replaced by `VideoModal` WebView approach in a previous commit).
-  - The package still linked its Old Architecture native code at CocoaPods install time even when unused, which is a startup crash risk on any Hermes + `newArchEnabled: false` build.
-  - Removing it eliminates the crash risk entirely with no feature loss.
-- Regenerated `apps/mobile/package-lock.json` using `npm@10.9.3` (the exact version EAS CI uses for `npm ci`). Lockfile now has zero sync errors.
+| Commit | Build | Description |
+|---|---|---|
+| `4c3061c` | 1037 | Removed `react-native-youtube-iframe` from `package.json` (zero JS imports — replaced by `VideoModal` WebView; native code was still linking at CocoaPods time and was a startup crash risk). Regenerated lockfile with `npm@10.9.3`. |
+| `dab38de` | 1038–1039 | Billing screen rewrite — subscribe CTA is now the first thing on the screen (was buried after features and steps). Added "Copy website address" button using `Share.share()` which opens the iOS native share sheet (includes Copy); user copies, opens Safari, pastes. No `Linking.openURL`, Apple-compliant. |
 
-### Full pre-build verification results
+### Pre-build 1037 verification (all green)
 
 | Check | Result |
 |---|---|
 | `npx tsc --noEmit` | ✅ 0 errors |
 | `npx expo-doctor` | ✅ 18/18 checks passed |
 | `npx expo config --type public` | ✅ `jsEngine: hermes`, `newArchEnabled: false`, `bundleIdentifier: app.synap.fit` |
-| `npx expo export:embed --platform ios --dev false` | ✅ 1285 modules, 0 errors, Hermes bundle produced |
+| `npx expo export:embed --platform ios --dev false` | ✅ 1285 modules, Hermes, 0 errors |
 | `npx npm@10.9.3 ci --dry-run` | ✅ No sync errors |
-| Bundle: `youtube-iframe` | ✅ clean (not present) |
-| Bundle: `YoutubePlayer` | ✅ clean |
-| Bundle: `reanimated` | ✅ harmless — 2 comment strings inside expo-router internals, no `require()` |
-| Bundle: `webpackIgnore` | ✅ clean |
-| Bundle: `@opentelemetry` | ✅ clean |
-| Bundle: `OTEL_PKG` | ✅ clean |
+| Bundle crash-risk scan | ✅ no youtube-iframe, no reanimated require, no opentelemetry |
 
-### Commit
+### Current build
 
-`4c3061c` — `fix(mobile): remove react-native-youtube-iframe (replaced by VideoModal WebView), regen lockfile`
+**Latest build: 1039** — `dab38de` — billing screen UX rewrite (subscribe CTA first + Copy address button).
 
 ---
 

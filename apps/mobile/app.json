@@ -30,7 +30,7 @@
           "remote-notification"
         ]
       },
-      "buildNumber": "64"
+      "buildNumber": "1039"
     },
     "android": {
       "package": "app.synap.fit",
