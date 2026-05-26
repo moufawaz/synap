@@ -1,21 +1,185 @@
 import { useState } from 'react'
-import { ActivityIndicator, Alert, LayoutAnimation, Modal, Platform, Pressable, StyleSheet, Text, TextInput, UIManager, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Alert,
+  LayoutAnimation,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  UIManager,
+  View,
+} from 'react-native'
+import { router } from 'expo-router'
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
-import { createMealLog, deleteMealLog, getBarcodeProduct, getHydration, getMealLogs, MealLog, saveHydration, scanFoodPhoto, updateMealLog } from '@/features/nutrition'
+import {
+  createMealLog,
+  deleteMealLog,
+  getBarcodeProduct,
+  getHydration,
+  getMealLogs,
+  MealLog,
+  saveHydration,
+  scanFoodPhoto,
+  updateMealLog,
+} from '@/features/nutrition'
 import { getPlanHistory } from '@/features/workout'
+import { useAsyncData } from '@/hooks/useAsyncData'
+import { useLanguage } from '@/i18n/LanguageProvider'
+import { useTheme } from '@/theme/ThemeProvider'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true)
 }
-import { useAsyncData } from '@/hooks/useAsyncData'
-import { useLanguage } from '@/i18n/LanguageProvider'
-import { useTheme } from '@/theme/ThemeProvider'
+
+// ── Helpers ───────────────────────────────────────────────
+
+/** Safely convert any recipe/instruction value (string, object, array) to a displayable string. */
+function safeText(val: unknown): string {
+  if (!val) return ''
+  if (typeof val === 'string') return val.trim()
+  if (Array.isArray(val)) {
+    return val.map((v: unknown) => (typeof v === 'string' ? v : safeText(v))).filter(Boolean).join('\n')
+  }
+  if (typeof val === 'object') {
+    const r = val as Record<string, unknown>
+    const parts: string[] = []
+    if (r.title && typeof r.title === 'string') parts.push(r.title)
+    if (r.steps) parts.push(safeText(r.steps))
+    if (r.instructions) parts.push(safeText(r.instructions))
+    if (r.tips) parts.push('Tips: ' + safeText(r.tips))
+    if (r.prep_time_min) parts.push(`Prep: ${r.prep_time_min} min`)
+    if (r.cook_time_min) parts.push(`Cook: ${r.cook_time_min} min`)
+    // If nothing structured, fall back to top-level string values
+    if (parts.length === 0) {
+      Object.values(r).forEach(v => { if (typeof v === 'string' && v) parts.push(v) })
+    }
+    return parts.filter(Boolean).join('\n')
+  }
+  return String(val)
+}
+
+/** Safely extract an ingredient line from any shape (string, object). */
+function safeIngredient(ing: unknown): string {
+  if (typeof ing === 'string') return ing.trim()
+  if (ing && typeof ing === 'object') {
+    const o = ing as Record<string, unknown>
+    const name = o.name ?? o.item ?? o.food ?? ''
+    const amount = o.amount ?? o.quantity ?? o.serving ?? ''
+    const cal = o.calories ? ` · ${o.calories} kcal` : ''
+    return `${name}${amount ? '  ' + amount : ''}${cal}`.trim()
+  }
+  return String(ing ?? '')
+}
+
+function todayKey() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function numberOrNull(value: string) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function pct(current: number, target: number) {
+  if (!target || target <= 0) return 0
+  return Math.max(0, Math.min(100, (current / target) * 100))
+}
+
+// ── Simple circle progress (no react-native-svg needed) ───
+
+function CalorieRing({ eaten, total, color }: { eaten: number; total: number; color: any }) {
+  const SIZE = 80
+  const pctVal = pct(eaten, total)
+  // Simulate a ring with a thick border + rotate overlay trick using Views
+  // We'll draw an arc indicator using border-radius and transform
+  const deg = Math.round(pctVal * 3.6) // 0–360
+
+  return (
+    <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Background ring */}
+      <View style={{
+        position: 'absolute', width: SIZE, height: SIZE, borderRadius: SIZE / 2,
+        borderWidth: 7, borderColor: color.elevated,
+      }} />
+      {/* Progress ring — we overlay two half-circle clips */}
+      {deg > 0 ? (
+        <View style={{ position: 'absolute', width: SIZE, height: SIZE }}>
+          {/* Left half */}
+          <View style={{
+            position: 'absolute', width: SIZE, height: SIZE,
+            borderRadius: SIZE / 2,
+            borderWidth: 7,
+            borderColor: 'transparent',
+            borderLeftColor: deg > 180 ? color.flame : 'transparent',
+            borderBottomColor: deg > 180 ? color.flame : 'transparent',
+            transform: [{ rotate: deg > 180 ? `${((deg - 180) * 1)}deg` : '0deg' }],
+          }} />
+          {/* Right half */}
+          <View style={{
+            position: 'absolute', width: SIZE, height: SIZE,
+            borderRadius: SIZE / 2,
+            borderWidth: 7,
+            borderColor: 'transparent',
+            borderRightColor: color.flame,
+            borderTopColor: color.flame,
+            transform: [{ rotate: `${Math.min(deg, 180)}deg` }],
+          }} />
+        </View>
+      ) : null}
+      {/* Center text */}
+      <Text style={{ fontSize: 16, fontWeight: '900', color: color.text }}>{eaten}</Text>
+      <Text style={{ fontSize: 9, fontWeight: '700', color: color.dim, letterSpacing: 0.5 }}>EATEN</Text>
+    </View>
+  )
+}
+
+// ── Quick action button ───────────────────────────────────
+
+function QuickLink({ icon, label, labelAr, color: c, borderColor, onPress, isRtl }: {
+  icon: string; label: string; labelAr?: string; color: any; borderColor: string; onPress: () => void; isRtl: boolean
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.quickLink, { backgroundColor: c.surface, borderColor, opacity: pressed ? 0.8 : 1 }]}>
+      <View style={[styles.quickLinkIcon, { backgroundColor: `${borderColor}1A`, borderColor: `${borderColor}33` }]}>
+        <Feather name={icon as any} size={16} color={borderColor} />
+      </View>
+      <Text style={[styles.quickLinkText, { color: c.text, textAlign: isRtl ? 'right' : 'left' }]} numberOfLines={1}>
+        {isRtl && labelAr ? labelAr : label}
+      </Text>
+      <Text style={[styles.quickLinkOpen, { color: borderColor }]}>{isRtl ? 'افتح' : 'OPEN'}</Text>
+    </Pressable>
+  )
+}
+
+// ── Macro bar ─────────────────────────────────────────────
+
+function MacroBar({ label, eaten, total, barColor, color }: { label: string; eaten: number; total: number; barColor: string; color: any }) {
+  const p = pct(eaten, total)
+  return (
+    <View style={styles.macroLine}>
+      <View style={styles.macroHeader}>
+        <Text style={[styles.body, { color: color.text }]}>{label}</Text>
+        <Text style={[styles.body, { color: color.muted }]}>{Math.round(eaten)}/{total || '—'}</Text>
+      </View>
+      <View style={[styles.barTrack, { backgroundColor: color.elevated }]}>
+        <View style={[styles.barFill, { width: `${p}%`, backgroundColor: barColor }]} />
+      </View>
+    </View>
+  )
+}
+
+// ── Main screen ───────────────────────────────────────────
 
 export default function NutritionScreen() {
   const { color } = useTheme()
@@ -23,6 +187,7 @@ export default function NutritionScreen() {
   const logs = useAsyncData(getMealLogs, [])
   const plan = useAsyncData(getPlanHistory, [])
   const hydration = useAsyncData(getHydration, [])
+
   const [name, setName] = useState('')
   const [calories, setCalories] = useState('')
   const [barcode, setBarcode] = useState('')
@@ -33,20 +198,46 @@ export default function NutritionScreen() {
   const [barcodeLocked, setBarcodeLocked] = useState(false)
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const [expandedMeals, setExpandedMeals] = useState<Record<number, boolean>>({})
+  const [logPanelOpen, setLogPanelOpen] = useState(false)
+
+  const align = isRtl ? 'right' : 'left'
 
   function toggleMealExpand(index: number) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
     setExpandedMeals(prev => ({ ...prev, [index]: !prev[index] }))
   }
 
+  // ── Data ────────────────────────────────────────────────
+
+  const activeDiet = plan.data?.activeDietPlan?.plan_json
+  const plannedMeals: any[] = Array.isArray(activeDiet?.meals) ? activeDiet.meals : []
+  const mealTimingNote: string = safeText(activeDiet?.meal_timing_note)
+  const preWorkout: string = safeText(activeDiet?.pre_workout)
+  const postWorkout: string = safeText(activeDiet?.post_workout)
+  const targets = {
+    calories: Number(activeDiet?.daily_calories ?? activeDiet?.calories_per_day ?? 0),
+    protein: Number(activeDiet?.macros?.protein_g ?? activeDiet?.protein_g ?? 0),
+    carbs: Number(activeDiet?.macros?.carbs_g ?? activeDiet?.carbs_g ?? 0),
+    fat: Number(activeDiet?.macros?.fat_g ?? activeDiet?.fat_g ?? activeDiet?.fats_g ?? 0),
+    water: Number(activeDiet?.hydration_liters ?? activeDiet?.water_l ?? 3),
+  }
+
+  const allLogs = logs.data?.logs ?? []
+  const totalCalories = allLogs.reduce((s, l) => s + (l.calories_estimated || 0), 0)
+  const totalProtein = allLogs.reduce((s, l) => s + (l.protein_g || 0), 0)
+  const totalCarbs = allLogs.reduce((s, l) => s + (l.carbs_g || 0), 0)
+  const totalFat = allLogs.reduce((s, l) => s + (l.fats_g || 0), 0)
+  const glasses = hydration.data?.hydration?.glasses ?? 0
+
+  // ── Actions ─────────────────────────────────────────────
+
   async function handleSave() {
     const mealName = name.trim()
     const kcal = Number(calories)
     if (!mealName || !Number.isFinite(kcal)) {
-      Alert.alert('Nutrition', 'Enter food name and calories.')
+      Alert.alert('Nutrition', isRtl ? 'أدخل اسم الطعام والسعرات.' : 'Enter food name and calories.')
       return
     }
-
     setSaving(true)
     try {
       if (editing) {
@@ -81,6 +272,7 @@ export default function NutritionScreen() {
     setEditing(log)
     setName(log.meal_name || '')
     setCalories(String(log.calories_estimated || ''))
+    setLogPanelOpen(true)
   }
 
   async function handlePhotoScan() {
@@ -88,34 +280,20 @@ export default function NutritionScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync()
       if (!permission.granted) {
-        Alert.alert('Camera permission needed', 'Allow camera access to scan food packaging.')
+        Alert.alert(isRtl ? 'مطلوب إذن الكاميرا' : 'Camera permission needed', isRtl ? 'اسمح للكاميرا لمسح الطعام.' : 'Allow camera access to scan food packaging.')
         return
       }
-
-      const result = await ImagePicker.launchCameraAsync({
-        base64: true,
-        quality: 0.75,
-        allowsEditing: false,
-      })
+      const result = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.75 })
       if (result.canceled) return
-
       const asset = result.assets[0]
-      if (!asset?.base64) {
-        Alert.alert('Nutrition', 'Could not read the photo. Please try again.')
-        return
-      }
-
+      if (!asset?.base64) { Alert.alert('Nutrition', 'Could not read photo.'); return }
       const response = await scanFoodPhoto(asset.base64, asset.mimeType || 'image/jpeg')
-      if (!response.product) {
-        Alert.alert('Food not found', response.reason || 'Ion could not identify this food photo.')
-        return
-      }
-
+      if (!response.product) { Alert.alert(isRtl ? 'لم يُعثر على الطعام' : 'Food not found', response.reason || 'Ion could not identify this food.'); return }
       const serving = response.product.serving_size_g || 100
-      const caloriesPer100 = response.product.calories_per_100g || 0
       setName(response.product.brand ? `${response.product.name} (${response.product.brand}) - ${serving}g` : `${response.product.name} - ${serving}g`)
-      setCalories(String(Math.round((caloriesPer100 * serving) / 100)))
-      Alert.alert('Food found', 'Review the values, then tap Log food.')
+      setCalories(String(Math.round(((response.product.calories_per_100g || 0) * serving) / 100)))
+      setLogPanelOpen(true)
+      Alert.alert(isRtl ? 'تم العثور على الطعام' : 'Food found', isRtl ? 'راجع القيم ثم اضغط تسجيل.' : 'Review the values, then tap Log food.')
     } catch (error) {
       Alert.alert('Photo scan failed', error instanceof Error ? error.message : 'Try again in a moment.')
     } finally {
@@ -123,23 +301,9 @@ export default function NutritionScreen() {
     }
   }
 
-  const totalCalories = (logs.data?.logs ?? []).reduce((sum, item) => sum + (item.calories_estimated || 0), 0)
-  const activeDiet = plan.data?.activeDietPlan?.plan_json
-  const plannedMeals = Array.isArray(activeDiet?.meals) ? activeDiet.meals : []
-  const totalProtein = (logs.data?.logs ?? []).reduce((sum, item) => sum + (item.protein_g || 0), 0)
-  const totalCarbs = (logs.data?.logs ?? []).reduce((sum, item) => sum + (item.carbs_g || 0), 0)
-  const totalFat = (logs.data?.logs ?? []).reduce((sum, item) => sum + (item.fats_g || 0), 0)
-  const targets = {
-    calories: Number(activeDiet?.daily_calories ?? activeDiet?.calories_per_day ?? 0),
-    protein: Number(activeDiet?.macros?.protein_g ?? activeDiet?.protein_g ?? 0),
-    carbs: Number(activeDiet?.macros?.carbs_g ?? activeDiet?.carbs_g ?? 0),
-    fat: Number(activeDiet?.macros?.fat_g ?? activeDiet?.fat_g ?? activeDiet?.fats_g ?? 0),
-    water: Number(activeDiet?.hydration_liters ?? 3),
-  }
-
   async function logPlannedMeal(meal: any) {
     const mealKey = String(meal.name || meal.meal_name || '').toLowerCase()
-    const existing = (logs.data?.logs || []).find(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
+    const existing = allLogs.find(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
     if (existing) {
       await deleteMealLog(existing.id)
       await logs.reload()
@@ -157,11 +321,6 @@ export default function NutritionScreen() {
     await logs.reload()
   }
 
-  function progress(current: number, target: number) {
-    if (!target || target <= 0) return 0
-    return Math.max(0, Math.min(100, Math.round((current / target) * 100)))
-  }
-
   async function addWater(delta: number) {
     const current = hydration.data?.hydration?.glasses ?? 0
     await saveHydration({ glasses: Math.max(0, current + delta), target_liters: targets.water })
@@ -170,33 +329,26 @@ export default function NutritionScreen() {
 
   async function lookupBarcode() {
     if (!barcode.trim()) return
-    try {
-      await applyBarcodeProduct(barcode.trim())
-    } catch (error) {
+    try { await applyBarcodeProduct(barcode.trim()) } catch (error) {
       Alert.alert('Barcode', error instanceof Error ? error.message : 'Could not look up barcode.')
     }
   }
 
   async function applyBarcodeProduct(code: string) {
     const res = await getBarcodeProduct(code)
-    if (!res.product) {
-      Alert.alert('Barcode', 'Product not found. Use photo scan or manual entry.')
-      return false
-    }
+    if (!res.product) { Alert.alert('Barcode', 'Product not found.'); return false }
     const serving = res.product.serving_size_g || 100
     setBarcode(code)
     setName(res.product.brand ? `${res.product.name} (${res.product.brand}) - ${serving}g` : `${res.product.name} - ${serving}g`)
     setCalories(String(Math.round(((res.product.calories_per_100g || 0) * serving) / 100)))
-    Alert.alert('Food found', 'Review the values, then tap Log food.')
+    setLogPanelOpen(true)
+    Alert.alert(isRtl ? 'تم العثور على المنتج' : 'Food found', isRtl ? 'راجع القيم ثم اضغط تسجيل.' : 'Review the values, then tap Log food.')
     return true
   }
 
   async function openBarcodeScanner() {
     const permission = cameraPermission?.granted ? cameraPermission : await requestCameraPermission()
-    if (!permission?.granted) {
-      Alert.alert('Camera permission needed', 'Allow camera access to scan barcodes.')
-      return
-    }
+    if (!permission?.granted) { Alert.alert(isRtl ? 'مطلوب إذن الكاميرا' : 'Camera permission needed', isRtl ? 'اسمح للكاميرا لمسح الباركود.' : 'Allow camera access to scan barcodes.'); return }
     setBarcodeLocked(false)
     setScannerOpen(true)
   }
@@ -216,109 +368,169 @@ export default function NutritionScreen() {
     }
   }
 
+  // ── Render ───────────────────────────────────────────────
+
   return (
     <Screen>
-      <IonPageHeader eyebrow="NUTRITION" title={text.nutrition} subtitle={`${totalCalories}/${targets.calories || '-'} kcal - P:${Math.round(totalProtein)}/${targets.protein || '-'} C:${Math.round(totalCarbs)}/${targets.carbs || '-'} F:${Math.round(totalFat)}/${targets.fat || '-'}`} />
+      <IonPageHeader
+        eyebrow="NUTRITION"
+        title={text.nutrition}
+        subtitle={`${Math.round(totalCalories)}${targets.calories ? `/${targets.calories}` : ''} kcal · P ${Math.round(totalProtein)}g`}
+      />
+
+      {/* ── Macro summary ── */}
       <Card>
-        <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>Macro progress</Text>
-        {[
-          ['Calories', totalCalories, targets.calories, color.flame],
-          ['Protein', Math.round(totalProtein), targets.protein, color.spark],
-          ['Carbs', Math.round(totalCarbs), targets.carbs, color.cyan],
-          ['Fat', Math.round(totalFat), targets.fat, color.pulse],
-        ].map(([label, current, target, barColor]) => (
-          <View key={String(label)} style={styles.macroLine}>
+        <View style={[styles.macroSummary, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
+          <CalorieRing eaten={Math.round(totalCalories)} total={targets.calories} color={color} />
+          <View style={{ flex: 1, paddingLeft: isRtl ? 0 : 14, paddingRight: isRtl ? 14 : 0 }}>
             <View style={styles.macroHeader}>
-              <Text style={[styles.body, { color: color.text }]}>{String(label)}</Text>
-              <Text style={[styles.body, { color: color.muted }]}>{Number(current)}/{Number(target) || '-'}</Text>
+              <Text style={[styles.body, { color: color.text }]}>{isRtl ? 'السعرات' : 'Calories'}</Text>
+              <Text style={[styles.body, { color: color.muted }]}>{Math.round(totalCalories)}/{targets.calories || '—'}</Text>
             </View>
-            <View style={[styles.barTrack, { backgroundColor: color.elevated }]}>
-              <View style={[styles.barFill, { width: `${progress(Number(current), Number(target))}%`, backgroundColor: String(barColor) }]} />
-            </View>
+            <MacroBar label={isRtl ? 'بروتين' : 'Protein'} eaten={totalProtein} total={targets.protein} barColor={color.spark} color={color} />
+            <MacroBar label={isRtl ? 'كربوهيدرات' : 'Carbs'} eaten={totalCarbs} total={targets.carbs} barColor={color.flame} color={color} />
+            <MacroBar label={isRtl ? 'دهون' : 'Fat'} eaten={totalFat} total={targets.fat} barColor={'#3B82F6'} color={color} />
           </View>
-        ))}
-        <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left', marginTop: 10 }]}>
-          Water {hydration.data?.hydration?.glasses ?? 0} glasses / {targets.water}L target
-        </Text>
-        <View style={styles.row}>
-          <Pressable onPress={() => addWater(1)} style={[styles.secondary, { borderColor: color.cyan }]}><Text style={[styles.secondaryText, { color: color.cyan }]}>+ Water</Text></Pressable>
-          <Pressable onPress={() => addWater(-1)} style={[styles.secondary, { borderColor: color.border }]}><Text style={[styles.secondaryText, { color: color.text }]}>- Water</Text></Pressable>
+        </View>
+
+        {/* Water tracker */}
+        <View style={[styles.waterRow, { borderTopColor: color.border }]}>
+          <View style={{ flexDirection: isRtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+            <Feather name="droplet" size={13} color="#3B82F6" />
+            <Text style={[styles.body, { color: color.text }]}>{isRtl ? 'ماء' : 'Water'}</Text>
+            <Text style={[styles.body, { color: color.muted }]}>{glasses} / {targets.water}L</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <Pressable onPress={() => addWater(1)} style={[styles.waterBtn, { backgroundColor: '#3B82F61A', borderColor: '#3B82F633' }]}>
+              <Text style={{ color: '#3B82F6', fontWeight: '900', fontSize: 13 }}>+ </Text>
+              <Feather name="droplet" size={11} color="#3B82F6" />
+            </Pressable>
+            <Pressable onPress={() => addWater(-1)} style={[styles.waterBtn, { backgroundColor: color.elevated, borderColor: color.border }]}>
+              <Text style={{ color: color.muted, fontWeight: '900', fontSize: 13 }}>–</Text>
+            </Pressable>
+          </View>
         </View>
       </Card>
+
+      {/* ── Quick links ── */}
+      <View style={styles.quickLinks}>
+        <QuickLink icon="shopping-bag" label="Grocery List" labelAr="قائمة التسوق" color={color} borderColor={color.pulse} onPress={() => router.push('/grocery')} isRtl={isRtl} />
+        <QuickLink icon="map-pin" label="Eating Out" labelAr="الأكل خارجاً" color={color} borderColor={color.flame} onPress={() => router.push('/eating-out')} isRtl={isRtl} />
+      </View>
+
+      {/* ── Meal timing note ── */}
+      {mealTimingNote ? (
+        <View style={[styles.noteBanner, { backgroundColor: `${color.spark}0F`, borderColor: `${color.spark}26` }]}>
+          <Feather name="clock" size={13} color={color.sparkLight} />
+          <Text style={[styles.noteText, { color: color.muted }]}>{mealTimingNote}</Text>
+        </View>
+      ) : null}
+
+      {/* ── Planned meals ── */}
       {plannedMeals.length ? (
         <Card style={styles.section}>
-          <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'قائمة الوجبات' : 'Meal checklist'}</Text>
+          <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{isRtl ? 'وجبات اليوم' : "Today's meals"}</Text>
           {plannedMeals.map((meal: any, index: number) => {
             const mealKey = String(meal.name || meal.meal_name || '').toLowerCase()
-            const done = (logs.data?.logs || []).some(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
+            const done = allLogs.some(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
             const expanded = expandedMeals[index] ?? false
 
-            // Extract recipe details from meal object
-            const ingredients: string[] = Array.isArray(meal.ingredients)
-              ? meal.ingredients.map((ing: any) => typeof ing === 'string' ? ing : `${ing.name ?? ing.item ?? ''} ${ing.amount ?? ing.quantity ?? ''}`.trim())
+            // Extract food items (web uses meal.foods or meal.items)
+            const foodItems: any[] = Array.isArray(meal.foods) ? meal.foods
+              : Array.isArray(meal.items) ? meal.items
               : []
-            const recipe: string = meal.recipe || meal.instructions || meal.description || ''
+
+            // Extract ingredients
+            const rawIngredients: unknown[] = Array.isArray(meal.ingredients) ? meal.ingredients : []
+            const ingredients: string[] = rawIngredients.map(safeIngredient).filter(Boolean)
+
+            // Recipe text — safely handle object or string
+            const recipeText = safeText(meal.recipe || meal.instructions || meal.description || '')
+
             const macros = {
               protein: meal.protein_g ?? meal.protein ?? null,
               carbs: meal.carbs_g ?? meal.carbs ?? null,
               fat: meal.fat_g ?? meal.fats_g ?? meal.fat ?? null,
             }
-            const hasDetails = ingredients.length > 0 || recipe || macros.protein != null
+
+            const hasDetails = foodItems.length > 0 || ingredients.length > 0 || recipeText
 
             return (
               <View key={index} style={[styles.mealRow, { borderColor: done ? color.pulse : color.border }]}>
-                {/* Main tap row: log/unlog */}
-                <Pressable onPress={() => logPlannedMeal(meal)} style={styles.mealMainRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.itemTitle, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>
-                      {done ? '✓ ' : ''}{meal.name || meal.meal_name || `Meal ${index + 1}`}
+                {/* Main tap row */}
+                <View style={styles.mealMainRow}>
+                  <Pressable onPress={() => logPlannedMeal(meal)} style={[styles.mealCheck, { borderColor: done ? color.pulse : color.dim, backgroundColor: done ? color.pulse : 'transparent' }]}>
+                    {done ? <Feather name="check" size={13} color="#FFFFFF" /> : null}
+                  </Pressable>
+                  <Pressable onPress={() => logPlannedMeal(meal)} style={{ flex: 1 }}>
+                    <Text style={[styles.itemTitle, { color: color.text, textAlign: align }]}>
+                      {meal.name || meal.meal_name || `Meal ${index + 1}`}
                     </Text>
-                    <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
-                      {meal.time || meal.meal_time ? `${meal.time || meal.meal_time}  ·  ` : ''}
-                      {meal.calories ? `${meal.calories} kcal` : ''}
-                      {macros.protein != null ? `  ·  P ${macros.protein}g` : ''}
-                      {macros.carbs != null ? `  C ${macros.carbs}g` : ''}
-                      {macros.fat != null ? `  F ${macros.fat}g` : ''}
+                    <Text style={[styles.body, { color: color.muted, textAlign: align }]}>
+                      {[meal.time || meal.meal_time, meal.calories ? `${meal.calories} kcal` : null,
+                        macros.protein != null ? `P ${macros.protein}g` : null,
+                        macros.carbs != null ? `C ${macros.carbs}g` : null,
+                        macros.fat != null ? `F ${macros.fat}g` : null,
+                      ].filter(Boolean).join('  ·  ')}
                     </Text>
-                    <Text style={[styles.body, { color: done ? color.pulse : color.dim }]}>
-                      {done ? (isRtl ? 'اضغط لإلغاء التسجيل' : 'Tap to unlog') : (isRtl ? 'اضغط للتسجيل' : 'Tap to log')}
+                    <Text style={[styles.logHint, { color: done ? color.pulse : color.dim }]}>
+                      {done ? (isRtl ? '✓ اضغط لإلغاء التسجيل' : '✓ Tap to unlog') : (isRtl ? 'اضغط للتسجيل' : 'Tap to log')}
                     </Text>
-                  </View>
-
+                  </Pressable>
                   {hasDetails ? (
                     <Pressable onPress={() => toggleMealExpand(index)} style={styles.expandBtn} hitSlop={8}>
                       <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={color.muted} />
                     </Pressable>
                   ) : null}
-                </Pressable>
+                </View>
 
-                {/* Expanded recipe / ingredients */}
+                {/* Expanded detail */}
                 {expanded && hasDetails ? (
                   <View style={[styles.recipeSection, { borderTopColor: color.border }]}>
-                    {ingredients.length > 0 ? (
+                    {/* Food items list (web-style breakdown) */}
+                    {foodItems.length > 0 ? (
                       <>
                         <Text style={[styles.recipeSectionTitle, { color: color.spark }]}>
-                          {isRtl ? 'المكوّنات' : 'Ingredients'}
+                          {isRtl ? 'الأطعمة' : 'FOODS'}
                         </Text>
-                        {ingredients.map((ing, i) => (
-                          <Text key={i} style={[styles.ingredientLine, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
-                            {'·  '}{ing}
-                          </Text>
+                        {foodItems.map((food: any, fi: number) => (
+                          <View key={fi} style={[styles.foodItem, { backgroundColor: color.elevated }]}>
+                            <Text style={[styles.foodItemName, { color: color.text }]}>
+                              {food.item || food.name || food.food || String(food)}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                              {food.amount || food.quantity || food.serving
+                                ? <Text style={[styles.foodItemAmount, { color: color.muted }]}>{food.amount || food.quantity || food.serving}</Text>
+                                : null}
+                              {food.calories
+                                ? <Text style={[styles.foodItemCal, { color: color.flame }]}>{food.calories} kcal</Text>
+                                : null}
+                            </View>
+                          </View>
                         ))}
                       </>
                     ) : null}
-                    {recipe ? (
+
+                    {/* Ingredients */}
+                    {ingredients.length > 0 ? (
                       <>
-                        <Text style={[styles.recipeSectionTitle, { color: color.spark, marginTop: ingredients.length > 0 ? 10 : 0 }]}>
-                          {isRtl ? 'طريقة التحضير' : 'Recipe'}
+                        <Text style={[styles.recipeSectionTitle, { color: color.spark, marginTop: foodItems.length > 0 ? 10 : 0 }]}>
+                          {isRtl ? 'المكوّنات' : 'INGREDIENTS'}
                         </Text>
-                        <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>{recipe}</Text>
+                        {ingredients.map((ing, i) => (
+                          <Text key={i} style={[styles.ingredientLine, { color: color.muted, textAlign: align }]}>·  {ing}</Text>
+                        ))}
                       </>
                     ) : null}
-                    {macros.protein != null && ingredients.length === 0 && !recipe ? (
-                      <Text style={[styles.body, { color: color.muted }]}>
-                        P {macros.protein}g  ·  C {macros.carbs ?? '—'}g  ·  F {macros.fat ?? '—'}g
-                      </Text>
+
+                    {/* Recipe */}
+                    {recipeText ? (
+                      <>
+                        <Text style={[styles.recipeSectionTitle, { color: color.spark, marginTop: (foodItems.length > 0 || ingredients.length > 0) ? 10 : 0 }]}>
+                          {isRtl ? 'طريقة التحضير' : 'RECIPE'}
+                        </Text>
+                        <Text style={[styles.body, { color: color.muted, textAlign: align, lineHeight: 20 }]}>{recipeText}</Text>
+                      </>
                     ) : null}
                   </View>
                 ) : null}
@@ -327,66 +539,96 @@ export default function NutritionScreen() {
           })}
         </Card>
       ) : null}
-      <Card style={styles.section}>
-        <Text style={[styles.title, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>Log food</Text>
-        <View style={styles.form}>
-          <TextInput
-            value={barcode}
-            onChangeText={setBarcode}
-            placeholder="Barcode number"
-            placeholderTextColor={color.dim}
-            keyboardType="number-pad"
-            style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: isRtl ? 'right' : 'left' }]}
-          />
-          <Pressable onPress={lookupBarcode} style={[styles.secondaryFull, { borderColor: color.cyan, backgroundColor: color.elevated }]}>
-            <Text style={[styles.secondaryText, { color: color.cyan }]}>Lookup barcode</Text>
-          </Pressable>
-          <Pressable onPress={openBarcodeScanner} style={[styles.secondaryFull, { borderColor: color.pulse, backgroundColor: color.elevated }]}>
-            <Text style={[styles.secondaryText, { color: color.pulse }]}>Scan live barcode</Text>
-          </Pressable>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Food name"
-            placeholderTextColor={color.dim}
-            style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: isRtl ? 'right' : 'left' }]}
-          />
-          <TextInput
-            value={calories}
-            onChangeText={setCalories}
-            placeholder="Calories"
-            placeholderTextColor={color.dim}
-            keyboardType="numeric"
-            style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: isRtl ? 'right' : 'left' }]}
-          />
-          <Pressable disabled={saving} onPress={handleSave} style={[styles.primary, { backgroundColor: color.flame }]}>
-            {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{editing ? 'Save changes' : 'Log food'}</Text>}
-          </Pressable>
-          <Pressable disabled={scanning} onPress={handlePhotoScan} style={[styles.secondaryFull, { borderColor: color.flame, backgroundColor: color.elevated }]}>
-            {scanning ? <ActivityIndicator color={color.flame} /> : <Text style={[styles.secondaryText, { color: color.flame }]}>Scan food photo</Text>}
-          </Pressable>
+
+      {/* ── Pre / Post workout ── */}
+      {(preWorkout || postWorkout) ? (
+        <View style={styles.section}>
+          {preWorkout ? (
+            <View style={[styles.noteBanner, { backgroundColor: `${color.pulse}0F`, borderColor: `${color.pulse}26` }]}>
+              <Text style={[styles.recipeSectionTitle, { color: color.pulse }]}>{isRtl ? 'قبل التمرين' : 'PRE-WORKOUT'}</Text>
+              <Text style={[styles.body, { color: color.muted }]}>{preWorkout}</Text>
+            </View>
+          ) : null}
+          {postWorkout ? (
+            <View style={[styles.noteBanner, { backgroundColor: `${color.spark}0F`, borderColor: `${color.spark}26`, marginTop: 8 }]}>
+              <Text style={[styles.recipeSectionTitle, { color: color.sparkLight }]}>{isRtl ? 'بعد التمرين' : 'POST-WORKOUT'}</Text>
+              <Text style={[styles.body, { color: color.muted }]}>{postWorkout}</Text>
+            </View>
+          ) : null}
         </View>
+      ) : null}
+
+      {/* ── Log food panel toggle ── */}
+      <Card style={styles.section}>
+        <Pressable onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setLogPanelOpen(p => !p) }}
+          style={[styles.logPanelHeader, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
+          <Text style={[styles.sectionTitle, { color: color.text, marginBottom: 0 }]}>{isRtl ? 'تسجيل طعام' : 'Log food'}</Text>
+          <Feather name={logPanelOpen ? 'chevron-up' : 'chevron-down'} size={18} color={color.muted} />
+        </Pressable>
+
+        {logPanelOpen ? (
+          <View style={styles.form}>
+            <TextInput value={barcode} onChangeText={setBarcode} placeholder={isRtl ? 'رقم الباركود' : 'Barcode number'} placeholderTextColor={color.dim}
+              keyboardType="number-pad" style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: align }]} />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable onPress={lookupBarcode} style={[styles.secondaryHalf, { borderColor: '#3B82F6', backgroundColor: color.elevated }]}>
+                <Text style={[styles.secondaryText, { color: '#3B82F6' }]}>{isRtl ? 'بحث' : 'Lookup'}</Text>
+              </Pressable>
+              <Pressable onPress={openBarcodeScanner} style={[styles.secondaryHalf, { borderColor: color.pulse, backgroundColor: color.elevated }]}>
+                <Feather name="camera" size={14} color={color.pulse} />
+                <Text style={[styles.secondaryText, { color: color.pulse }]}>{isRtl ? 'مسح' : 'Scan'}</Text>
+              </Pressable>
+            </View>
+            <TextInput value={name} onChangeText={setName} placeholder={isRtl ? 'اسم الطعام' : 'Food name'} placeholderTextColor={color.dim}
+              style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: align }]} />
+            <TextInput value={calories} onChangeText={setCalories} placeholder={isRtl ? 'السعرات' : 'Calories'} placeholderTextColor={color.dim}
+              keyboardType="numeric" style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: align }]} />
+            <Pressable disabled={saving} onPress={handleSave} style={[styles.primary, { backgroundColor: color.flame }]}>
+              {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{editing ? (isRtl ? 'حفظ التعديلات' : 'Save changes') : (isRtl ? 'تسجيل الطعام' : 'Log food')}</Text>}
+            </Pressable>
+            <Pressable disabled={scanning} onPress={handlePhotoScan} style={[styles.secondaryFull, { borderColor: color.flame, backgroundColor: color.elevated }]}>
+              {scanning ? <ActivityIndicator color={color.flame} /> : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="camera" size={14} color={color.flame} />
+                  <Text style={[styles.secondaryText, { color: color.flame }]}>{isRtl ? 'تصوير الطعام' : 'Scan food photo'}</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
       </Card>
+
+      {/* ── Logged foods ── */}
       <View style={styles.list}>
         {logs.loading ? <ActivityIndicator color={color.spark} /> : null}
         {logs.error ? <Text style={[styles.body, { color: color.danger }]}>{logs.error}</Text> : null}
-        {(logs.data?.logs ?? []).map(log => (
-          <Card key={log.id}>
-            <Text style={[styles.itemTitle, { color: color.text, textAlign: isRtl ? 'right' : 'left' }]}>{log.meal_name || 'Food'}</Text>
-            <Text style={[styles.body, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>
-              {log.calories_estimated || 0} kcal - P:{log.protein_g || 0} C:{log.carbs_g || 0} F:{log.fats_g || 0}
+        {allLogs.length > 0 ? (
+          <View style={[styles.section]}>
+            <Text style={[styles.sectionTitle, { color: color.text, textAlign: align, marginBottom: 8 }]}>
+              {isRtl ? 'الأطعمة المسجلة' : 'LOGGED FOODS'}
+              <Text style={[styles.body, { color: color.spark }]}>  {allLogs.length}</Text>
             </Text>
-            <View style={styles.row}>
-              <Pressable onPress={() => startEdit(log)} style={[styles.secondary, { borderColor: color.border }]}>
-                <Text style={[styles.secondaryText, { color: color.text }]}>Edit</Text>
-              </Pressable>
-              <Pressable onPress={() => handleDelete(log.id)} style={[styles.secondary, { borderColor: color.danger }]}>
-                <Text style={[styles.secondaryText, { color: color.danger }]}>Delete</Text>
-              </Pressable>
-            </View>
-          </Card>
-        ))}
+            {allLogs.map(log => (
+              <Card key={log.id} style={{ marginBottom: 8 }}>
+                <Text style={[styles.itemTitle, { color: color.text, textAlign: align, fontSize: 15 }]}>{log.meal_name || 'Food'}</Text>
+                <Text style={[styles.body, { color: color.muted, textAlign: align }]}>
+                  {log.calories_estimated || 0} kcal{log.protein_g ? `  ·  P ${log.protein_g}g` : ''}{log.carbs_g ? `  C ${log.carbs_g}g` : ''}{log.fats_g ? `  F ${log.fats_g}g` : ''}
+                </Text>
+                <View style={[styles.row, { marginTop: 8 }]}>
+                  <Pressable onPress={() => startEdit(log)} style={[styles.secondary, { borderColor: color.border }]}>
+                    <Text style={[styles.secondaryText, { color: color.text }]}>{isRtl ? 'تعديل' : 'Edit'}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => handleDelete(log.id)} style={[styles.secondary, { borderColor: color.danger }]}>
+                    <Text style={[styles.secondaryText, { color: color.danger }]}>{isRtl ? 'حذف' : 'Delete'}</Text>
+                  </Pressable>
+                </View>
+              </Card>
+            ))}
+          </View>
+        ) : null}
       </View>
+
+      {/* ── Barcode camera modal ── */}
       <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => setScannerOpen(false)}>
         <View style={[styles.scannerRoot, { backgroundColor: color.bg }]}>
           <CameraView
@@ -397,9 +639,9 @@ export default function NutritionScreen() {
           />
           <View style={styles.scannerOverlay}>
             <View style={[styles.scannerFrame, { borderColor: color.flame }]} />
-            <Text style={styles.scannerHelp}>Place the barcode inside the frame</Text>
+            <Text style={styles.scannerHelp}>{isRtl ? 'ضع الباركود داخل الإطار' : 'Place the barcode inside the frame'}</Text>
             <Pressable onPress={() => setScannerOpen(false)} style={[styles.closeScanner, { backgroundColor: color.elevated, borderColor: color.border }]}>
-              <Text style={[styles.secondaryText, { color: color.text }]}>Close scanner</Text>
+              <Text style={[styles.secondaryText, { color: color.text }]}>{isRtl ? 'إغلاق' : 'Close scanner'}</Text>
             </Pressable>
           </View>
         </View>
@@ -409,18 +651,194 @@ export default function NutritionScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 22,
+  sectionTitle: {
+    fontSize: 14,
     fontWeight: '900',
-    marginBottom: 8,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 12,
   },
   body: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  section: {
+    marginTop: 12,
+  },
+  // Macro summary
+  macroSummary: {
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 14,
+  },
+  macroLine: {
+    marginTop: 6,
+  },
+  macroHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  barTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  // Water row
+  waterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    marginTop: 12,
+    paddingTop: 12,
+  },
+  waterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  // Quick links
+  quickLinks: {
+    gap: 8,
+    marginTop: 12,
+  },
+  quickLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  quickLinkIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  quickLinkText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  quickLinkOpen: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  // Note banners
+  noteBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  noteText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  // Meal rows
+  mealRow: {
+    borderWidth: 1,
+    borderRadius: 14,
+    marginTop: 10,
+    overflow: 'hidden',
+  },
+  mealMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 10,
+  },
+  mealCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  itemTitle: {
     fontSize: 15,
-    lineHeight: 22,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
+  logHint: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  expandBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  // Recipe/food expanded section
+  recipeSection: {
+    borderTopWidth: 1,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    paddingTop: 10,
+  },
+  recipeSectionTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  foodItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  foodItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+  },
+  foodItemAmount: {
+    fontSize: 11,
+  },
+  foodItemCal: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  ingredientLine: {
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  // Log panel
+  logPanelHeader: {
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   form: {
     gap: 10,
-    marginTop: 16,
+    marginTop: 14,
   },
   input: {
     borderWidth: 1,
@@ -443,64 +861,25 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
-  list: {
-    gap: 12,
-    marginTop: 14,
-  },
-  section: {
-    marginTop: 14,
-  },
-  mealRow: {
-    borderWidth: 1,
-    borderRadius: 14,
-    marginTop: 10,
-    overflow: 'hidden',
-  },
-  mealMainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    gap: 8,
-  },
-  expandBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  recipeSection: {
-    borderTopWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  recipeSectionTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  ingredientLine: {
-    fontSize: 13,
-    lineHeight: 20,
-    fontWeight: '600',
-  },
-  itemTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
   row: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 12,
   },
   secondary: {
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
+  },
+  secondaryHalf: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 46,
+    borderWidth: 1,
+    borderRadius: 14,
   },
   secondaryFull: {
     minHeight: 50,
@@ -511,58 +890,15 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     fontWeight: '900',
+    fontSize: 13,
   },
-  macroLine: {
-    marginTop: 10,
+  list: {
+    marginTop: 4,
   },
-  macroHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 6,
-  },
-  barTrack: {
-    height: 8,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-  scannerRoot: {
-    flex: 1,
-  },
-  scannerOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  scannerFrame: {
-    width: '88%',
-    maxWidth: 360,
-    aspectRatio: 1.7,
-    borderWidth: 3,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-  },
-  scannerHelp: {
-    marginTop: 18,
-    color: '#FFFFFF',
-    fontWeight: '900',
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowRadius: 8,
-  },
-  closeScanner: {
-    position: 'absolute',
-    bottom: 42,
-    left: 24,
-    right: 24,
-    minHeight: 52,
-    borderWidth: 1,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // Scanner
+  scannerRoot: { flex: 1 },
+  scannerOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  scannerFrame: { width: '88%', maxWidth: 360, aspectRatio: 1.7, borderWidth: 3, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.08)' },
+  scannerHelp: { marginTop: 18, color: '#FFFFFF', fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 8 },
+  closeScanner: { position: 'absolute', bottom: 42, left: 24, right: 24, minHeight: 52, borderWidth: 1, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 })
