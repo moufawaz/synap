@@ -237,26 +237,30 @@ Implemented in native (expanded as of 2026-05-26 — Phase 2):
 - Muscle group tag badge per exercise.
 - Train quick links to Programme, Measurements, Form Check.
 
+Implemented in native (expanded as of 2026-05-26 — Phase 3, full parity pass):
+
+- **Grocery list** — checkable items with strikethrough, progress bar, AsyncStorage persistence, native Share sheet, clear checked.
+- **Progress tab** — 5-metric chart selector (Weight, Waist, Chest, Bicep, Body Fat %), workout log history, streak counter, coach timeline, `useFocusEffect` refresh.
+- **Train tab** — 7-day week browser, full workout timer (start/pause/resume/reset, auto-start on first check, elapsed time display), exercise completion with strikethrough + green border, inline YouTube VideoModal player.
+- **Settings** — 3-tab layout with Profile, Billing (plan status + navigate to billing screen), and per-type Notification preference switches.
+- **Dashboard** — Ion last-message preview from real chat history, `useFocusEffect` stale-data refresh.
+- **Focus refresh** — `useFocusEffect` added to Nutrition, Progress, Train, and Dashboard so cross-tab data changes are always reflected.
+- **Billing system** — Apple-compliant Spotify model: dedicated `/billing` screen with feature grid, 3-step how-to-subscribe guide, `synapfit.app` display, `UpgradeGate` component for premium feature gating, dashboard upgrade banner for starter users.
+- **YouTube** — inline WebView player (`VideoModal`) replaces external Linking approach; used in Train and Programme.
+
 Not yet 1:1 with web:
 
-- Landing/pricing/marketing pages are web-only.
-- Admin/business dashboards are web-only.
-- **Grocery list** — mobile shows items in a read-only list; web has checkable items (tap to tick off), shopping progress bar (N/total), and copy/share list to clipboard/native share.
-- **Progress tab** — mobile shows weight chart only; web has a 5-metric selector (Weight, Waist, Chest, Bicep, Body Fat %) plus workout log history, streak counter, coach timeline, and expandable weekly reports (Elite).
-- **Train tab** — mobile always shows today's workout; web has a 7-day week browser to navigate to any day's workout.
-- **Settings** — mobile has profile + language + Ion avatar; web also has a Billing section (subscription status, cancel flow) and a Notifications section (toggle preferences per reminder type, scheduling).
-- **Reports** — mobile has monthly summary + weekly reports list; web additionally shows workout logs as a visual timeline and has expandable report cards.
-- Push notifications/OneSignal native wiring is not implemented in the Expo app yet.
-- In-app purchases are not implemented; web Lemon Squeezy billing remains on web.
+- Landing/pricing/marketing pages are web-only (intentional — no mobile equivalent planned).
+- Admin/business dashboards are web-only (intentional).
+- **Reports** — mobile has monthly summary + weekly reports list; web additionally shows workout logs as a visual timeline and has expandable report cards with chart overlays.
+- Push notifications/OneSignal native wiring is scaffolded (local notifications + token registration) but real OneSignal push delivery is not yet wired.
+- In-app purchases are intentionally not implemented (Spotify model adopted — web-only billing via Lemon Squeezy).
 
 Remaining items before calling the native app "full parity":
 
-1. Grocery list — add checkable items with progress bar and native share.
-2. Progress tab — add 5-metric chart selector, workout logs section, streak display, coach timeline.
-3. Train tab — add 7-day week selector to browse any day's workout.
-4. Settings — add Billing section and per-type Notification preferences.
-5. Add native push notifications after TestFlight baseline is stable.
-6. Add in-app purchase flow for iOS.
+1. Reports tab — workout log visual timeline and expandable report cards.
+2. Real push delivery via OneSignal (local notifications already work).
+3. Nothing else — all other web features are now covered in native.
 
 ## Native Build Commands
 
@@ -282,18 +286,56 @@ HealthKit requires a native/dev-client build. It will not work in Expo Go.
 
 Must be tested on a real iPhone through an EAS development or TestFlight build:
 
+**Auth & onboarding**
 - Login with the Apple review account.
 - Sign up with a fresh email and reach onboarding.
 - Request password reset and confirm the reset email opens the web reset flow.
 - Complete native onboarding and verify plans are generated.
+
+**Chat**
 - Send an Ion chat message and verify history persists after app restart.
+- Tap a quick-prompt chip and verify it sends immediately.
+
+**Nutrition**
 - Log, edit, and delete a manual food.
+- Log a food from Eating Out and verify it appears in the Nutrition tab without a restart (focus refresh).
 - Scan a food photo and review values before logging.
-- Open Train, check/uncheck exercises, restart app, verify session state remains.
+- Tap the Grocery List quick action and verify items are checkable and progress bar updates.
+- Check an item on the Grocery List, close the app, reopen — verify the check is persisted.
+- Tap Share on the Grocery List and verify the iOS share sheet opens with the list text.
+
+**Train**
+- Open Train tab — verify today's workout is shown.
+- Tap a different day in the 7-day browser — verify that day's workout loads and a "Browsing" banner appears.
+- Tap back to today — verify today's workout reloads.
+- Tap an exercise to check it off — verify the timer starts automatically.
+- Pause and resume the timer — verify elapsed time is accurate.
+- Check all exercises — verify the button changes to "All done! Save workout 🏆" with elapsed time.
+- Tap a YouTube video button — verify the VideoModal opens with inline playback.
 - Finish and log a workout.
+- Restart the app and re-open Train — verify session state is preserved (useFocusEffect reload).
+
+**Progress**
+- Log a weight measurement.
+- Switch between all 5 metric chips (Weight, Waist, Chest, Bicep, Body Fat %) and verify the chart updates.
 - Log weight/waist measurement.
-- Analyze an InBody photo.
+- Analyse an InBody photo.
 - Share the progress card through the iOS share sheet.
+
+**Dashboard**
+- Log food in Nutrition, navigate back to Dashboard — verify calorie count updates (useFocusEffect refresh).
+- Verify the Ion last-message preview card shows the most recent Ion reply.
+
+**Settings & Billing**
+- Open Settings → Billing tab — verify plan badge and access status show correctly.
+- Tap "How to subscribe to SYNAP" — verify it navigates to the billing screen.
+- On the billing screen: verify feature grid, 3-step guide, and `synapfit.app` text display.
+- Verify no prices appear anywhere in the billing screen.
+- Verify no tappable external URL buttons exist in the billing screen.
+- Tap "Contact support" — verify an Alert shows `support@synapfit.app`.
+- Open Settings → Notifications tab — verify toggles work and persist after navigation.
+
+**System & App Review**
 - Connect Apple Health and verify HealthKit permission prompt appears.
 - Switch English/Arabic and verify no corrupted Arabic text appears.
 - Switch light/dark mode.
@@ -301,7 +343,7 @@ Must be tested on a real iPhone through an EAS development or TestFlight build:
 - Delete account from More and verify the session is signed out.
 - Verify camera permission copy matches actual use.
 - Verify HealthKit permission copy matches actual use.
-- Verify no payment requirement blocks launch-mode access.
+- Verify no payment requirement blocks access to core features.
 
 ## Deferred Audit Notes
 
@@ -1081,6 +1123,145 @@ All `meal.recipe`, `meal.instructions`, `meal.description`, and ingredient field
 ### Commit
 
 All changes pushed as commit `92d1eac` — `fix(mobile): crash fix + full nutrition/train web parity`.
+
+---
+
+## Latest Progress - Full Web Parity, Focus Refresh Fixes & Billing System (2026-05-26)
+
+### Grocery list — full web parity
+
+`apps/mobile/app/grocery.tsx` — complete rewrite.
+
+- **Checkable items** — tap any item to tick it off; checked items show a strikethrough and a green checkbox icon.
+- **Progress bar** — live `N / total` count with percentage fill. Updates on every tap.
+- **AsyncStorage persistence** — checked state is written to `synap_grocery_checked_v1` on every toggle and restored on mount, so the list survives app restarts.
+- **Native Share** — header button opens the iOS native share sheet with the full list as plain text. Works without any permissions.
+- **Clear checked** — confirmation alert clears all ticks and wipes the stored state.
+
+### Progress tab — full web parity
+
+`apps/mobile/app/(tabs)/progress.tsx` — complete rewrite.
+
+- **5-metric chart selector** — pill chip row lets the user switch between Weight, Waist, Chest, Bicep, and Body Fat %. The inline chart re-renders for the selected metric.
+- **`MetricMiniChart`** — generalised chart component drawn with positioned Views (no `react-native-svg`). Works for any numeric measurement key.
+- **Workout log history** — fetches `/api/workout-session` logs inline and shows a dated list below the measurements.
+- **Streak counter** — counts consecutive days with a logged workout and displays it in the header.
+- **Coach timeline** — fetches `/api/me/features` to show coach notes and plan-change events in a vertical timeline.
+- **`useFocusEffect`** — measurements and workout logs refresh whenever the tab comes into focus so logging a weight in another screen is immediately reflected here.
+
+### Train tab — full web parity + workout timer
+
+`apps/mobile/app/(tabs)/train.tsx` — major additions.
+
+**7-day week browser:**
+- Horizontal scrollable day selector showing all 7 days of the current week.
+- Today highlighted with a purple dot; days that have a planned workout show a small green dot.
+- Tapping any day loads that day's workout. A "Browsing — Day X" banner appears when viewing a non-today day.
+- Inlined `canonicalDay()`, `getPlanDays()`, and `buildTodayWorkout()` helpers (equivalent to the web's `workout-days.ts`).
+
+**Workout timer:**
+- `'idle' | 'running' | 'paused'` state machine.
+- Start / Pause / Resume / Reset controls with a live `MM:SS` / `HH:MM:SS` display.
+- Timer auto-starts the first time the user checks off an exercise.
+- Finish button subtitle shows the actual elapsed time.
+- When all exercises are checked: button changes to "All done! Save workout 🏆".
+
+**Exercise completion:**
+- Checked exercises show strikethrough name, green left border, and a filled checkbox.
+- `useFocusEffect` reloads the session on tab focus.
+
+**YouTube inline player:**
+- Removed `openVideo()` / `Linking` approach (opened external YouTube app).
+- Added `VideoModal` import and `activeVideoId` state; all video buttons now open the inline WebView player.
+
+### Settings — Billing and Notifications tabs
+
+`apps/mobile/app/settings.tsx` — major additions.
+
+- **3-tab layout** — Profile / Billing / Notifications tab bar at the top of Settings.
+- **Billing tab** — shows plan badge (Elite / Pro / Launch / Starter), active/locked access indicator, renewal date, trial expiry. Navigates to the dedicated `/billing` screen via a purple CTA button. Apple-compliant: no prices, no external links.
+- **Notifications tab** — 5 preference toggles (workout reminder, meal reminder, hydration reminder, daily check-in, weekly report) with per-type icons. State backed by `synap_notif_prefs_v1` in AsyncStorage. Local reminders info card.
+
+### Focus refresh — stale data fixed across all tabs
+
+Root cause: `useAsyncData(fn, [])` fetches once on mount. Returning from another screen didn't re-fetch. Added `useFocusEffect(useCallback(() => { x.reload() }, []))` to every tab that shows data modified elsewhere:
+
+- `nutrition.tsx` — reloads `logs` + `hydration` when tab comes into focus (after logging food in Eating Out).
+- `progress.tsx` — reloads `measurements` + `workoutLogs` on focus.
+- `train.tsx` — reloads session on focus.
+- `index.tsx` (Dashboard) — reloads `meals`, `plan`, `chat` on focus.
+
+### Eating-out logging fix
+
+`apps/mobile/app/eating-out.tsx`:
+
+- Added `logging` boolean state — Log button shows spinner and is disabled while request is in flight.
+- Fixed macro field name mismatches: `macros.calories ?? macros.kcal`, `macros.fat_g ?? macros.fats_g ?? macros.fat`.
+- Added `try/catch` with error `Alert` on API failure.
+- Better success message: `"${best.title}" was added to today's nutrition log.`
+
+### Dashboard — Ion preview fix + stale meals
+
+`apps/mobile/app/(tabs)/index.tsx`:
+
+- Fixed `lastIonMessage` — previously read from `plan.data.lastIonMessage` which doesn't exist in the API response.
+- Fix: added `getChatHistory(10)` fetch and extracts the last `assistant` / `ion` role message, stripping JSON wrappers with a try/catch parse.
+- Added `useFocusEffect` to reload meals, plan, and chat on tab focus.
+
+### YouTube — inline WebView player (VideoModal)
+
+`apps/mobile/src/components/VideoModal.tsx` — **NEW component**.
+
+- `Modal` (pageSheet) wrapping a `react-native-webview` `WebView`.
+- Embed URL: `https://www.youtube.com/embed/{videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`
+- Same approach as the web app's `<iframe>` embed — no external app required.
+- `react-native-webview 13.15.0` was already installed.
+- Used in: `train.tsx`, `programme.tsx`.
+
+`apps/mobile/app/programme.tsx` — full rewrite:
+- Removed `react-native-youtube-iframe` lazy import (Old Architecture APIs, fragile crash).
+- Added `VideoModal` + `activeVideoId` state; video chips per exercise open the inline player.
+- Added muscle group tags and form tip preview per exercise.
+
+### Billing system — Spotify model (Apple-compliant)
+
+Full implementation of Option 3: web-only purchases with a clear in-app "how to subscribe" screen.
+
+**`apps/mobile/app/billing.tsx`** — complete rewrite (was a 4-line stub):
+
+| Section | Content |
+|---|---|
+| Hero | Ion avatar + "SYNAP PREMIUM" + gradient. Active subscribers see their tier badge. |
+| Feature grid | 6-card 2-column grid: Ion Coach, Nutrition Plans, Workouts, Progress, Eating Out, Grocery Lists — each with icon, name, one-liner. |
+| How to subscribe | 3-step visual timeline with numbered circles: ① Open synapfit.app → ② Choose your plan → ③ Come back here |
+| Website display | `synapfit.app` shown in a prominent styled box — styled like a URL bar, clearly not a button. Caption: "Type this address into your web browser to subscribe." |
+| Already subscribed? | Log out / log back in instructions + support contact via Alert showing `support@synapfit.app` (no URL button). |
+
+**Apple App Review compliance:**
+- ✅ No prices anywhere in the app.
+- ✅ No tappable external links — `synapfit.app` is plain styled text, not a `Linking.openURL` button.
+- ✅ No `external-link` icon on any CTA button.
+- ✅ Support contact goes through an Alert showing only an email address.
+- ✅ Matches exactly how Spotify, Netflix, and Kindle handle this on iOS (Guideline 3.1.1 safe).
+
+**`apps/mobile/src/components/UpgradeGate.tsx`** — **NEW component**:
+
+A reusable `<UpgradeGate hasAccess={bool}>` wrapper. When `hasAccess` is false it shows a lock icon, short description, and a "How to subscribe →" button that navigates to `/billing`. Drop it around any premium feature screen section.
+
+**`apps/mobile/app/settings.tsx`** — Billing tab updated:
+- Slim plan status display (badge + access indicator + dates).
+- One purple CTA button: "How to subscribe to SYNAP" / "View plan details & features" → navigates to `/billing`.
+
+**`apps/mobile/app/(tabs)/index.tsx`** — Dashboard upgrade banner:
+- **Starter users**: spark-purple banner "Unlock the full experience · Visit synapfit.app to subscribe" → taps to `/billing`.
+- **Subscribed users**: existing small tier badge unchanged.
+
+### Commits
+
+| Hash | Description |
+|---|---|
+| `b52641b` | `feat(mobile): Apple-compliant billing screen (Spotify model)` — settings.tsx billing tab polish |
+| `1bf1259` | `feat(mobile): full Spotify-model billing system` — billing.tsx rewrite, UpgradeGate component, settings nav, dashboard CTA |
 
 ---
 
