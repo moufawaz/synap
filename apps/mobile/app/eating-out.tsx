@@ -12,6 +12,7 @@ export default function EatingOutScreen() {
   const [situation, setSituation] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [logging, setLogging] = useState(false)
 
   async function generate() {
     if (!situation.trim()) return
@@ -28,17 +29,24 @@ export default function EatingOutScreen() {
   async function logBest() {
     const best = result?.recommendation?.best_order
     if (!best) return
-    const macros = best.estimated_macros || {}
-    await createMealLog({
-      meal_name: best.title,
-      description: (best.items || []).join(', '),
-      calories_estimated: macros.calories,
-      protein_g: macros.protein_g,
-      carbs_g: macros.carbs_g,
-      fats_g: macros.fat_g,
-      source: 'mobile_eating_out',
-    })
-    Alert.alert('Logged', 'Best order was added to today.')
+    setLogging(true)
+    try {
+      const macros = best.estimated_macros || {}
+      await createMealLog({
+        meal_name: best.title || 'Eating out',
+        description: (best.items || []).join(', '),
+        calories_estimated: macros.calories ?? macros.kcal ?? undefined,
+        protein_g: macros.protein_g ?? macros.protein ?? undefined,
+        carbs_g: macros.carbs_g ?? macros.carbs ?? undefined,
+        fats_g: macros.fat_g ?? macros.fats_g ?? macros.fat ?? undefined,
+        source: 'mobile_eating_out',
+      })
+      Alert.alert('Logged ✓', `"${best.title}" was added to today's nutrition log.`)
+    } catch (error) {
+      Alert.alert('Could not log', error instanceof Error ? error.message : 'Try again in a moment.')
+    } finally {
+      setLogging(false)
+    }
   }
 
   const best = result?.recommendation?.best_order
@@ -58,7 +66,9 @@ export default function EatingOutScreen() {
           {(best.items || []).map((item: string, index: number) => <Text key={index} style={[styles.body, { color: color.text }]}>• {item}</Text>)}
           <Text style={[styles.body, { color: color.spark }]}>~{best.estimated_macros?.calories} kcal P:{best.estimated_macros?.protein_g} C:{best.estimated_macros?.carbs_g} F:{best.estimated_macros?.fat_g}</Text>
           <Text style={[styles.body, { color: color.text }]}>{best.why}</Text>
-          <Pressable onPress={logBest} style={[styles.secondary, { borderColor: color.pulse }]}><Text style={[styles.secondaryText, { color: color.pulse }]}>Log this food</Text></Pressable>
+          <Pressable onPress={logBest} disabled={logging} style={[styles.secondary, { borderColor: color.pulse, opacity: logging ? 0.6 : 1 }]}>
+            {logging ? <ActivityIndicator color={color.pulse} size="small" /> : <Text style={[styles.secondaryText, { color: color.pulse }]}>Log this food</Text>}
+          </Pressable>
         </Card>
       ) : null}
       {backup ? <Card style={styles.cardGap}><Text style={[styles.title, { color: color.text }]}>Backup</Text><Text style={[styles.body, { color: color.text }]}>{backup.title}</Text></Card> : null}

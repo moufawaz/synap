@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,7 @@ import {
   UIManager,
   View,
 } from 'react-native'
-import { router } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker'
 import Feather from '@expo/vector-icons/Feather'
@@ -187,6 +187,15 @@ export default function NutritionScreen() {
   const logs = useAsyncData(getMealLogs, [])
   const plan = useAsyncData(getPlanHistory, [])
   const hydration = useAsyncData(getHydration, [])
+
+  // Reload logs every time this tab comes into focus so food logged from
+  // eating-out, chat, or any other screen appears immediately on return.
+  useFocusEffect(
+    useCallback(() => {
+      logs.reload()
+      hydration.reload()
+    }, [])
+  )
 
   const [name, setName] = useState('')
   const [calories, setCalories] = useState('')

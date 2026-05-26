@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as Sharing from 'expo-sharing'
 import Feather from '@expo/vector-icons/Feather'
+import { useFocusEffect } from 'expo-router'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
@@ -118,6 +119,14 @@ export default function ProgressScreen() {
 
   const latest = measurements.data?.measurements?.[0]
   const previous = measurements.data?.measurements?.[1]
+
+  // Reload on focus so new measurements/workouts from other screens appear immediately
+  useFocusEffect(
+    useCallback(() => {
+      measurements.reload()
+      workoutLogs.reload()
+    }, [])
+  )
 
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('weight_kg')
   const [weight, setWeight] = useState('')
