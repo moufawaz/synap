@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router, type Href } from 'expo-router'
@@ -113,7 +114,14 @@ export default function MoreScreen() {
           icon="log-out"
           label={text.logout}
           color={{ ...color, spark: color.spark }}
-          onPress={signOut}
+          onPress={async () => {
+            await signOut()
+            // Clear dashboard cache so next user doesn't see stale data
+            const keys = await AsyncStorage.getAllKeys()
+            const dashKeys = keys.filter(k => k.startsWith('@sdc:'))
+            if (dashKeys.length) await AsyncStorage.multiRemove(dashKeys)
+            router.replace('/(auth)/login')
+          }}
           rowDir={rowDir}
           accent={color.spark}
         />

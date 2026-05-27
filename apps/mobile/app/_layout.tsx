@@ -4,7 +4,7 @@ import { Stack } from 'expo-router'
 import { router } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { StatusBar } from 'expo-status-bar'
-import { AuthProvider } from '@/auth/AuthProvider'
+import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 
@@ -52,6 +52,14 @@ function routeFromNotification(response: Notifications.NotificationResponse | nu
 
 function RootNavigator() {
   const { mode, color } = useTheme()
+  const { session, loading } = useAuth()
+
+  // Safety net: any sign-out path (signOut(), token expiry, etc.) redirects to login
+  useEffect(() => {
+    if (!loading && session === null) {
+      router.replace('/(auth)/login')
+    }
+  }, [session, loading])
 
   useEffect(() => {
     Notifications.getLastNotificationResponseAsync().then(response => {
