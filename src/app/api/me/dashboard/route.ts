@@ -75,25 +75,26 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const today = todayIso()
 
-  // ── All queries in parallel ──────────────────────────────────
+  // ── All queries in parallel — each is individually safe ──────
+  // Using allSettled so a single failing query never blanks the whole dashboard.
   const [
-    sub,
+    subResult,
     profileRes,
     measurementsRes,
     dietPlanRes,
     workoutPlanRes,
     mealLogsRes,
     lastIonMsgRes,
-  ] = await Promise.all([
+  ] = await Promise.allSettled([
     getUserSubscription(user.id),
     admin.from('profiles')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle(),
     admin.from('measurements')
-      .select('weight_kg, measured_at, created_at')
+      .select('weight_kg, date, created_at')
       .eq('user_id', user.id)
-      .order('measured_at', { ascending: false })
+      .order('date', { ascending: false })
       .limit(2),
     admin.from('diet_plans')
       .select('id, created_at, start_date, end_date, plan_json, active')
@@ -109,12 +110,11 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    admin.from('meal_logs')
-      .select('id, meal_name, meal_time, calories_estimated, protein_g, carbs_g, fats_g, logged_at')
+    admin.from('meals_log')
+      .select('id, meal_name:description, meal_time, calories_estimated, protein_g, carbs_g, fats_g, logged_at')
       .eq('user_id', user.id)
-      .gte('logged_at', `${today}T00:00:00`)
-      .lte('logged_at', `${today}T23:59:59`)
-      .order('logged_at', { ascending: false }),
+      .eq('date', today)
+      .order('logged_at', { ascending: true }),
     admin.from('chat_messages')
       .select('content, role, created_at')
       .eq('user_id', user.id)
@@ -124,21 +124,24 @@ export async function GET(req: Request) {
       .maybeSingle(),
   ])
 
-  const tier        = effectivePlan(sub)
-  const profile     = profileRes.data || null
-  const measurements = measurementsRes.data || []
-  const dietPlan    = dietPlanRes.data || null
-  const workoutPlan = workoutPlanRes.data || null
-  const mealLogs    = mealLogsRes.data || []
+  const sub        = subResult.status === 'fulfilled'        ? subResult.value        : null
+
+  const tier         = effectivePlan(sub)
+  const profile      = profileRes.status === 'fulfilled'      ? (profileRes.value.data      || null) : null
+  const measurements = measurementsRes.status === 'fulfilled'  ? (measurementsRes.value.data || [])   : []
+  const dietPlan     = dietPlanRes.status === 'fulfilled'      ? (dietPlanRes.value.data     || null) : null
+  const workoutPlan  = workoutPlanRes.status === 'fulfilled'   ? (workoutPlanRes.value.data  || null) : null
+  const mealLogs     = mealLogsRes.status === 'fulfilled'      ? (mealLogsRes.value.data     || [])   : []
+  const lastIonRaw   = lastIonMsgRes.status === 'fulfilled'    ? lastIonMsgRes.value.data            : null
 
   // Parse last Ion message
   let lastIonMessage: string | null = null
-  if (lastIonMsgRes.data?.content) {
+  if (lastIonRaw?.content) {
     try {
-      const parsed = JSON.parse(lastIonMsgRes.data.content)
+      const parsed = JSON.parse(lastIonRaw.content)
       lastIonMessage = parsed.message ?? parsed.reply ?? parsed.content ?? null
     } catch {
-      lastIonMessage = lastIonMsgRes.data.content.trim() || null
+      lastIonMessage = lastIonRaw.content.trim() || null
     }
   }
 
