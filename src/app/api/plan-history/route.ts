@@ -87,15 +87,30 @@ function summarizeTodayWorkout(plan: any) {
   if (!days.length) return null
 
   const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const today = weekDays[new Date().getDay()]
-  const selected = days.find((day: any) => {
+  const dayOfWeek = new Date().getDay() // 0=Sun … 6=Sat
+  const today = weekDays[dayOfWeek]
+
+  // 1) Try exact name match (plan days named "Monday", "Wednesday - Legs", etc.)
+  let selected = days.find((day: any) => {
     const name = String(day?.day_name ?? day?.day ?? '').toLowerCase()
     return name.includes(today.toLowerCase())
-  }) ?? days.find((day: any) => Array.isArray(day?.exercises) && day.exercises.length > 0) ?? days[0]
+  })
+
+  // 2) Index-based: Monday-first week → Mon=0, Tue=1, Wed=2, …, Sun=6
+  if (!selected) {
+    const mondayIndex = (dayOfWeek + 6) % 7
+    selected = days[mondayIndex % days.length]
+  }
+
+  // 3) Last resort: first non-empty day
+  if (!selected) {
+    selected = days.find((day: any) => Array.isArray(day?.exercises) && day.exercises.length > 0) ?? days[0]
+  }
 
   const exercises = Array.isArray(selected?.exercises) ? selected.exercises : []
   return {
-    day_name: selected?.day_name ?? selected?.day ?? today,
+    // Always show real calendar day so the card never reads "Monday" on a Wednesday
+    day_name: today,
     muscle_focus: selected?.muscle_focus ?? selected?.focus ?? null,
     duration_min: selected?.duration_min ?? selected?.duration_minutes ?? null,
     is_rest_day: exercises.length === 0 || exercises.every((exercise: any) => {

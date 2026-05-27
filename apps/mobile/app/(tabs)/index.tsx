@@ -25,17 +25,18 @@ function timeGreeting(isRtl: boolean) {
 export default function DashboardScreen() {
   const { color } = useTheme()
   const { text, isRtl } = useLanguage()
-  const subscription = useAsyncData(getSubscriptionStatus, [])
-  const plan         = useAsyncData(getPlanHistory, [])
-  const meals        = useAsyncData(getMealLogs, [])
-  const profile      = useAsyncData(getProfile, [])
-  const chat         = useAsyncData(() => getChatHistory(10), [])
+  const subscription = useAsyncData(getSubscriptionStatus, [], { cacheKey: 'subscription' })
+  const plan         = useAsyncData(getPlanHistory,        [], { cacheKey: 'plan-history' })
+  const meals        = useAsyncData(getMealLogs,           [], { cacheKey: 'meal-logs-today', cacheTtlMs: 2 * 60 * 1000 })
+  const profile      = useAsyncData(getProfile,           [], { cacheKey: 'profile', cacheTtlMs: 10 * 60 * 1000 })
+  const chat         = useAsyncData(() => getChatHistory(10), [], { cacheKey: 'chat-last10' })
 
   useFocusEffect(
     useCallback(() => {
-      meals.reload()
-      plan.reload()
-      chat.reload()
+      // Silent refresh on tab focus — cached data stays visible, updates quietly
+      meals.silentRefresh()
+      plan.silentRefresh()
+      chat.silentRefresh()
     }, [])
   )
 
