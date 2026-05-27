@@ -58,13 +58,13 @@ export default function DashboardScreen() {
   )
 
   const d              = dash.data
-  const tier           = d?.subscription.tier ?? 'starter'
+  const tier           = d?.subscription?.tier ?? 'starter'
   const name           = d?.profile?.name || 'Athlete'
   const goal           = d?.profile?.goal || ''
-  const workout        = d?.todayWorkout
+  const workout        = d?.todayWorkout ?? null
   const mealLogs       = d?.mealLogs ?? []
-  const activeDiet     = d?.activeDietPlan?.plan_json
-  const plannedMeals   = Array.isArray(activeDiet?.meals) ? activeDiet.meals : []
+  const activeDiet     = d?.activeDietPlan?.plan_json ?? null
+  const plannedMeals   = Array.isArray(activeDiet?.meals) ? (activeDiet.meals as any[]) : []
   const caloriesLogged = mealLogs.reduce((sum, item) => sum + (item.calories_estimated || 0), 0)
   const calorieTarget  = Number(activeDiet?.daily_calories ?? activeDiet?.calories_per_day ?? 0)
   const completedMeals = plannedMeals.filter((meal: any) =>
@@ -76,7 +76,7 @@ export default function DashboardScreen() {
   const measurements   = d?.measurements ?? []
   const latestWeight   = measurements[0]?.weight_kg
   const prevWeight     = measurements[1]?.weight_kg
-  const weightDelta    = latestWeight && prevWeight ? (latestWeight - prevWeight) : null
+  const weightDelta    = (latestWeight && prevWeight) ? (latestWeight - prevWeight) : null
   const lastIonMessage = d?.lastIonMessage ?? null
 
   const goalLabels: Record<string, string> = {
@@ -257,7 +257,7 @@ export default function DashboardScreen() {
         <View style={[styles.accessBanner, { backgroundColor: color.elevated, borderColor: color.border, flexDirection: rowDir }]}>
           <SynapLogo size="sm" />
           <Text style={[styles.accessText, { color: color.muted }]}>
-            {`${tier.toUpperCase()} — ${d.subscription.planName || text.launchAccess}`}
+            {`${tier.toUpperCase()} — ${d?.subscription?.planName || text.launchAccess}`}
           </Text>
         </View>
       ) : null}
