@@ -7,37 +7,14 @@ import { Card } from '@/components/Card'
 import { IonAvatar } from '@/components/IonAvatar'
 import { Screen } from '@/components/Screen'
 import { SynapLogo } from '@/components/SynapLogo'
-import { apiFetch } from '@/lib/api'
+import { getChatHistory } from '@/features/chat'
+import { getMealLogs } from '@/features/nutrition'
+import { getProfile } from '@/features/profile'
+import { getSubscriptionStatus } from '@/features/subscription'
+import { getPlanHistory } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
-
-// ── Single combined dashboard fetch (replaces 5 separate calls) ─
-type DashboardData = {
-  subscription: { tier: string; status: string | null; planName: string | null }
-  profile: Record<string, any> | null
-  measurements: Array<{ weight_kg?: number; measured_at?: string; created_at?: string }>
-  activeDietPlan: { id: string; created_at: string; plan_json: any } | null
-  activeWorkoutPlan: { id: string; created_at: string; plan_json: any } | null
-  todayWorkout: {
-    day_name: string; muscle_focus: string | null; duration_min: number | null
-    is_rest_day: boolean; exercises: any[]
-  } | null
-  timing: {
-    diet?: { label: string; daysLeft: number; expired: boolean } | null
-    workout?: { label: string; daysLeft: number; expired: boolean } | null
-  }
-  mealLogs: Array<{
-    id: string; meal_name: string | null; calories_estimated: number | null
-    protein_g?: number | null; carbs_g?: number | null; fats_g?: number | null
-    logged_at: string
-  }>
-  lastIonMessage: string | null
-}
-
-async function getDashboard(): Promise<DashboardData> {
-  return apiFetch<DashboardData>('/api/me/dashboard')
-}
 
 function timeGreeting(isRtl: boolean) {
   const h = new Date().getHours()
@@ -48,23 +25,27 @@ function timeGreeting(isRtl: boolean) {
 export default function DashboardScreen() {
   const { color } = useTheme()
   const { text, isRtl } = useLanguage()
-  const dash = useAsyncData(getDashboard, [])
+  const subscription = useAsyncData(getSubscriptionStatus, [])
+  const plan         = useAsyncData(getPlanHistory, [])
+  const meals        = useAsyncData(getMealLogs, [])
+  const profile      = useAsyncData(getProfile, [])
+  const chat         = useAsyncData(() => getChatHistory(10), [])
 
-  // Refresh when the tab comes back into focus
   useFocusEffect(
     useCallback(() => {
-      dash.reload()
+      meals.reload()
+      plan.reload()
+      chat.reload()
     }, [])
   )
 
-  const d              = dash.data
-  const tier           = d?.subscription?.tier ?? 'starter'
-  const name           = d?.profile?.name || 'Athlete'
-  const goal           = d?.profile?.goal || ''
-  const workout        = d?.todayWorkout ?? null
-  const mealLogs       = d?.mealLogs ?? []
-  const activeDiet     = d?.activeDietPlan?.plan_json ?? null
-  const plannedMeals   = Array.isArray(activeDiet?.meals) ? (activeDiet.meals as any[]) : []
+  const tier         = subscription.data?.tier ?? 'starter'
+  const name         = profile.data?.profile?.name || 'Athlete'
+  const goal         = profile.data?.profile?.goal || ''
+  const workout      = plan.data?.todayWorkout
+  const mealLogs     = meals.data?.logs ?? []
+  const activeDiet   = plan.data?.activeDietPlan?.plan_json
+  const plannedMeals = Array.isArray(activeDiet?.meals) ? activeDiet.meals : []
   const caloriesLogged = mealLogs.reduce((sum, item) => sum + (item.calories_estimated || 0), 0)
   const calorieTarget  = Number(activeDiet?.daily_calories ?? activeDiet?.calories_per_day ?? 0)
   const completedMeals = plannedMeals.filter((meal: any) =>
@@ -72,17 +53,30 @@ export default function DashboardScreen() {
       String(meal.name || meal.meal_name || '').toLowerCase()
     ))
   ).length
-  const trainingDays   = d?.timing?.workout?.label ?? ''
-  const measurements   = d?.measurements ?? []
-  const latestWeight   = measurements[0]?.weight_kg
-  const prevWeight     = measurements[1]?.weight_kg
-  const weightDelta    = (latestWeight && prevWeight) ? (latestWeight - prevWeight) : null
-  const lastIonMessage = d?.lastIonMessage ?? null
+  const trainingDays = plan.data?.timing?.workout?.label ?? ''
+
+  const profileMeasurements: Array<{ weight_kg?: number }> = (profile.data as any)?.measurements ?? []
+  const latestWeight: number | undefined = profileMeasurements[0]?.weight_kg
+  const prevWeight:   number | undefined = profileMeasurements[1]?.weight_kg
+  const weightDelta = latestWeight && prevWeight ? (latestWeight - prevWeight) : null
 
   const goalLabels: Record<string, string> = {
     lose_fat: 'Lose Fat', build_muscle: 'Build Muscle',
     recomposition: 'Recomp', improve_fitness: 'Fitness', be_healthier: 'Health',
   }
+
+  // Last Ion message — parsed from chat history
+  const lastIonMessage: string | null = (() => {
+    const msgs = chat.data?.messages ?? []
+    const last = [...msgs].reverse().find(m => m.role === 'assistant' || m.role === 'ion')
+    if (!last) return null
+    try {
+      const parsed = JSON.parse(last.content)
+      return parsed.message ?? parsed.reply ?? parsed.content ?? null
+    } catch {
+      return last.content.replace(/^```json\s*/i, '').replace(/```$/i, '').trim() || null
+    }
+  })()
 
   const align  = isRtl ? 'right' : 'left'
   const rowDir = isRtl ? 'row-reverse' : 'row'
@@ -110,13 +104,13 @@ export default function DashboardScreen() {
 
       {/* Stat chips */}
       <View style={[styles.statRow, { flexDirection: rowDir }]}>
-        <StatChip icon="target"     label={isRtl ? 'الهدف' : 'GOAL'}     value={goalLabels[goal] || 'Active'}            color={color.spark}      bg={color.surface} border={color.border} />
-        <StatChip icon="zap"        label={isRtl ? 'السعرات' : 'CALORIES'} value={calorieTarget ? `${calorieTarget} kcal` : '-'} color={color.flame} bg={color.surface} border={color.border} />
-        <StatChip icon="activity"   label={isRtl ? 'هذا الأسبوع' : 'TRAINING'} value={trainingDays || '-'}              color={color.sparkLight} bg={color.surface} border={color.border} />
-        <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}  value={latestWeight ? `${latestWeight} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} />
+        <StatChip icon="target"      label={isRtl ? 'الهدف' : 'GOAL'}      value={goalLabels[goal] || 'Active'}            color={color.spark}      bg={color.surface} border={color.border} />
+        <StatChip icon="zap"         label={isRtl ? 'السعرات' : 'CALORIES'} value={calorieTarget ? `${calorieTarget} kcal` : '-'} color={color.flame} bg={color.surface} border={color.border} />
+        <StatChip icon="activity"    label={isRtl ? 'هذا الأسبوع' : 'TRAINING'} value={trainingDays || '-'}               color={color.sparkLight} bg={color.surface} border={color.border} />
+        <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}    value={latestWeight ? `${latestWeight} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} />
       </View>
 
-      {/* Ion coaching engine card — always visible */}
+      {/* Ion coaching engine — always visible */}
       <Pressable
         onPress={() => router.push('/(tabs)/chat')}
         style={[styles.ionPreview, { backgroundColor: color.sparkSoft, borderColor: 'rgba(187,92,246,0.22)' }]}
@@ -125,10 +119,8 @@ export default function DashboardScreen() {
           <IonAvatar size="sm" showStatus={false} />
           <View style={styles.ionPreviewText}>
             <Text style={[styles.ionLabel, { color: color.sparkLight }]}>✦ ION</Text>
-            {dash.loading ? (
-              <Text style={[styles.ionMsg, { color: color.dim, textAlign: align }]}>
-                {isRtl ? '…' : '…'}
-              </Text>
+            {chat.loading ? (
+              <Text style={[styles.ionMsg, { color: color.dim, textAlign: align }]}>…</Text>
             ) : lastIonMessage ? (
               <Text style={[styles.ionMsg, { color: color.muted, textAlign: align }]} numberOfLines={2}>
                 {lastIonMessage}
@@ -155,7 +147,7 @@ export default function DashboardScreen() {
             <View style={styles.cardHeaderText}>
               <Text style={[styles.eyebrow, { color: color.sparkLight }]}>{isRtl ? 'اليوم' : 'TODAY'}</Text>
               <Text style={[styles.cardTitle, { color: color.text }]}>
-                {dash.loading ? '…' : workout?.day_name || (isRtl ? 'لا خطة بعد' : 'No plan yet')}
+                {plan.loading ? '…' : workout?.day_name || (isRtl ? 'لا خطة بعد' : 'No plan yet')}
               </Text>
             </View>
             <Feather name={isRtl ? 'chevron-left' : 'chevron-right'} size={14} color={color.dim} />
@@ -168,9 +160,9 @@ export default function DashboardScreen() {
                   <Text style={[styles.exMeta, { color: color.sparkLight }]}>{ex.sets}×{ex.reps}</Text>
                 </View>
               ))}
-              {(workout.exercises || []).length > 3 && (
+              {(workout.exercises || []).length > 3 ? (
                 <Text style={[styles.moreText, { color: color.dim }]}>+{workout.exercises.length - 3} more exercises</Text>
-              )}
+              ) : null}
             </View>
           ) : workout?.is_rest_day ? (
             <Text style={[styles.restText, { color: color.muted }]}>
@@ -199,7 +191,7 @@ export default function DashboardScreen() {
             </View>
             <Feather name={isRtl ? 'chevron-left' : 'chevron-right'} size={14} color={color.dim} />
           </View>
-          {calorieTarget > 0 && (
+          {calorieTarget > 0 ? (
             <View style={[styles.barTrack, { backgroundColor: color.elevated, marginTop: 12 }]}>
               <LinearGradient
                 colors={[color.flame, color.spark]}
@@ -208,34 +200,32 @@ export default function DashboardScreen() {
                 style={[styles.barFill, { width: `${Math.min(100, Math.round((caloriesLogged / calorieTarget) * 100))}%` }]}
               />
             </View>
-          )}
+          ) : null}
           <Text style={[styles.moreText, { color: color.muted, marginTop: 8, textAlign: align }]}>
-            {plannedMeals.length
-              ? `${completedMeals}/${plannedMeals.length} ${isRtl ? 'وجبات مسجلة' : 'planned meals logged'}`
-              : `${mealLogs.length} ${isRtl ? 'أطعمة مسجلة اليوم' : 'foods logged today'}`}
+            {plannedMeals.length ? `${completedMeals}/${plannedMeals.length} ${isRtl ? 'وجبات مسجلة' : 'planned meals logged'}` : `${mealLogs.length} ${isRtl ? 'أطعمة مسجلة اليوم' : 'foods logged today'}`}
           </Text>
         </Card>
       </Pressable>
 
       {/* Weight delta */}
-      {weightDelta !== null && (
+      {weightDelta !== null ? (
         <View style={[styles.weightRow, { flexDirection: rowDir }]}>
           <Feather name="trending-up" size={13} color={weightDelta <= 0 ? color.pulse : color.flame} />
           <Text style={[styles.weightDelta, { color: weightDelta <= 0 ? color.pulse : color.flame }]}>
             {weightDelta > 0 ? '+' : ''}{weightDelta.toFixed(1)} kg {isRtl ? 'من القياس السابق' : 'from previous'}
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* Quick actions */}
       <View style={[styles.quickRow, { flexDirection: rowDir }]}>
-        <QuickAction icon="message-circle" label={isRtl ? 'اسأل Ion' : 'ASK ION'}    color={color.spark} bg={color.sparkSoft}          onPress={() => router.push('/(tabs)/chat')} />
-        <QuickAction icon="bar-chart-2"    label={isRtl ? 'سجل الوزن' : 'LOG WEIGHT'} color={color.pulse} bg="rgba(16,185,129,0.12)"    onPress={() => router.push('/(tabs)/progress')} />
-        <QuickAction icon="zap"            label={isRtl ? 'ابدأ التمرين' : 'START'}   color={color.flame} bg="rgba(249,115,22,0.12)"    onPress={() => router.push('/(tabs)/train')} />
+        <QuickAction icon="message-circle" label={isRtl ? 'اسأل Ion' : 'ASK ION'}     color={color.spark} bg={color.sparkSoft}       onPress={() => router.push('/(tabs)/chat')} />
+        <QuickAction icon="bar-chart-2"    label={isRtl ? 'سجل الوزن' : 'LOG WEIGHT'} color={color.pulse} bg="rgba(16,185,129,0.12)"  onPress={() => router.push('/(tabs)/progress')} />
+        <QuickAction icon="zap"            label={isRtl ? 'ابدأ التمرين' : 'START'}   color={color.flame} bg="rgba(249,115,22,0.12)"  onPress={() => router.push('/(tabs)/train')} />
       </View>
 
       {/* Subscription banner */}
-      {!dash.loading && tier === 'starter' ? (
+      {!subscription.loading && subscription.data?.tier === 'starter' ? (
         <Pressable
           onPress={() => router.push('/billing')}
           style={[styles.upgradeBanner, { backgroundColor: color.sparkSoft, borderColor: 'rgba(187,92,246,0.25)', flexDirection: rowDir }]}
@@ -253,11 +243,11 @@ export default function DashboardScreen() {
           </View>
           <Feather name={isRtl ? 'arrow-left' : 'arrow-right'} size={14} color={color.spark} />
         </Pressable>
-      ) : !dash.loading && d?.subscription ? (
+      ) : !subscription.loading && subscription.data ? (
         <View style={[styles.accessBanner, { backgroundColor: color.elevated, borderColor: color.border, flexDirection: rowDir }]}>
           <SynapLogo size="sm" />
           <Text style={[styles.accessText, { color: color.muted }]}>
-            {`${tier.toUpperCase()} — ${d?.subscription?.planName || text.launchAccess}`}
+            {`${tier.toUpperCase()} — ${subscription.data.planName || text.launchAccess}`}
           </Text>
         </View>
       ) : null}
