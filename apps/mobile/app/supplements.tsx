@@ -12,7 +12,13 @@ export default function SupplementsScreen() {
   const recs = useAsyncData(getSupplementRecommendations, [], { cacheKey: 'supplement-recs', cacheTtlMs: 30 * 60 * 1000 })
   const [generating, setGenerating] = useState(false)
   const recommendation = recs.data?.recommendation
-  const items: any[] = Array.isArray(recommendation?.recommendations) ? recommendation.recommendations : []
+  // DB stores the full AI JSON in `recommendations` column — the array is nested under `.supplements`
+  const recData = recommendation?.recommendations
+  const items: any[] = Array.isArray(recData?.supplements)
+    ? recData.supplements
+    : Array.isArray(recData)
+      ? recData  // legacy shape fallback
+      : []
 
   async function generate() {
     setGenerating(true)
@@ -56,13 +62,13 @@ export default function SupplementsScreen() {
             <Text style={[styles.title, { color: color.text }]}>Your supplement stack</Text>
             <Text style={[styles.body, { color: color.muted }]}>
               {recommendation?.generated_at
-                ? `Last generated ${new Date(recommendation.generated_at).toLocaleDateString()}. Regenerate to refresh with your current plan.`
+                ? `Last generated ${new Date(recommendation.generated_at).toLocaleDateString('en-GB')}. Regenerate to refresh with your current plan.`
                 : 'Ion will analyse your profile, goal, and active plan to build a personalised supplement stack with timing, dosage, and rationale.'}
             </Text>
           </>
         ) : items.length > 0 ? (
           <Text style={[styles.body, { color: color.muted }]}>
-            Generated {new Date(recommendation.generated_at).toLocaleDateString()} · {items.length} supplements
+            Generated {new Date(recommendation.generated_at).toLocaleDateString('en-GB')} · {items.length} supplements
           </Text>
         ) : null}
 
@@ -96,8 +102,11 @@ export default function SupplementsScreen() {
               </View>
             ) : null}
           </View>
-          {item.rationale || item.why ? (
-            <Text style={[styles.body, { color: color.muted, marginTop: 8 }]}>{item.rationale || item.why}</Text>
+          {item.benefit || item.rationale || item.why ? (
+            <Text style={[styles.body, { color: color.muted, marginTop: 8 }]}>{item.benefit || item.rationale || item.why}</Text>
+          ) : null}
+          {item.notes ? (
+            <Text style={[styles.body, { color: color.dim, marginTop: 4 }]}>💡 {item.notes}</Text>
           ) : null}
           {item.where_to_buy ? (
             <Text style={[styles.body, { color: color.dim, marginTop: 4 }]}>🛒 {item.where_to_buy}</Text>
