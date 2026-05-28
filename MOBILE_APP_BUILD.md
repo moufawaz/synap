@@ -1309,3 +1309,252 @@ Local verification:
 
 - `npm run typecheck` passed inside `apps/mobile`.
 - `npx expo export --platform ios --clear` passed and produced a Hermes bytecode bundle.
+
+---
+
+## Latest Progress - Build 1046 QA Bug-Fix Pass (2026-05-28)
+
+Full bug-fix session addressing issues found during real-device testing on build 1039–1044. All fixes pushed to `main` and auto-triggered the Direct Build workflow.
+
+### Build CI: Direct Build replaces EAS auto-trigger
+
+- `ios-expo-eas.yml` changed from auto-trigger on push → **manual-only**. EAS builds were failing on every push (EXPO_TOKEN not configured in this repo's Actions) and creating noise.
+- `ios-expo-direct.yml` changed from manual-only → **auto-triggers on every push to `main`** when `apps/mobile/**` changes. This is now the primary build path.
+- Build numbers bumped: `1044` (accidentally skipped) → `1046` (correct next build).
+
+### Fix: Dashboard loading lag — stale-while-revalidate caching
+
+**Root cause:** `useAsyncData` fetched fresh on every mount with no cache. Every tab switch showed a loading spinner.
+
+**Fix:** Complete rewrite of `apps/mobile/src/hooks/useAsyncData.ts`:
+- Stale-while-revalidate pattern using AsyncStorage.
+- Cache key prefix: `@sdc:`, configurable `cacheTtlMs` (default 5 min).
+- Cache hit → sets data immediately (no spinner), then `silentRefresh()` in background.
+- New return value includes `silentRefresh` method used by `useFocusEffect` so tab focus never shows a loading state.
+
+**Dashboard cache keys added:**
+```typescript
+subscription  → @sdc:subscription      (default 5 min TTL)
+plan          → @sdc:plan-history       (default 5 min TTL)
+meals         → @sdc:meal-logs-today    (2 min TTL — changes frequently)
+profile       → @sdc:profile            (10 min TTL)
+chat          → @sdc:chat-last10        (default 5 min TTL)
+```
+
+**Logout cache clearing:** More screen logout now removes all `@sdc:*` keys from AsyncStorage before navigating to login so the next user doesn't see stale data.
+
+### Fix: Workout shows wrong day (Monday on Wednesday)
+
+**Root cause:** `summarizeTodayWorkout()` in `/api/plan-history/route.ts` matched the day array by name first, then fell back to `dayOfWeek % plan.days.length`. JS `Date.getDay()` is Sunday-indexed (0=Sun), but workout plans are Monday-indexed — a Wednesday (JS day 3) was mapped to plan index 3 = Thursday.
+
+**Fix:** Fallback changed to `(dayOfWeek + 6) % 7` (Monday-indexed). Also fixed to always return the real calendar day name in the response so the UI always shows the correct day.
+
+### Fix: Logout required app restart
+
+**Root cause:** `signOut()` was called but navigation to login never fired unless `_layout.tsx` re-rendered.
+
+**Fix:**
+1. `_layout.tsx` — added `useAuth` session watcher: `if (!loading && session === null) router.replace('/(auth)/login')`.
+2. More screen logout handler — explicitly calls `router.replace('/(auth)/login')` after `signOut()` and cache clear.
+
+### Fix: Barcode scan "Unauthorized" on mobile
+
+**Root cause:** `requireFoodScanAccess()` was called without `req` in the barcode API routes. On mobile, auth comes from the Bearer token in the request header — calling without `req` means the token is never read → 401.
+
+**Files fixed:**
+- `src/app/api/barcode/route.ts` — `requireFoodScanAccess(req)`
+- `src/app/api/barcode/estimate/route.ts` — `requireFoodScanAccess(req)`
+
+### Fix: Food logging only saved calories, not macros
+
+**Root cause:** The nutrition log form had only a calories field. `handleSave()` never sent `protein_g`, `carbs_g`, or `fats_g`.
+
+**Fix in `apps/mobile/app/(tabs)/nutrition.tsx`:**
+- Added `protein`, `carbs`, `fat` state variables.
+- `handleSave()` now includes `protein_g`, `carbs_g`, `fats_g`.
+- `applyBarcodeProduct()` scales macros by serving size and fills all 4 fields.
+- `handlePhotoScan()` populates macro fields from AI scan result.
+- `startEdit()` pre-fills macro fields from the existing log entry.
+- Added 3 side-by-side macro inputs (P / C / F) in the log form UI.
+- Added `estimateBarcodeProduct()` AI fallback when barcode product isn't found in Open Food Facts.
+
+### Fix: Push notifications not working
+
+**Root cause:** The server was sending push notifications via OneSignal but `ONESIGNAL_APP_ID` / `ONESIGNAL_API_KEY` were not set → silently failing.
+
+**Fix — Expo Push service (no API key needed, token-based):**
+- Added `src/lib/expo-push.ts`:
+  - `getExpoTokensForUser(userId)` — queries `push_tokens` table.
+  - `sendExpoPush(messages)` — POSTs to `https://exp.host/--/api/v2/push/send`.
+  - `sendPushToUser(userId, payload)` — high-level helper.
+- Added `src/lib/push.ts`:
+  - `pushToUser({ userId, type, overrides })` — tries Expo first, falls back to OneSignal.
+- Updated `src/app/api/push-notification/route.ts` — uses `sendPushToUser()`.
+- Updated `src/app/api/adaptation-check/route.ts` — all 4 `sendPushNotification()` calls → `pushToUser()`.
+- Updated `src/app/api/renew-plan/route.ts` — `pushToUser()`.
+
+**Fix — Adaptation check runs from mobile:**
+- Dashboard (`index.tsx`) now calls `runAdaptationCheck()` once per day via AsyncStorage date gate `@sdc:adaptation-last`.
+- Added `runAdaptationCheck()` to `apps/mobile/src/features/tools.ts`.
+
+**Required Supabase table (already added):**
+```sql
+-- push_tokens table was already created in a previous build
+```
+
+### Fix: Notification timing was fixed times, not plan meal times
+
+**Root cause:** `scheduleSynapReminders()` used hardcoded `13:00` for meal reminders.
+
+**Fix in `apps/mobile/src/features/notifications.ts`:**
+- Added `parseMealTime(raw)` helper (parses `"7:30 AM"`, `"13:00"`, `"8am"` etc.).
+- `scheduleSynapReminders({ mealTimes? })` now schedules one reminder per plan meal at its actual plan time.
+- Falls back to a single 1 PM reminder if no plan times available.
+- `_layout.tsx` `tryAutoRegisterPush()` reads cached plan meal times from AsyncStorage and passes them to `scheduleSynapReminders()`.
+
+**Also removed:** "Send backend test" button from `apps/mobile/app/notifications.tsx` (was developer-only debugging tool, should not be visible to users).
+
+### Fix: Supplement Stack stuck loading / items not showing
+
+**Root cause 1:** Data shape mismatch. The AI generates `{ supplements: [...] }` stored as JSON in the `recommendations` DB column. The mobile app read `recommendation.recommendations` (the DB column object), then checked `Array.isArray(recommendation.recommendations)` → always `false` (it's an object, not an array).
+
+**Fix:** Read `recommendation.recommendations.supplements` with a legacy array fallback:
+```typescript
+const recData = recommendation?.recommendations
+const items = Array.isArray(recData?.supplements) ? recData.supplements
+             : Array.isArray(recData) ? recData  // legacy fallback
+             : []
+```
+
+**Root cause 2:** AI outputs `benefit` and `notes` fields, but the screen looked for `rationale`/`why` and `where_to_buy`.
+
+**Fix:** Added `item.benefit` as primary, `item.notes` shown with 💡 icon.
+
+**Root cause 3:** `toLocaleDateString()` with no locale uses the device locale → Hijri calendar on Arabic devices.
+
+**Fix:** All date displays use `toLocaleDateString('en-GB')` to force Gregorian format.
+
+### Fix: Apple Health connects but does nothing
+
+**Root cause:** The connection flow only showed an alert but never synced data to the app.
+
+**Fix in `apps/mobile/app/(tabs)/more.tsx`:**
+- After successful HealthKit read, if `summary.latestWeightKg` is present, auto-calls `createMeasurement()` to sync the weight to the user's progress log.
+- Alert now shows actual health values (steps, calories, weight, HR).
+- Added `createMeasurement` import from `@/features/measurements`.
+
+### Fix: Recipe button had no loading indicator
+
+**Root cause:** Recipe generation takes 5–15 seconds but the button showed no feedback.
+
+**Fix in `apps/mobile/app/plan.tsx`:**
+- Added `recipeLoading` state (`number | null`) tracking which meal index is loading.
+- Recipe button shows `ActivityIndicator` while loading.
+- Other meal recipe buttons are dimmed (opacity 0.4) while any recipe is generating.
+- Response parser handles both `steps` and `ingredients` arrays.
+
+### Fix: Pre/post workout text overflowing frame in Nutrition
+
+**Root cause:** The pre/post workout banner used `flexDirection: 'row'` which caused long text to overflow the card boundary.
+
+**Fix in `apps/mobile/app/(tabs)/nutrition.tsx`:**
+- Added `workoutBanner` style with `flexDirection: 'column'`.
+- Text now wraps correctly within the card.
+
+### Fix: workout_log table missing from database
+
+**Root cause:** `workout_log` was defined in `supabase-schema.sql` but never migrated to the live database. Saving a workout returned `{"error":"Could not find the table 'public.workout_logs' in the schema cache"}`.
+
+**Fix:** Added migration `supabase/migrations/20260528_workout_log.sql` with all columns used by the API:
+
+```sql
+create table if not exists public.workout_log (
+  id               uuid  default uuid_generate_v4() primary key,
+  user_id          uuid  references public.users(id) on delete cascade not null,
+  date             date  default current_date,
+  day_name         text,
+  workout_plan_id  uuid  references public.workout_plans(id),
+  exercises_completed integer,
+  total_exercises  integer,
+  completion_pct   integer,
+  exercises        jsonb,
+  duration_min     integer,
+  duration_minutes integer,
+  notes            text,
+  ion_feedback     text,
+  logged_at        timestamptz default now(),
+  created_at       timestamptz default now()
+);
+alter table public.workout_log enable row level security;
+create policy "Users can manage own workout logs" on public.workout_log
+  for all using (auth.uid() = user_id);
+```
+
+**Applied to live Supabase database via SQL Editor.**
+
+### Fix: Billing Settings tab shows "Starter" for all users
+
+**Root cause:** `apps/mobile/app/settings.tsx` computed `tierLabel` using `sub?.plan_type` which doesn't exist in the `/api/me/subscription` response (which only returns `tier`, `status`, `planName`).
+
+**Fix:** Updated both `tierLabel` and `tierColor` to use `sub?.tier`:
+```typescript
+const tierLabel = sub?.tier === 'elite' ? 'Elite'
+                : sub?.tier === 'pro'   ? 'Pro'
+                : sub?.tier === 'launch' ? 'Launch Access' : 'Starter'
+const tierColor = sub?.tier === 'elite' ? color.flame
+                : sub?.tier === 'pro'   ? color.spark
+                : sub?.tier === 'launch' ? color.pulse : color.muted
+```
+
+### Fix: Raw push token visible on Notifications screen
+
+**Root cause:** Notifications screen displayed the full `ExponentPushToken[...]` string as text.
+
+**Fix:** Replaced with a friendly status message:
+- Before registration: `"Push notifications not yet enabled on this device."`
+- After registration: `"✓ Device registered for push notifications"` (in pulse/green colour).
+
+### Fix: Push token "Network request failed" on Direct Builds
+
+**Root cause:** `getExpoPushTokenAsync()` requires an explicit `projectId`. On Direct Builds (not EAS), `Constants.easConfig?.projectId` is `null`, so the call had no project ID → Expo's token service couldn't identify the project → network call failed.
+
+**Fix in `apps/mobile/app/notifications.tsx` and `app/_layout.tsx`:**
+```typescript
+const projectId =
+  Constants.expoConfig?.extra?.eas?.projectId ||
+  (Constants as any).easConfig?.projectId ||
+  '5fb169d2-85c2-48ef-990f-960a395e7c6a'  // hardcoded fallback for Direct Builds
+const res = await Notifications.getExpoPushTokenAsync({ projectId })
+```
+
+### Fix: Workout checkboxes reset to empty when returning to Train tab
+
+**Root cause:** `saveWorkoutSession()` called PUT `/api/workout-session` which inserts into `chat_messages` with `role: 'system'`. The `chat_messages` table has a check constraint `role IN ('user', 'ion')` — so every save silently failed with a DB error. The `.catch(() => {})` swallowed it. `useFocusEffect` then loaded the empty session on every tab return.
+
+**Fix in `apps/mobile/app/(tabs)/train.tsx`:**
+- Removed all `getWorkoutSession` / `saveWorkoutSession` API calls.
+- Replaced with AsyncStorage local session:
+  ```typescript
+  const SESSION_KEY = (date: string) => `@synap:workout-session:${date}`
+  async function loadLocalSession(date)  // reads from AsyncStorage
+  async function saveLocalSession(date, completedExercises, exercisePerformance)  // writes to AsyncStorage
+  ```
+- `toggleExercise`, `updatePerformance`, `selectDay`, and `useFocusEffect` all use the local helpers.
+- Session persists instantly across tab switches with no network dependency.
+
+### Commits in this pass
+
+| Commit | Description |
+|---|---|
+| `f894520` | fix: barcode auth, food macros, push via Expo, adaptation check from mobile |
+| `46ee140` | fix: notification timing, remove test button, supplement loading, Apple Health sync, recipe spinner, pre/post workout overflow |
+| `bb7bdfb` | chore: bump iOS build number to 1044 (then superseded) |
+| `5b1c497` | chore: bump iOS build number to 1046 |
+| `586e624` | ci: auto-trigger Direct Build on push, disable EAS auto-trigger |
+| `c2b5e22` | fix: supplements items not showing, Hijri date, benefit/notes field names |
+| `660cb01` | fix: workout_log migration, billing tier display, hide push token |
+| `0538e56` | fix: push token Network request failed, workout session resets via AsyncStorage |
+
+### Current build
+
+**Build 1046** — all fixes above — auto-building via `iOS Expo Direct Build` GitHub Actions workflow.
