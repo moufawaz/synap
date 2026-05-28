@@ -1558,3 +1558,59 @@ const res = await Notifications.getExpoPushTokenAsync({ projectId })
 ### Current build
 
 **Build 1046** — all fixes above — auto-building via `iOS Expo Direct Build` GitHub Actions workflow.
+
+---
+
+## Build 1051 QA Pass — Source Audit Fixes (2026-05-29)
+
+Pre-submission source-level QA audit of every screen. Five issues found and fixed, plus a CI dependency-validation failure resolved.
+
+### Fix: Dashboard stat chips & quick actions unreadable in light mode
+
+**Root cause:** `StatChip` and `QuickAction` in `apps/mobile/app/(tabs)/index.tsx` hardcoded text colours — label `#475569` and value `#F8FAFC`. `#F8FAFC` is the **dark-mode** text token; in light mode the screen background is also `#F8FAFC`, so values/labels rendered near-white on near-white = invisible.
+
+**Fix:** Both components now take `labelColor`/`valueColor` props wired to theme tokens (`color.muted` for labels, `color.text` for values) at every call site.
+
+### Fix: Notification preference toggles didn't persist or take effect
+
+**Root cause:** `apps/mobile/app/settings.tsx` declared `NOTIF_STORAGE_KEY` but never read or wrote it. `toggleNotif` only called `setState` (in-memory), so prefs reset to defaults on every screen open, and the switches were never wired to the actual scheduler — reminders fired regardless.
+
+**Fix:**
+- Moved the `NotifPrefs` type, `DEFAULT_NOTIF_PREFS`, and a shared `NOTIF_PREFS_KEY` into `apps/mobile/src/features/notifications.ts`, with `loadNotifPrefs()` / `saveNotifPrefs()` helpers.
+- `scheduleSynapReminders()` now accepts `prefs` and **filters** the local reminders (workout / meal / hydration) by the user's toggles, loading from storage when not passed.
+- `settings.tsx` loads prefs on mount and, on toggle, persists + re-applies the schedule so switches take real effect.
+- `_layout.tsx` auto-register and `notifications.tsx` enable() pick up saved prefs automatically (no args → loads from storage).
+- Note: `checkin_reminder` and `weekly_report` are server-driven push, so they are now *persisted* but not locally scheduled — full server wiring is a separate task.
+
+### Fix: Supplements "Invalid Date" when `generated_at` missing
+
+**Root cause:** `apps/mobile/app/supplements.tsx` rendered `new Date(recommendation.generated_at).toLocaleDateString(...)` in the populated branch without the null guard the empty-state branch already had.
+
+**Fix:** Guarded the date — only renders "Generated …" when `generated_at` exists.
+
+### Fix: Macro-adjustment metric cards low-contrast in light mode
+
+**Root cause:** `apps/mobile/app/macro-adjustment.tsx` `Metric` used hardcoded white value text on a translucent-white card — unreadable in light mode.
+
+**Fix:** `Metric` now takes `bg`/`valueColor` from theme tokens (`color.elevated` / `color.text`).
+
+### Fix (CI): expo-doctor dependency-validation failure on build 1050
+
+**Root cause:** The `iOS Expo Direct Build` workflow runs `npx expo-doctor`, which failed (exit 1) on patch-version mismatches: `expo-font` 14.0.11 vs expected ~14.0.12, `expo-router` 6.0.23 vs ~6.0.24.
+
+**Fix:** Ran `npx expo install --fix` → bumped `expo-font ~14.0.12`, `expo-router ~6.0.24`, `expo ~54.0.35` and refreshed the lockfile. `expo-doctor` now passes 18/18.
+
+### Note: custom fonts not yet implemented
+
+Audit found **no** `.ttf`/`.otf` assets, no `useFonts`/`Font.loadAsync`, no `fontFamily` usage, and no `@expo-google-fonts/*` package. `expo-font` is present only as an SDK dep and is **not** in `app.json` plugins. Custom fonts are not wired up; the `expo install` suggestion to add `"expo-font"` to plugins was intentionally skipped (a bare plugin with no `fonts` array is a no-op). To add custom fonts later: drop files in `assets/fonts/`, register via the `expo-font` plugin `fonts` array (or `useFonts`), and apply `fontFamily` in styles.
+
+### Commits in this pass
+
+| Commit | Description |
+|---|---|
+| `da7d888` | fix: light-mode contrast, notification prefs persistence, supplement date guard |
+| `3cb6555` | fix(ci): align expo-font/expo-router to SDK 54 expected versions |
+
+### Current build
+
+**Build 1051** — all fixes above — auto-building via `iOS Expo Direct Build` GitHub Actions workflow (build 1050 failed on the expo-doctor step, now resolved).
