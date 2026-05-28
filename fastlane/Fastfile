@@ -314,22 +314,40 @@ platform :ios do
     end
     pods_project.save
 
-    fmt_core_header = File.join(ios_dir, 'Pods', 'fmt', 'include', 'fmt', 'core.h')
-    UI.user_error!("fmt core header not found after pod install: #{fmt_core_header}") unless File.exist?(fmt_core_header)
-    File.chmod(0o644, fmt_core_header)
-    fmt_core = File.read(fmt_core_header)
-    fmt_core = fmt_core.gsub(/#(\s*)define FMT_USE_CONSTEVAL 1/, '#\1define FMT_USE_CONSTEVAL 0')
-    fmt_core = fmt_core.gsub(/#(\s*)define FMT_CONSTEVAL consteval/, '#\1define FMT_CONSTEVAL')
-    File.write(fmt_core_header, fmt_core)
-    UI.message('SYNAP_BUILD: Patched fmt core.h to disable consteval for Xcode 26')
+    # fmt relocated the consteval defines between header versions: fmt <= 10 keeps
+    # FMT_USE_CONSTEVAL / FMT_CONSTEVAL in core.h, fmt >= 11 moves them to base.h.
+    # (Enabling the New Architecture pulled in a newer fmt, so core.h alone is no
+    # longer guaranteed to exist.) The FMT_USE_CONSTEVAL=0 build-setting injection
+    # above is the primary fix; these header rewrites are belt-and-suspenders, so
+    # patch whichever headers are present and don't fail the build when one isn't.
+    fmt_include_dir = File.join(ios_dir, 'Pods', 'fmt', 'include', 'fmt')
+    consteval_headers = ['core.h', 'base.h']
+      .map { |name| File.join(fmt_include_dir, name) }
+      .select { |path| File.exist?(path) }
 
-    fmt_format_inl_header = File.join(ios_dir, 'Pods', 'fmt', 'include', 'fmt', 'format-inl.h')
-    UI.user_error!("fmt format-inl header not found after pod install: #{fmt_format_inl_header}") unless File.exist?(fmt_format_inl_header)
-    File.chmod(0o644, fmt_format_inl_header)
-    fmt_format_inl = File.read(fmt_format_inl_header)
-    fmt_format_inl = fmt_format_inl.gsub('FMT_STRING(', 'fmt::runtime(')
-    File.write(fmt_format_inl_header, fmt_format_inl)
-    UI.message('SYNAP_BUILD: Patched fmt format-inl.h to avoid Xcode 26 consteval FMT_STRING errors')
+    if consteval_headers.empty?
+      UI.important("SYNAP_BUILD: No fmt consteval header (core.h/base.h) found under #{fmt_include_dir} — relying on FMT_USE_CONSTEVAL=0 build setting only")
+    else
+      consteval_headers.each do |header|
+        File.chmod(0o644, header)
+        contents = File.read(header)
+        contents = contents.gsub(/#(\s*)define FMT_USE_CONSTEVAL 1/, '#\1define FMT_USE_CONSTEVAL 0')
+        contents = contents.gsub(/#(\s*)define FMT_CONSTEVAL consteval/, '#\1define FMT_CONSTEVAL')
+        File.write(header, contents)
+        UI.message("SYNAP_BUILD: Patched fmt #{File.basename(header)} to disable consteval for Xcode 26")
+      end
+    end
+
+    fmt_format_inl_header = File.join(fmt_include_dir, 'format-inl.h')
+    if File.exist?(fmt_format_inl_header)
+      File.chmod(0o644, fmt_format_inl_header)
+      fmt_format_inl = File.read(fmt_format_inl_header)
+      fmt_format_inl = fmt_format_inl.gsub('FMT_STRING(', 'fmt::runtime(')
+      File.write(fmt_format_inl_header, fmt_format_inl)
+      UI.message('SYNAP_BUILD: Patched fmt format-inl.h to avoid Xcode 26 consteval FMT_STRING errors')
+    else
+      UI.message('SYNAP_BUILD: fmt format-inl.h not present — skipping (consteval disabled via build settings)')
+    end
 
     # ── 6. Find the CocoaPods workspace (created by pod install) ─────────────
     # After pod install, build targets live in the .xcworkspace — using the
