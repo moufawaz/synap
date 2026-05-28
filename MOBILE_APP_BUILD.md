@@ -1611,6 +1611,31 @@ Audit found **no** `.ttf`/`.otf` assets, no `useFonts`/`Font.loadAsync`, no `fon
 | `da7d888` | fix: light-mode contrast, notification prefs persistence, supplement date guard |
 | `3cb6555` | fix(ci): align expo-font/expo-router to SDK 54 expected versions |
 
+## Post-test Pass — Notifications persistence + HealthKit / New Architecture (2026-05-29)
+
+### Fix: Notifications page lost "enabled" status on navigation
+
+**Root cause:** `apps/mobile/app/notifications.tsx` held `token` and `scheduledCount` only in component state. Navigating away unmounted the screen; returning reset state to `null`, so it always showed "Push notifications not yet enabled" even when the device was already registered.
+
+**Fix:** Persist the Expo push token to AsyncStorage (`@synap:push-token`) on enable, and add a `useFocusEffect` that re-reads OS permission status + persisted token + live scheduled-reminder count on every focus. Revoking permission in iOS Settings now correctly flips back to "not enabled" and clears the stored token.
+
+### Fix: HealthKit non-functional — re-enabled New Architecture
+
+**Root cause:** `@kingstinct/react-native-healthkit` v14 is built on `react-native-nitro-modules` (v0.35.7), and **Nitro modules only run under the New Architecture**. With `app.json` → `newArchEnabled: false`, the HealthKit native module never registered, so the Connect Health flow returned unavailable/unauthorized and produced no data. The HealthKit JS code (`src/features/health.ts`) was already correct for the v14 API.
+
+**Investigation (why New Arch was off):** Commit `2e9c5cd` (May 24) disabled New Arch because two modules crashed at startup under New Arch + JSC: `react-native-youtube-iframe` 2.4.1 and `react-native-view-shot` 5.1.0. That reason is now obsolete — `react-native-youtube-iframe` was removed entirely, `react-native-view-shot` is now 4.0.3 (New-Arch compatible, still lazy-loaded in `progress.tsx`), and the engine is now Hermes (not JSC). All remaining native modules (`expo-*`, `async-storage`, `react-native-webview` 13.15.0) support New Architecture.
+
+**Fix:** Set `newArchEnabled: true` in `app.json`.
+
+**Smoke test required on the new build:** (1) app launches to login, (2) HealthKit Connect works and returns data, (3) progress-card share still works (the one remaining old-style module path), (4) push/notifications still register.
+
+### Commits in this pass
+
+| Commit | Description |
+|---|---|
+| `6fb3481` | fix: persist Notifications page enabled status across navigation |
+| `72001c1` | feat: re-enable New Architecture so HealthKit (Nitro) works |
+
 ### Current build
 
 **Build 1051** — all fixes above — auto-building via `iOS Expo Direct Build` GitHub Actions workflow (build 1050 failed on the expo-doctor step, now resolved).
