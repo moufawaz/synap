@@ -56,7 +56,9 @@ export default function NotificationsScreen() {
       <PageHeader eyebrow="PUSH" title="Notifications" subtitle="Remote push, local reminders, and tap routing." />
       <Card>
         <Text style={[styles.title, { color: color.text }]}>Push status</Text>
-        <Text style={[styles.body, { color: color.muted }]}>{token || 'No native token yet.'}</Text>
+        <Text style={[styles.body, { color: token ? color.pulse : color.muted }]}>
+          {token ? '✓ Device registered for push notifications' : 'Push notifications not yet enabled on this device.'}
+        </Text>
         <Text style={[styles.body, { color: color.muted }]}>Local reminders: {scheduledCount ?? 'not checked'}</Text>
         <Pressable onPress={enable} style={[styles.primary, { backgroundColor: color.spark }]}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Enable push</Text>}</Pressable>
         <Pressable onPress={refreshScheduled} style={[styles.secondary, { borderColor: color.pulse }]}><Text style={[styles.secondaryText, { color: color.pulse }]}>Check local reminders</Text></Pressable>

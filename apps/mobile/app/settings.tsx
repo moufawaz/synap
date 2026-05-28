@@ -120,8 +120,8 @@ export default function SettingsScreen() {
   }
 
   const sub = subscription.data
-  const tierLabel = sub?.plan_type === 'elite' ? 'Elite' : sub?.plan_type === 'pro' ? 'Pro' : sub?.tier === 'launch' ? 'Launch Access' : 'Starter'
-  const tierColor = sub?.plan_type === 'elite' ? color.flame : sub?.plan_type === 'pro' ? color.spark : color.muted
+  const tierLabel = sub?.tier === 'elite' ? 'Elite' : sub?.tier === 'pro' ? 'Pro' : sub?.tier === 'launch' ? 'Launch Access' : 'Starter'
+  const tierColor = sub?.tier === 'elite' ? color.flame : sub?.tier === 'pro' ? color.spark : sub?.tier === 'launch' ? color.pulse : color.muted
 
   // Section tabs
   const TABS: { key: Section; label: string; labelAr: string; icon: string }[] = [
