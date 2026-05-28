@@ -1,12 +1,6 @@
 name: iOS Expo EAS Build
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - apps/mobile/**
-      - .github/workflows/ios-expo-eas.yml
   workflow_dispatch:
     inputs:
       profile:
