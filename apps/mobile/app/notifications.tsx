@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useFocusEffect } from 'expo-router'
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
 import * as Notifications from 'expo-notifications'
@@ -10,11 +12,38 @@ import { registerDeviceToken } from '@/features/tools'
 import { cancelSynapReminders, getSynapScheduledReminders, scheduleSynapReminders } from '@/features/notifications'
 import { useTheme } from '@/theme/ThemeProvider'
 
+const PUSH_TOKEN_KEY = '@synap:push-token'
+
 export default function NotificationsScreen() {
   const { color } = useTheme()
   const [token, setToken] = useState<string | null>(null)
   const [scheduledCount, setScheduledCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Restore the real push/reminder status whenever the screen is focused, so
+  // returning to this page doesn't show "not enabled" after it was enabled.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      ;(async () => {
+        try {
+          if (!Device.isDevice) return
+          const { status } = await Notifications.getPermissionsAsync()
+          if (status === 'granted') {
+            const saved = await AsyncStorage.getItem(PUSH_TOKEN_KEY)
+            if (active && saved) setToken(saved)
+          } else if (active) {
+            // Permission was revoked in iOS Settings — reflect that
+            setToken(null)
+            await AsyncStorage.removeItem(PUSH_TOKEN_KEY).catch(() => {})
+          }
+          const scheduled = await getSynapScheduledReminders()
+          if (active) setScheduledCount(scheduled.length)
+        } catch { /* non-fatal */ }
+      })()
+      return () => { active = false }
+    }, []),
+  )
 
   async function enable() {
     setLoading(true)
@@ -31,6 +60,7 @@ export default function NotificationsScreen() {
         '5fb169d2-85c2-48ef-990f-960a395e7c6a' // fallback for Direct Builds
       const res = await Notifications.getExpoPushTokenAsync({ projectId })
       setToken(res.data)
+      await AsyncStorage.setItem(PUSH_TOKEN_KEY, res.data).catch(() => {})
       await registerDeviceToken({ token: res.data, platform: Platform.OS })
       const scheduledIds = await scheduleSynapReminders()
       setScheduledCount(scheduledIds.length)
