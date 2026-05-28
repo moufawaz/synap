@@ -36,6 +36,18 @@ export async function requestTestPush() {
   })
 }
 
+/**
+ * Triggers the server-side adaptation check for the current user.
+ * This is what fires smart push notifications (plateau alerts, streaks,
+ * plan renewal warnings, Ion coaching messages, etc.).
+ * Should be called once per day — callers are responsible for rate-limiting.
+ */
+export async function runAdaptationCheck() {
+  return apiFetch<{ ok: boolean; checks: string[]; issues: number }>('/api/adaptation-check', {
+    method: 'POST',
+  })
+}
+
 export async function registerDeviceToken(input: { token: string; provider?: 'expo'; platform?: string }) {
   return apiFetch<{ ok: true }>('/api/device-token', {
     method: 'POST',

@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from 'next/server'
 import { createAdminClient, createServerClient } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
-import { sendPushNotification } from '@/lib/onesignal'
+import { pushToUser } from '@/lib/push'
 import { sendEmail } from '@/lib/resend'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
         issues.push({ type: 'diet_renewal', message: `Diet plan expires in ${daysLeft} day(s).`, priority: 'high' })
         checks.push('diet_renewal')
         await sendEmail({ to: user.email!, type: 'plan_renewal_warning', data: { name: profile.name, planType: 'diet', daysLeft } })
-        await sendPushNotification({ userId: user.id, type: 'plan_renewal' })
+        await pushToUser({ userId: user.id, type: 'plan_renewal' })
       }
     }
 
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
       if (daysSince >= 14) {
         issues.push({ type: 'measurement_overdue', message: `No measurements logged in ${daysSince} days.`, priority: 'medium' })
         checks.push('measurement_overdue')
-        await sendPushNotification({ userId: user.id, type: 'measurement_reminder' })
+        await pushToUser({ userId: user.id, type: 'measurement_reminder' })
       }
     }
 
@@ -138,7 +138,7 @@ export async function POST(req: Request) {
     if ([7, 14, 21, 30].includes(streak)) {
       issues.push({ type: 'streak_milestone', message: `${streak}-day workout streak!`, priority: 'low' })
       checks.push('streak_milestone')
-      await sendPushNotification({ userId: user.id, type: 'streak_milestone', overrides: { body: `You've trained ${streak} days in a row! Ion is tracking every session.` } })
+      await pushToUser({ userId: user.id, type: 'streak_milestone', overrides: { body: `You've trained ${streak} days in a row! Ion is tracking every session.` } })
       await sendEmail({ to: user.email!, type: 'milestone', data: { name: profile.name, milestone: `${streak}-Day Streak`, message: `You've trained ${streak} days consecutively. Consistency is what separates good from great.` } })
     }
 
@@ -174,7 +174,7 @@ Language: ${language}`
       })
 
       if (highPriority.length > 0) {
-        await sendPushNotification({ userId: user.id, type: 'ion_message', overrides: { body: ionContent.slice(0, 100) } })
+        await pushToUser({ userId: user.id, type: 'ion_message', overrides: { body: ionContent.slice(0, 100) } })
       }
     }
 

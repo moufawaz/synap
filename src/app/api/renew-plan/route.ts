@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
-import { sendPushNotification } from '@/lib/onesignal'
+import { pushToUser } from '@/lib/push'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 import { recordAiUsage } from '@/lib/ai-usage'
@@ -267,7 +267,7 @@ async function applyRenewalPreview({
 
   await Promise.allSettled([
     email ? sendEmail({ to: email, type: 'new_plan', data: { name: profile?.name || 'there', planType, weeks: durationWeeks } }) : Promise.resolve(),
-    sendPushNotification({ userId, type: 'plan_renewal' }),
+    pushToUser({ userId, type: 'plan_renewal' }),
   ])
 
   if (planType === 'diet' && process.env.ANTHROPIC_API_KEY) {

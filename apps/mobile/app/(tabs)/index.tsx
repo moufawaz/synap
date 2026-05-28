@@ -7,10 +7,12 @@ import { Card } from '@/components/Card'
 import { IonAvatar } from '@/components/IonAvatar'
 import { Screen } from '@/components/Screen'
 import { SynapLogo } from '@/components/SynapLogo'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getChatHistory } from '@/features/chat'
 import { getMealLogs } from '@/features/nutrition'
 import { getProfile } from '@/features/profile'
 import { getSubscriptionStatus } from '@/features/subscription'
+import { runAdaptationCheck } from '@/features/tools'
 import { getPlanHistory } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
@@ -37,6 +39,16 @@ export default function DashboardScreen() {
       meals.silentRefresh()
       plan.silentRefresh()
       chat.silentRefresh()
+      // Run adaptation check at most once per day — fires smart push notifications
+      // (plateau alerts, streak milestones, plan renewal warnings, Ion messages)
+      AsyncStorage.getItem('@sdc:adaptation-last').then(last => {
+        const today = new Date().toISOString().slice(0, 10)
+        if (last !== today) {
+          runAdaptationCheck()
+            .then(() => AsyncStorage.setItem('@sdc:adaptation-last', today))
+            .catch(() => {})
+        }
+      })
     }, [])
   )
 
