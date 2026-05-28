@@ -8,6 +8,7 @@ on:
       - main
     paths:
       - apps/mobile/**
+      - fastlane/**
       - .github/workflows/ios-expo-direct.yml
   workflow_dispatch:
     inputs:
