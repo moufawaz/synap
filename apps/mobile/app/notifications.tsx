@@ -25,8 +25,11 @@ export default function NotificationsScreen() {
       }
       const permission = await Notifications.requestPermissionsAsync()
       if ((permission as any).status !== 'granted' && !(permission as any).granted) return Alert.alert('Push', 'Permission was not granted.')
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId
-      const res = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ||
+        (Constants as any).easConfig?.projectId ||
+        '5fb169d2-85c2-48ef-990f-960a395e7c6a' // fallback for Direct Builds
+      const res = await Notifications.getExpoPushTokenAsync({ projectId })
       setToken(res.data)
       await registerDeviceToken({ token: res.data, platform: Platform.OS })
       const scheduledIds = await scheduleSynapReminders()

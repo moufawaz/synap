@@ -1,15 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { router, useFocusEffect } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { VideoModal } from '@/components/VideoModal'
-import { getPlanHistory, getWorkoutSession, logWorkout, saveWorkoutSession, TodayWorkout } from '@/features/workout'
+import { getPlanHistory, logWorkout, TodayWorkout } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+
+// Local session helpers — persisted in AsyncStorage, instant, no network needed
+const SESSION_KEY = (date: string) => `@synap:workout-session:${date}`
+
+async function loadLocalSession(date: string) {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_KEY(date))
+    if (!raw) return null
+    return JSON.parse(raw) as { completedExercises: number[]; exercisePerformance: Record<string, { weight?: string; reps?: string }> }
+  } catch { return null }
+}
+
+async function saveLocalSession(date: string, completedExercises: number[], exercisePerformance: Record<string, { weight?: string; reps?: string }>) {
+  try {
+    await AsyncStorage.setItem(SESSION_KEY(date), JSON.stringify({ completedExercises, exercisePerformance }))
+  } catch {}
+}
 
 // ── Day helpers ───────────────────────────────────────────────────────────────
 
@@ -151,15 +169,15 @@ export default function TrainScreen() {
   const date = todayKey()
   const align = isRtl ? 'right' : 'left'
 
-  // Reload session when the tab comes into focus
+  // Reload session when the tab comes into focus (AsyncStorage — instant, no network)
   useFocusEffect(
     useCallback(() => {
-      getWorkoutSession(date)
-        .then(({ session }) => {
-          setCompleted(session?.completedExercises ?? [])
-          setPerformance((session?.exercisePerformance as Record<string, { weight?: string; reps?: string }>) ?? {})
-        })
-        .catch(() => {})
+      loadLocalSession(date).then(session => {
+        if (session) {
+          setCompleted(session.completedExercises ?? [])
+          setPerformance(session.exercisePerformance ?? {})
+        }
+      })
     }, [date])
   )
 
@@ -223,16 +241,16 @@ export default function TrainScreen() {
     if (timerState === 'idle') startTimer()
     const next = completedSet.has(index) ? completed.filter(i => i !== index) : [...completed, index]
     setCompleted(next)
-    if (workout && selectedDay === todayCanonical) {
-      await saveWorkoutSession({ date, dayName: workout.day_name, completedExercises: next, exercisePerformance: performance }).catch(() => {})
+    if (selectedDay === todayCanonical) {
+      await saveLocalSession(date, next, performance)
     }
   }
 
   async function updatePerformance(index: number, key: 'weight' | 'reps', value: string) {
     const next = { ...performance, [index]: { ...(performance[index] || {}), [key]: value } }
     setPerformance(next)
-    if (workout && selectedDay === todayCanonical) {
-      await saveWorkoutSession({ date, dayName: workout.day_name, completedExercises: completed, exercisePerformance: next }).catch(() => {})
+    if (selectedDay === todayCanonical) {
+      await saveLocalSession(date, completed, next)
     }
   }
 
@@ -247,12 +265,10 @@ export default function TrainScreen() {
       setCompleted([])
       setPerformance({})
     } else {
-      getWorkoutSession(date)
-        .then(({ session }) => {
-          setCompleted(session?.completedExercises ?? [])
-          setPerformance((session?.exercisePerformance as Record<string, { weight?: string; reps?: string }>) ?? {})
-        })
-        .catch(() => {})
+      loadLocalSession(date).then(session => {
+        setCompleted(session?.completedExercises ?? [])
+        setPerformance(session?.exercisePerformance ?? {})
+      })
     }
   }
 

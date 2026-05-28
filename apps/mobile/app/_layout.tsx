@@ -77,8 +77,11 @@ async function tryAutoRegisterPush() {
     const { status } = await Notifications.getPermissionsAsync()
     if (status !== 'granted') return  // don't prompt here; user can enable in Notifications screen
 
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId || (Constants as any).easConfig?.projectId
-    const { data: token } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ||
+      (Constants as any).easConfig?.projectId ||
+      '5fb169d2-85c2-48ef-990f-960a395e7c6a' // fallback for Direct Builds
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId })
     await registerDeviceToken({ token, platform: Platform.OS })
 
     // Build meal reminders from cached plan times so each meal gets its own reminder
