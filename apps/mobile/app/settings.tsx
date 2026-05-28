@@ -7,6 +7,13 @@ import { IonAvatar } from '@/components/IonAvatar'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { getProfile, saveProfile } from '@/features/profile'
+import {
+  DEFAULT_NOTIF_PREFS,
+  loadNotifPrefs,
+  saveNotifPrefs,
+  scheduleSynapReminders,
+  type NotifPrefs,
+} from '@/features/notifications'
 import { apiFetch } from '@/lib/api'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
@@ -35,23 +42,7 @@ const PROFILE_FIELDS = [
   ['meals_per_day', 'Meals/day', 'وجبات/يوم', 'number-pad'],
 ] as const
 
-// ── Notification pref types ───────────────────────────────────────────────────
-
-type NotifPrefs = {
-  workout_reminder: boolean
-  meal_reminder: boolean
-  hydration_reminder: boolean
-  checkin_reminder: boolean
-  weekly_report: boolean
-}
-
-const DEFAULT_NOTIF_PREFS: NotifPrefs = {
-  workout_reminder: true,
-  meal_reminder: true,
-  hydration_reminder: true,
-  checkin_reminder: true,
-  weekly_report: false,
-}
+// ── Notification labels (types/defaults live in @/features/notifications) ──────
 
 const NOTIF_LABELS: Record<keyof NotifPrefs, { en: string; ar: string; icon: string }> = {
   workout_reminder: { en: 'Workout reminder', ar: 'تذكير التمرين', icon: 'activity' },
@@ -60,8 +51,6 @@ const NOTIF_LABELS: Record<keyof NotifPrefs, { en: string; ar: string; icon: str
   checkin_reminder: { en: 'Daily check-in', ar: 'تسجيل يومي', icon: 'check-circle' },
   weekly_report: { en: 'Weekly report', ar: 'تقرير أسبوعي', icon: 'file-text' },
 }
-
-const NOTIF_STORAGE_KEY = 'synap_notif_prefs_v1'
 
 async function getSubscription() {
   return apiFetch<{ tier: string; status: string; plan_type?: string; renewal_date?: string; trial_ends_at?: string; access: boolean }>('/api/me/subscription')
@@ -79,6 +68,11 @@ export default function SettingsScreen() {
   const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS)
 
   const align = isRtl ? 'right' : 'left'
+
+  // Load persisted notification preferences
+  useEffect(() => {
+    loadNotifPrefs().then(setNotifPrefs).catch(() => {})
+  }, [])
 
   // Load profile fields
   useEffect(() => {
@@ -116,7 +110,14 @@ export default function SettingsScreen() {
   }
 
   function toggleNotif(key: keyof NotifPrefs) {
-    setNotifPrefs(prev => ({ ...prev, [key]: !prev[key] }))
+    setNotifPrefs(prev => {
+      const next = { ...prev, [key]: !prev[key] }
+      // Persist immediately and re-apply the local reminder schedule so the
+      // toggle takes real effect (workout/meal/hydration are local reminders).
+      saveNotifPrefs(next)
+      scheduleSynapReminders({ prefs: next }).catch(() => {})
+      return next
+    })
   }
 
   const sub = subscription.data

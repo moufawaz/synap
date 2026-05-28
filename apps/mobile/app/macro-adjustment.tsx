@@ -43,10 +43,10 @@ export default function MacroAdjustmentScreen() {
         <Card style={styles.cardGap}>
           <Text style={[styles.title, { color: color.text }]}>Updated targets</Text>
           <View style={styles.grid}>
-            <Metric label="Calories" before={previous?.calories} after={adjustment.adjusted_calories} color={color.flame} />
-            <Metric label="Protein" before={previous?.protein} after={adjustment.adjusted_protein_g} color={color.spark} />
-            <Metric label="Carbs" before={previous?.carbs} after={adjustment.adjusted_carbs_g} color={color.cyan} />
-            <Metric label="Fat" before={previous?.fat} after={adjustment.adjusted_fat_g} color={color.pulse} />
+            <Metric label="Calories" before={previous?.calories} after={adjustment.adjusted_calories} color={color.flame} bg={color.elevated} valueColor={color.text} />
+            <Metric label="Protein" before={previous?.protein} after={adjustment.adjusted_protein_g} color={color.spark} bg={color.elevated} valueColor={color.text} />
+            <Metric label="Carbs" before={previous?.carbs} after={adjustment.adjusted_carbs_g} color={color.cyan} bg={color.elevated} valueColor={color.text} />
+            <Metric label="Fat" before={previous?.fat} after={adjustment.adjusted_fat_g} color={color.pulse} bg={color.elevated} valueColor={color.text} />
           </View>
           <Text style={[styles.body, { color: color.text }]}>{adjustment.rationale}</Text>
         </Card>
@@ -55,11 +55,11 @@ export default function MacroAdjustmentScreen() {
   )
 }
 
-function Metric({ label, before, after, color }: { label: string; before: unknown; after: unknown; color: string }) {
+function Metric({ label, before, after, color, bg, valueColor }: { label: string; before: unknown; after: unknown; color: string; bg: string; valueColor: string }) {
   return (
-    <View style={styles.metric}>
+    <View style={[styles.metric, { backgroundColor: bg }]}>
       <Text style={[styles.metricLabel, { color }]}>{label}</Text>
-      <Text style={styles.metricValue}>{String(before ?? '-')} → {String(after ?? '-')}</Text>
+      <Text style={[styles.metricValue, { color: valueColor }]}>{String(before ?? '-')} → {String(after ?? '-')}</Text>
     </View>
   )
 }
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
   primary: { minHeight: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
   primaryText: { color: '#fff', fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   grid: { gap: 10, marginVertical: 10 },
-  metric: { borderRadius: 12, padding: 12, backgroundColor: 'rgba(255,255,255,0.04)' },
+  metric: { borderRadius: 12, padding: 12 },
   metricLabel: { fontSize: 12, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
-  metricValue: { color: '#fff', fontSize: 18, fontWeight: '900', marginTop: 3 },
+  metricValue: { fontSize: 18, fontWeight: '900', marginTop: 3 },
 })

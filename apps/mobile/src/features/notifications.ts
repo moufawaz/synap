@@ -1,4 +1,38 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
+
+/** Which local reminders the user has enabled. Persisted from the Settings screen. */
+export type NotifPrefs = {
+  workout_reminder: boolean
+  meal_reminder: boolean
+  hydration_reminder: boolean
+  checkin_reminder: boolean
+  weekly_report: boolean
+}
+
+export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
+  workout_reminder: true,
+  meal_reminder: true,
+  hydration_reminder: true,
+  checkin_reminder: true,
+  weekly_report: false,
+}
+
+export const NOTIF_PREFS_KEY = 'synap_notif_prefs_v1'
+
+export async function loadNotifPrefs(): Promise<NotifPrefs> {
+  try {
+    const raw = await AsyncStorage.getItem(NOTIF_PREFS_KEY)
+    if (raw) return { ...DEFAULT_NOTIF_PREFS, ...JSON.parse(raw) }
+  } catch { /* fall through to defaults */ }
+  return DEFAULT_NOTIF_PREFS
+}
+
+export async function saveNotifPrefs(prefs: NotifPrefs): Promise<void> {
+  try {
+    await AsyncStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(prefs))
+  } catch { /* non-fatal */ }
+}
 
 export type ReminderSettings = {
   /** Hour (0-23) for workout reminder — falls back to 18 */
@@ -7,6 +41,8 @@ export type ReminderSettings = {
   /** Meal times extracted from the user's active diet plan */
   mealTimes?: Array<{ hour: number; minute: number; name: string }>
   hydrationHour?: number
+  /** User toggles — when omitted, defaults are loaded from storage */
+  prefs?: NotifPrefs
 }
 
 type Reminder = {
@@ -50,41 +86,48 @@ function buildMealReminders(mealTimes: Array<{ hour: number; minute: number; nam
 export async function scheduleSynapReminders(settings: ReminderSettings = {}) {
   await cancelSynapReminders()
 
+  const prefs = settings.prefs ?? (await loadNotifPrefs())
   const toSchedule: Reminder[] = []
 
   // Workout reminder
-  toSchedule.push({
-    id: `${REMINDER_IDS_KEY_PREFIX}workout`,
-    title: '💪 Workout check-in',
-    body: "Open today's session and keep your plan moving.",
-    hour: settings.workoutHour ?? 18,
-    minute: settings.workoutMinute ?? 0,
-    url: '/(tabs)/train',
-  })
+  if (prefs.workout_reminder) {
+    toSchedule.push({
+      id: `${REMINDER_IDS_KEY_PREFIX}workout`,
+      title: '💪 Workout check-in',
+      body: "Open today's session and keep your plan moving.",
+      hour: settings.workoutHour ?? 18,
+      minute: settings.workoutMinute ?? 0,
+      url: '/(tabs)/train',
+    })
+  }
 
   // Meal reminders — use plan times if provided, else one generic reminder at 1 PM
-  if (settings.mealTimes && settings.mealTimes.length > 0) {
-    toSchedule.push(...buildMealReminders(settings.mealTimes))
-  } else {
+  if (prefs.meal_reminder) {
+    if (settings.mealTimes && settings.mealTimes.length > 0) {
+      toSchedule.push(...buildMealReminders(settings.mealTimes))
+    } else {
+      toSchedule.push({
+        id: `${REMINDER_IDS_KEY_PREFIX}meal`,
+        title: '🥗 Nutrition check-in',
+        body: 'Log your meals while the details are still fresh.',
+        hour: 13,
+        minute: 0,
+        url: '/(tabs)/nutrition',
+      })
+    }
+  }
+
+  // Hydration reminder
+  if (prefs.hydration_reminder) {
     toSchedule.push({
-      id: `${REMINDER_IDS_KEY_PREFIX}meal`,
-      title: '🥗 Nutrition check-in',
-      body: 'Log your meals while the details are still fresh.',
-      hour: 13,
+      id: `${REMINDER_IDS_KEY_PREFIX}hydration`,
+      title: '💧 Hydration nudge',
+      body: 'Water target still counts. Add a glass now.',
+      hour: settings.hydrationHour ?? 16,
       minute: 0,
       url: '/(tabs)/nutrition',
     })
   }
-
-  // Hydration reminder
-  toSchedule.push({
-    id: `${REMINDER_IDS_KEY_PREFIX}hydration`,
-    title: '💧 Hydration nudge',
-    body: 'Water target still counts. Add a glass now.',
-    hour: settings.hydrationHour ?? 16,
-    minute: 0,
-    url: '/(tabs)/nutrition',
-  })
 
   const ids: string[] = []
   for (const reminder of toSchedule) {

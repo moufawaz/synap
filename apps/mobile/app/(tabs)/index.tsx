@@ -117,10 +117,10 @@ export default function DashboardScreen() {
 
       {/* Stat chips */}
       <View style={[styles.statRow, { flexDirection: rowDir }]}>
-        <StatChip icon="target"      label={isRtl ? 'الهدف' : 'GOAL'}      value={goalLabels[goal] || 'Active'}            color={color.spark}      bg={color.surface} border={color.border} />
-        <StatChip icon="zap"         label={isRtl ? 'السعرات' : 'CALORIES'} value={calorieTarget ? `${calorieTarget} kcal` : '-'} color={color.flame} bg={color.surface} border={color.border} />
-        <StatChip icon="activity"    label={isRtl ? 'هذا الأسبوع' : 'TRAINING'} value={trainingDays || '-'}               color={color.sparkLight} bg={color.surface} border={color.border} />
-        <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}    value={latestWeight ? `${latestWeight} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} />
+        <StatChip icon="target"      label={isRtl ? 'الهدف' : 'GOAL'}      value={goalLabels[goal] || 'Active'}            color={color.spark}      bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
+        <StatChip icon="zap"         label={isRtl ? 'السعرات' : 'CALORIES'} value={calorieTarget ? `${calorieTarget} kcal` : '-'} color={color.flame} bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
+        <StatChip icon="activity"    label={isRtl ? 'هذا الأسبوع' : 'TRAINING'} value={trainingDays || '-'}               color={color.sparkLight} bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
+        <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}    value={latestWeight ? `${latestWeight} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
       </View>
 
       {/* Ion coaching engine — always visible */}
@@ -232,9 +232,9 @@ export default function DashboardScreen() {
 
       {/* Quick actions */}
       <View style={[styles.quickRow, { flexDirection: rowDir }]}>
-        <QuickAction icon="message-circle" label={isRtl ? 'اسأل Ion' : 'ASK ION'}     color={color.spark} bg={color.sparkSoft}       onPress={() => router.push('/(tabs)/chat')} />
-        <QuickAction icon="bar-chart-2"    label={isRtl ? 'سجل الوزن' : 'LOG WEIGHT'} color={color.pulse} bg="rgba(16,185,129,0.12)"  onPress={() => router.push('/(tabs)/progress')} />
-        <QuickAction icon="zap"            label={isRtl ? 'ابدأ التمرين' : 'START'}   color={color.flame} bg="rgba(249,115,22,0.12)"  onPress={() => router.push('/(tabs)/train')} />
+        <QuickAction icon="message-circle" label={isRtl ? 'اسأل Ion' : 'ASK ION'}     color={color.spark} bg={color.sparkSoft}       labelColor={color.text} onPress={() => router.push('/(tabs)/chat')} />
+        <QuickAction icon="bar-chart-2"    label={isRtl ? 'سجل الوزن' : 'LOG WEIGHT'} color={color.pulse} bg="rgba(16,185,129,0.12)"  labelColor={color.text} onPress={() => router.push('/(tabs)/progress')} />
+        <QuickAction icon="zap"            label={isRtl ? 'ابدأ التمرين' : 'START'}   color={color.flame} bg="rgba(249,115,22,0.12)"  labelColor={color.text} onPress={() => router.push('/(tabs)/train')} />
       </View>
 
       {/* Subscription banner */}
@@ -268,23 +268,23 @@ export default function DashboardScreen() {
   )
 }
 
-function StatChip({ icon, label, value, color, bg, border }: { icon: string; label: string; value: string; color: string; bg: string; border: string }) {
+function StatChip({ icon, label, value, color, bg, border, labelColor, valueColor }: { icon: string; label: string; value: string; color: string; bg: string; border: string; labelColor: string; valueColor: string }) {
   return (
     <View style={[styles.statChip, { backgroundColor: bg, borderColor: border }]}>
       <Feather name={icon as any} size={13} color={color} />
-      <Text style={[styles.statLabel, { color: '#475569' }]}>{label}</Text>
-      <Text style={[styles.statValue, { color: '#F8FAFC' }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: labelColor }]}>{label}</Text>
+      <Text style={[styles.statValue, { color: valueColor }]}>{value}</Text>
     </View>
   )
 }
 
-function QuickAction({ icon, label, color, bg, onPress }: { icon: string; label: string; color: string; bg: string; onPress: () => void }) {
+function QuickAction({ icon, label, color, bg, labelColor, onPress }: { icon: string; label: string; color: string; bg: string; labelColor: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={[styles.quickAction, { backgroundColor: bg, borderColor: `${color}30` }]}>
       <View style={[styles.quickIcon, { backgroundColor: `${color}18`, borderColor: `${color}30` }]}>
         <Feather name={icon as any} size={18} color={color} />
       </View>
-      <Text style={[styles.quickLabel, { color: '#F8FAFC' }]}>{label}</Text>
+      <Text style={[styles.quickLabel, { color: labelColor }]}>{label}</Text>
     </Pressable>
   )
 }

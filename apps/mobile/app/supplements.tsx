@@ -68,7 +68,7 @@ export default function SupplementsScreen() {
           </>
         ) : items.length > 0 ? (
           <Text style={[styles.body, { color: color.muted }]}>
-            Generated {new Date(recommendation.generated_at).toLocaleDateString('en-GB')} · {items.length} supplements
+            {recommendation?.generated_at ? `Generated ${new Date(recommendation.generated_at).toLocaleDateString('en-GB')} · ` : ''}{items.length} supplements
           </Text>
         ) : null}
 
