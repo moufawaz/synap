@@ -5,7 +5,7 @@ import { requireFoodScanAccess } from '@/lib/feature-access'
 const OFF_BASE = 'https://world.openfoodfacts.org/api/v2/product'
 
 export async function GET(req: Request) {
-  const gate = await requireFoodScanAccess()
+  const gate = await requireFoodScanAccess(req)
   if (gate.response) return gate.response
 
   const { searchParams } = new URL(req.url)

@@ -70,6 +70,14 @@ export async function getBarcodeProduct(code: string) {
   return apiFetch<{ product: PhotoFoodProduct | null }>(`/api/barcode?code=${encodeURIComponent(code)}`)
 }
 
+/** AI-powered fallback: estimates nutrition for a food/product name when barcode lookup returns nothing */
+export async function estimateBarcodeProduct(name: string) {
+  return apiFetch<{ product: PhotoFoodProduct | null; confidence?: string; ai_estimated?: boolean }>('/api/barcode/estimate', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+}
+
 export async function getHydration(date = new Date().toISOString().split('T')[0]) {
   return apiFetch<{ hydration: { date: string; glasses: number; liters?: number | null; target_liters?: number | null } }>(`/api/hydration?date=${date}`)
 }

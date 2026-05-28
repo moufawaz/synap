@@ -12,7 +12,7 @@ const client = new Anthropic()
 // Uses Claude Haiku to estimate nutrition for a product name when barcode lookup fails
 export async function POST(req: Request) {
   try {
-    const gate = await requireFoodScanAccess()
+    const gate = await requireFoodScanAccess(req)
     if (gate.response) return gate.response
 
     const { name } = await req.json()

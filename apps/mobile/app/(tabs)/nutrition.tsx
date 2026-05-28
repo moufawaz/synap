@@ -23,6 +23,7 @@ import { Screen } from '@/components/Screen'
 import {
   createMealLog,
   deleteMealLog,
+  estimateBarcodeProduct,
   getBarcodeProduct,
   getHydration,
   getMealLogs,
@@ -199,6 +200,9 @@ export default function NutritionScreen() {
 
   const [name, setName] = useState('')
   const [calories, setCalories] = useState('')
+  const [protein, setProtein] = useState('')
+  const [carbs, setCarbs] = useState('')
+  const [fat, setFat] = useState('')
   const [barcode, setBarcode] = useState('')
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState<MealLog | null>(null)
@@ -240,6 +244,10 @@ export default function NutritionScreen() {
 
   // ── Actions ─────────────────────────────────────────────
 
+  function clearForm() {
+    setName(''); setCalories(''); setProtein(''); setCarbs(''); setFat(''); setEditing(null)
+  }
+
   async function handleSave() {
     const mealName = name.trim()
     const kcal = Number(calories)
@@ -247,16 +255,19 @@ export default function NutritionScreen() {
       Alert.alert('Nutrition', isRtl ? 'أدخل اسم الطعام والسعرات.' : 'Enter food name and calories.')
       return
     }
+    const macros = {
+      protein_g: numberOrNull(protein) ?? undefined,
+      carbs_g:   numberOrNull(carbs)   ?? undefined,
+      fats_g:    numberOrNull(fat)     ?? undefined,
+    }
     setSaving(true)
     try {
       if (editing) {
-        await updateMealLog({ id: editing.id, meal_name: mealName, calories_estimated: Math.round(kcal) })
+        await updateMealLog({ id: editing.id, meal_name: mealName, calories_estimated: Math.round(kcal), ...macros })
       } else {
-        await createMealLog({ meal_name: mealName, calories_estimated: Math.round(kcal), source: 'mobile_manual' })
+        await createMealLog({ meal_name: mealName, calories_estimated: Math.round(kcal), ...macros, source: 'mobile_manual' })
       }
-      setName('')
-      setCalories('')
-      setEditing(null)
+      clearForm()
       await logs.reload()
     } catch (error: any) {
       Alert.alert('Nutrition', error?.message || 'Could not save food')
@@ -281,6 +292,9 @@ export default function NutritionScreen() {
     setEditing(log)
     setName(log.meal_name || '')
     setCalories(String(log.calories_estimated || ''))
+    setProtein(log.protein_g != null ? String(log.protein_g) : '')
+    setCarbs(log.carbs_g != null ? String(log.carbs_g) : '')
+    setFat(log.fats_g != null ? String(log.fats_g) : '')
     setLogPanelOpen(true)
   }
 
@@ -299,8 +313,12 @@ export default function NutritionScreen() {
       const response = await scanFoodPhoto(asset.base64, asset.mimeType || 'image/jpeg')
       if (!response.product) { Alert.alert(isRtl ? 'لم يُعثر على الطعام' : 'Food not found', response.reason || 'Ion could not identify this food.'); return }
       const serving = response.product.serving_size_g || 100
+      const scale = serving / 100
       setName(response.product.brand ? `${response.product.name} (${response.product.brand}) - ${serving}g` : `${response.product.name} - ${serving}g`)
-      setCalories(String(Math.round(((response.product.calories_per_100g || 0) * serving) / 100)))
+      setCalories(String(Math.round((response.product.calories_per_100g || 0) * scale)))
+      setProtein(response.product.protein_per_100g != null ? String(Math.round(response.product.protein_per_100g * scale * 10) / 10) : '')
+      setCarbs(response.product.carbs_per_100g != null ? String(Math.round(response.product.carbs_per_100g * scale * 10) / 10) : '')
+      setFat(response.product.fat_per_100g != null ? String(Math.round(response.product.fat_per_100g * scale * 10) / 10) : '')
       setLogPanelOpen(true)
       Alert.alert(isRtl ? 'تم العثور على الطعام' : 'Food found', isRtl ? 'راجع القيم ثم اضغط تسجيل.' : 'Review the values, then tap Log food.')
     } catch (error) {
@@ -344,12 +362,20 @@ export default function NutritionScreen() {
   }
 
   async function applyBarcodeProduct(code: string) {
-    const res = await getBarcodeProduct(code)
-    if (!res.product) { Alert.alert('Barcode', 'Product not found.'); return false }
-    const serving = res.product.serving_size_g || 100
+    let product = (await getBarcodeProduct(code)).product
+    if (!product) {
+      // Barcode not in database — try AI estimate as fallback (same as web)
+      product = (await estimateBarcodeProduct(code).catch(() => ({ product: null }))).product
+    }
+    if (!product) { Alert.alert('Barcode', isRtl ? 'المنتج غير موجود.' : 'Product not found.'); return false }
+    const serving = product.serving_size_g || 100
+    const scale = serving / 100
     setBarcode(code)
-    setName(res.product.brand ? `${res.product.name} (${res.product.brand}) - ${serving}g` : `${res.product.name} - ${serving}g`)
-    setCalories(String(Math.round(((res.product.calories_per_100g || 0) * serving) / 100)))
+    setName(product.brand ? `${product.name} (${product.brand}) - ${serving}g` : `${product.name} - ${serving}g`)
+    setCalories(String(Math.round((product.calories_per_100g || 0) * scale)))
+    setProtein(product.protein_per_100g != null ? String(Math.round(product.protein_per_100g * scale * 10) / 10) : '')
+    setCarbs(product.carbs_per_100g != null ? String(Math.round(product.carbs_per_100g * scale * 10) / 10) : '')
+    setFat(product.fat_per_100g != null ? String(Math.round(product.fat_per_100g * scale * 10) / 10) : '')
     setLogPanelOpen(true)
     Alert.alert(isRtl ? 'تم العثور على المنتج' : 'Food found', isRtl ? 'راجع القيم ثم اضغط تسجيل.' : 'Review the values, then tap Log food.')
     return true
@@ -590,8 +616,17 @@ export default function NutritionScreen() {
             </View>
             <TextInput value={name} onChangeText={setName} placeholder={isRtl ? 'اسم الطعام' : 'Food name'} placeholderTextColor={color.dim}
               style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: align }]} />
-            <TextInput value={calories} onChangeText={setCalories} placeholder={isRtl ? 'السعرات' : 'Calories'} placeholderTextColor={color.dim}
+            <TextInput value={calories} onChangeText={setCalories} placeholder={isRtl ? 'السعرات (kcal)' : 'Calories (kcal)'} placeholderTextColor={color.dim}
               keyboardType="numeric" style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: align }]} />
+            {/* Macros row */}
+            <View style={{ flexDirection: isRtl ? 'row-reverse' : 'row', gap: 8 }}>
+              <TextInput value={protein} onChangeText={setProtein} placeholder={isRtl ? 'بروتين (g)' : 'Protein (g)'} placeholderTextColor={color.dim}
+                keyboardType="numeric" style={[styles.input, { flex: 1, backgroundColor: color.elevated, borderColor: color.spark + '66', color: color.text, textAlign: align }]} />
+              <TextInput value={carbs} onChangeText={setCarbs} placeholder={isRtl ? 'كارب (g)' : 'Carbs (g)'} placeholderTextColor={color.dim}
+                keyboardType="numeric" style={[styles.input, { flex: 1, backgroundColor: color.elevated, borderColor: color.flame + '66', color: color.text, textAlign: align }]} />
+              <TextInput value={fat} onChangeText={setFat} placeholder={isRtl ? 'دهون (g)' : 'Fat (g)'} placeholderTextColor={color.dim}
+                keyboardType="numeric" style={[styles.input, { flex: 1, backgroundColor: color.elevated, borderColor: '#3B82F666', color: color.text, textAlign: align }]} />
+            </View>
             <Pressable disabled={saving} onPress={handleSave} style={[styles.primary, { backgroundColor: color.flame }]}>
               {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{editing ? (isRtl ? 'حفظ التعديلات' : 'Save changes') : (isRtl ? 'تسجيل الطعام' : 'Log food')}</Text>}
             </Pressable>

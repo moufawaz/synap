@@ -1,10 +1,14 @@
-import { Component, useEffect, type ReactNode } from 'react'
-import { Text, View } from 'react-native'
+import { Component, useEffect, useRef, type ReactNode } from 'react'
+import { Platform, Text, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { router } from 'expo-router'
+import Constants from 'expo-constants'
+import * as Device from 'expo-device'
 import * as Notifications from 'expo-notifications'
 import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
+import { registerDeviceToken } from '@/features/tools'
+import { scheduleSynapReminders } from '@/features/notifications'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 
@@ -50,14 +54,35 @@ function routeFromNotification(response: Notifications.NotificationResponse | nu
   return '/(tabs)'
 }
 
+/** Silently register push token if permission is already granted — no prompt shown */
+async function tryAutoRegisterPush() {
+  try {
+    if (!Device.isDevice) return
+    const { status } = await Notifications.getPermissionsAsync()
+    if (status !== 'granted') return  // don't prompt here; user can enable in Notifications screen
+
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId || (Constants as any).easConfig?.projectId
+    const { data: token } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+    await registerDeviceToken({ token, platform: Platform.OS })
+    await scheduleSynapReminders()   // ensure daily reminders are scheduled
+  } catch { /* non-fatal */ }
+}
+
 function RootNavigator() {
   const { mode, color } = useTheme()
   const { session, loading } = useAuth()
+  const pushRegistered = useRef(false)
 
   // Safety net: any sign-out path (signOut(), token expiry, etc.) redirects to login
   useEffect(() => {
     if (!loading && session === null) {
+      pushRegistered.current = false
       router.replace('/(auth)/login')
+    }
+    // Auto-register push token once per session when user is authenticated
+    if (!loading && session !== null && !pushRegistered.current) {
+      pushRegistered.current = true
+      tryAutoRegisterPush()
     }
   }, [session, loading])
 
