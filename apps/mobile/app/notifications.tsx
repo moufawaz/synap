@@ -6,7 +6,7 @@ import * as Notifications from 'expo-notifications'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
-import { registerDeviceToken, requestTestPush } from '@/features/tools'
+import { registerDeviceToken } from '@/features/tools'
 import { cancelSynapReminders, getSynapScheduledReminders, scheduleSynapReminders } from '@/features/notifications'
 import { useTheme } from '@/theme/ThemeProvider'
 
@@ -51,15 +51,6 @@ export default function NotificationsScreen() {
     Alert.alert('Local reminders', 'Daily SYNAP reminders were cancelled on this device.')
   }
 
-  async function test() {
-    try {
-      await requestTestPush()
-      Alert.alert('Push', 'Backend test request sent.')
-    } catch (error) {
-      Alert.alert('Push', error instanceof Error ? error.message : 'Could not send backend push.')
-    }
-  }
-
   return (
     <Screen>
       <PageHeader eyebrow="PUSH" title="Notifications" subtitle="Remote push, local reminders, and tap routing." />
@@ -68,7 +59,6 @@ export default function NotificationsScreen() {
         <Text style={[styles.body, { color: color.muted }]}>{token || 'No native token yet.'}</Text>
         <Text style={[styles.body, { color: color.muted }]}>Local reminders: {scheduledCount ?? 'not checked'}</Text>
         <Pressable onPress={enable} style={[styles.primary, { backgroundColor: color.spark }]}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Enable push</Text>}</Pressable>
-        <Pressable onPress={test} style={[styles.secondary, { borderColor: color.cyan }]}><Text style={[styles.secondaryText, { color: color.cyan }]}>Send backend test</Text></Pressable>
         <Pressable onPress={refreshScheduled} style={[styles.secondary, { borderColor: color.pulse }]}><Text style={[styles.secondaryText, { color: color.pulse }]}>Check local reminders</Text></Pressable>
         <Pressable onPress={disableLocal} style={[styles.secondary, { borderColor: color.danger }]}><Text style={[styles.secondaryText, { color: color.danger }]}>Cancel local reminders</Text></Pressable>
       </Card>

@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen'
 import { useAuth } from '@/auth/AuthProvider'
 import { deleteAccount } from '@/features/account'
 import { HealthSummary, requestHealthAccessAndRead } from '@/features/health'
+import { createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
@@ -48,7 +49,23 @@ export default function MoreScreen() {
       if (!summary.available) {
         Alert.alert('Apple Health unavailable', 'HealthKit is available on iPhone and supported iPad devices only.')
       } else if (!summary.authorized) {
-        Alert.alert('Apple Health not authorized', 'You can enable access later from iOS Settings.')
+        Alert.alert('Apple Health not authorized', 'You can enable access later from iOS Settings → Privacy → Health → SYNAP.')
+      } else {
+        // Auto-sync today's weight to SYNAP measurements if Apple Health has one
+        if (summary.latestWeightKg) {
+          try {
+            await createMeasurement({
+              date: new Date().toISOString().slice(0, 10),
+              weight_kg: summary.latestWeightKg,
+            })
+          } catch { /* non-fatal — maybe already logged today */ }
+        }
+        const lines: string[] = []
+        if (summary.stepsToday != null) lines.push(`Steps today: ${summary.stepsToday.toLocaleString()}`)
+        if (summary.activeEnergyToday != null) lines.push(`Active calories: ${summary.activeEnergyToday} kcal`)
+        if (summary.latestWeightKg != null) lines.push(`Weight: ${summary.latestWeightKg.toFixed(1)} kg${summary.latestWeightKg ? ' (synced to progress)' : ''}`)
+        if (summary.restingHeartRate != null) lines.push(`Resting HR: ${Math.round(summary.restingHeartRate)} bpm`)
+        Alert.alert('Apple Health connected ✓', lines.length ? lines.join('\n') : 'Ion now has access to your health data.')
       }
     } catch (error) {
       Alert.alert('Apple Health', error instanceof Error ? error.message : 'Could not read Health data.')

@@ -30,6 +30,7 @@ export default function PlanScreen() {
   const plan = useAsyncData(getPlanHistory, [])
   const [tab, setTab] = useState<Tab>('diet')
   const [busy, setBusy] = useState<string | null>(null)
+  const [recipeLoading, setRecipeLoading] = useState<number | null>(null)
   const diet = plan.data?.activeDietPlan?.plan_json
   const workout = plan.data?.activeWorkoutPlan?.plan_json
   const meals = Array.isArray(diet?.meals) ? diet.meals : []
@@ -38,12 +39,22 @@ export default function PlanScreen() {
   const activeTiming = tab === 'diet' ? plan.data?.timing?.diet : plan.data?.timing?.workout
   const previousPlan = useMemo(() => history.find((item: any) => !item.active), [history])
 
-  async function recipe(meal: any) {
+  async function recipe(meal: any, index: number) {
+    setRecipeLoading(index)
     try {
       const res = await generateMealRecipe(meal)
-      Alert.alert(res.recipe?.title || 'Recipe', (res.recipe?.steps || []).join('\n'))
+      const title = res.recipe?.title || meal.name || 'Recipe'
+      const steps: string[] = Array.isArray(res.recipe?.steps) ? res.recipe.steps : []
+      const ingredients: string[] = Array.isArray(res.recipe?.ingredients) ? res.recipe.ingredients : []
+      const body = [
+        ingredients.length ? `Ingredients:\n${ingredients.join('\n')}` : '',
+        steps.length ? `\nSteps:\n${steps.join('\n')}` : '',
+      ].filter(Boolean).join('\n') || 'Recipe not available.'
+      Alert.alert(title, body)
     } catch (error) {
       Alert.alert('Recipe', error instanceof Error ? error.message : 'Could not generate recipe.')
+    } finally {
+      setRecipeLoading(null)
     }
   }
 
@@ -140,8 +151,14 @@ export default function PlanScreen() {
               <Text style={[styles.itemTitle, { color: color.text }]}>{meal.name || meal.meal_name || `Meal ${index + 1}`}</Text>
               <Text style={[styles.body, { color: color.muted }]}>{meal.time || meal.meal_time || ''} {meal.calories ? `- ${meal.calories} kcal` : ''}</Text>
               {mealFoods(meal).map((food: string, foodIndex: number) => <Text key={foodIndex} style={[styles.body, { color: color.text }]}>• {food}</Text>)}
-              <Pressable onPress={() => recipe(meal)} style={[styles.smallButton, { borderColor: color.flame }]}>
-                <Text style={[styles.smallButtonText, { color: color.flame }]}>Recipe</Text>
+              <Pressable
+                disabled={recipeLoading !== null}
+                onPress={() => recipe(meal, index)}
+                style={[styles.smallButton, { borderColor: color.flame, opacity: recipeLoading !== null && recipeLoading !== index ? 0.4 : 1 }]}
+              >
+                {recipeLoading === index
+                  ? <ActivityIndicator size="small" color={color.flame} />
+                  : <Text style={[styles.smallButtonText, { color: color.flame }]}>Recipe</Text>}
               </Pressable>
             </View>
           ))}

@@ -1,5 +1,6 @@
 import { Component, useEffect, useRef, type ReactNode } from 'react'
 import { Platform, Text, View } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Stack } from 'expo-router'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
@@ -54,6 +55,21 @@ function routeFromNotification(response: Notifications.NotificationResponse | nu
   return '/(tabs)'
 }
 
+/** Parse a time string "7:30 AM" / "13:00" / "8am" → { hour, minute } | null */
+function parsePlanTime(raw: string | undefined): { hour: number; minute: number } | null {
+  if (!raw) return null
+  const s = String(raw).trim()
+  const match = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i)
+  if (!match) return null
+  let hour = parseInt(match[1], 10)
+  const minute = match[2] ? parseInt(match[2], 10) : 0
+  const ampm = match[3]?.toLowerCase()
+  if (ampm === 'pm' && hour < 12) hour += 12
+  if (ampm === 'am' && hour === 12) hour = 0
+  if (hour < 0 || hour > 23) return null
+  return { hour, minute }
+}
+
 /** Silently register push token if permission is already granted — no prompt shown */
 async function tryAutoRegisterPush() {
   try {
@@ -64,7 +80,25 @@ async function tryAutoRegisterPush() {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId || (Constants as any).easConfig?.projectId
     const { data: token } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
     await registerDeviceToken({ token, platform: Platform.OS })
-    await scheduleSynapReminders()   // ensure daily reminders are scheduled
+
+    // Build meal reminders from cached plan times so each meal gets its own reminder
+    let mealTimes: Array<{ hour: number; minute: number; name: string }> | undefined
+    try {
+      const raw = await AsyncStorage.getItem('@sdc:plan-history')
+      if (raw) {
+        const cached = JSON.parse(raw)
+        const meals: any[] = cached?.data?.activeDietPlan?.plan_json?.meals || []
+        const parsed = meals
+          .map((m: any) => {
+            const t = parsePlanTime(m.time || m.meal_time)
+            return t ? { ...t, name: m.name || m.meal_name || 'Meal' } : null
+          })
+          .filter((x): x is { hour: number; minute: number; name: string } => x !== null)
+        if (parsed.length) mealTimes = parsed
+      }
+    } catch {}
+
+    await scheduleSynapReminders({ mealTimes })
   } catch { /* non-fatal */ }
 }
 

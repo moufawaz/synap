@@ -579,15 +579,15 @@ export default function NutritionScreen() {
       {(preWorkout || postWorkout) ? (
         <View style={styles.section}>
           {preWorkout ? (
-            <View style={[styles.noteBanner, { backgroundColor: `${color.pulse}0F`, borderColor: `${color.pulse}26` }]}>
+            <View style={[styles.workoutBanner, { backgroundColor: `${color.pulse}0F`, borderColor: `${color.pulse}26` }]}>
               <Text style={[styles.recipeSectionTitle, { color: color.pulse }]}>{isRtl ? 'قبل التمرين' : 'PRE-WORKOUT'}</Text>
-              <Text style={[styles.body, { color: color.muted }]}>{preWorkout}</Text>
+              <Text style={[styles.body, { color: color.muted, marginTop: 4 }]}>{preWorkout}</Text>
             </View>
           ) : null}
           {postWorkout ? (
-            <View style={[styles.noteBanner, { backgroundColor: `${color.spark}0F`, borderColor: `${color.spark}26`, marginTop: 8 }]}>
+            <View style={[styles.workoutBanner, { backgroundColor: `${color.spark}0F`, borderColor: `${color.spark}26`, marginTop: 8 }]}>
               <Text style={[styles.recipeSectionTitle, { color: color.sparkLight }]}>{isRtl ? 'بعد التمرين' : 'POST-WORKOUT'}</Text>
-              <Text style={[styles.body, { color: color.muted }]}>{postWorkout}</Text>
+              <Text style={[styles.body, { color: color.muted, marginTop: 4 }]}>{postWorkout}</Text>
             </View>
           ) : null}
         </View>
@@ -791,6 +791,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     marginTop: 8,
+  },
+  workoutBanner: {
+    flexDirection: 'column',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
   },
   noteText: {
     flex: 1,
