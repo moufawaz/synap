@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "scheme": "synap",
     "jsEngine": "hermes",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
