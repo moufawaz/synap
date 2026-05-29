@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, type ReactNode } from 'react'
+import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Platform, Text, View } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Stack } from 'expo-router'
@@ -9,6 +9,7 @@ import * as Notifications from 'expo-notifications'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
+import LoadingSplash from '@/components/LoadingSplash'
 import { registerDeviceToken } from '@/features/tools'
 import { scheduleSynapReminders } from '@/features/notifications'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
@@ -115,21 +116,16 @@ function RootNavigator() {
   const { mode, color } = useTheme()
   const { session, loading } = useAuth()
   const pushRegistered = useRef(false)
-  const splashHidden = useRef(false)
 
-  // Hide the splash as soon as auth resolves (cached data then paints instantly),
-  // with a hard 4s safety cap so a slow network can never strand users on splash.
+  // The branded LoadingSplash overlay (which shows a spinner over the splash
+  // artwork) stays up while auth resolves. A hard 4s safety cap guarantees it
+  // never strands users — Apple rejects artificially long splash screens.
+  const [splashTimedOut, setSplashTimedOut] = useState(false)
   useEffect(() => {
-    if (splashHidden.current) return
-    const hide = () => {
-      if (splashHidden.current) return
-      splashHidden.current = true
-      SplashScreen.hideAsync().catch(() => {})
-    }
-    if (!loading) hide()
-    const safety = setTimeout(hide, 4000)
+    const safety = setTimeout(() => setSplashTimedOut(true), 4000)
     return () => clearTimeout(safety)
-  }, [loading])
+  }, [])
+  const showSplash = loading && !splashTimedOut
 
   // Safety net: any sign-out path (signOut(), token expiry, etc.) redirects to login
   useEffect(() => {
@@ -166,6 +162,7 @@ function RootNavigator() {
           contentStyle: { backgroundColor: color.bg },
         }}
       />
+      <LoadingSplash visible={showSplash} />
     </>
   )
 }

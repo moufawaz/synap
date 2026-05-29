@@ -18,4 +18,10 @@ module.exports = {
     // SYNAP brand spark / accent used by the Live Activity views.
     $accent: '#BB5CF6',
   },
+  images: {
+    // Transparent SYNAP mark, generated into an imageset at prebuild and
+    // referenced from Swift as Image("SynapMark"). Used as the brand glyph in
+    // the Dynamic Island + Lock Screen Live Activity.
+    SynapMark: './synap-mark.png',
+  },
 }
