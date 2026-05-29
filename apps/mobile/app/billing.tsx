@@ -1,4 +1,4 @@
-import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
@@ -41,15 +41,14 @@ export default function BillingScreen() {
   const align = isRtl ? 'right' : 'left'
   const dir   = isRtl ? 'row-reverse' : 'row'
 
-  // Opens the iOS native share sheet — includes "Copy" as a standard option.
-  // Using Share instead of Linking.openURL keeps us Apple-compliant (no external URL button).
-  function shareWebsite() {
-    Share.share({
-      message: isRtl
-        ? 'اشترك في SYNAP على: synapfit.app'
-        : 'Subscribe to SYNAP at: synapfit.app',
-      url: 'https://synapfit.app',
-    }).catch(() => {})
+  function contactSupport() {
+    Alert.alert(
+      isRtl ? 'الدعم' : 'Support',
+      isRtl
+        ? 'للمساعدة بخصوص حسابك أو خطتك راسلنا على:\nion@synapfit.app'
+        : 'For help with your account or plan, email us at:\nion@synapfit.app',
+      [{ text: 'OK' }],
+    )
   }
 
   return (
@@ -68,54 +67,55 @@ export default function BillingScreen() {
       </Pressable>
 
       {/* ══════════════════════════════════════════════════════════════════
-          NON-SUBSCRIBER VIEW — subscribe CTA is the very first thing
+          NON-SUBSCRIBER VIEW — neutral plan status. No purchase CTA, no
+          website, no external steering (App Store Guideline 3.1.1 / 3.1.3).
+          The app only reflects entitlement granted by the account.
       ══════════════════════════════════════════════════════════════════ */}
       {!hasAccess ? (
         <>
-          {/* Main subscribe card */}
+          {/* Neutral status hero */}
           <LinearGradient
-            colors={['rgba(187,92,246,0.22)', 'rgba(187,92,246,0.06)']}
-            style={[styles.subscribeCard, { borderColor: 'rgba(187,92,246,0.30)' }]}
+            colors={['rgba(187,92,246,0.18)', 'rgba(187,92,246,0.05)', 'transparent']}
+            style={[styles.heroCard, { borderColor: 'rgba(187,92,246,0.25)' }]}
           >
             <IonAvatar size="lg" />
-
-            <Text style={[styles.subscribeTitle, { color: color.text }]}>
-              {isRtl ? 'اشترك في SYNAP' : 'Subscribe to SYNAP'}
+            <Text style={[styles.heroTitle, { color: color.text }]}>
+              {isRtl ? 'لا توجد خطة نشطة' : 'No active plan'}
             </Text>
-            <Text style={[styles.subscribeSub, { color: color.muted }]}>
+            <Text style={[styles.heroSub, { color: color.muted }]}>
               {isRtl
-                ? 'احصل على وصول كامل لكوتش آيون، خطط التغذية، وبرامج التمرين المخصصة.'
-                : 'Get full access to your Ion coach, personalised nutrition plans, and custom workout programmes.'}
-            </Text>
-
-            {/* Website address — big and obvious */}
-            <View style={[styles.urlDisplay, { backgroundColor: 'rgba(0,0,0,0.25)', borderColor: 'rgba(187,92,246,0.40)' }]}>
-              <Feather name="globe" size={16} color={color.sparkLight} />
-              <Text style={[styles.urlDisplayText, { color: '#fff' }]}>synapfit.app</Text>
-            </View>
-
-            {/* Copy address — opens native share sheet (includes Copy option) */}
-            <Pressable
-              style={[styles.copyBtn, { backgroundColor: color.spark }]}
-              onPress={shareWebsite}
-            >
-              <Feather name="copy" size={15} color="#fff" />
-              <Text style={styles.copyBtnText}>
-                {isRtl ? 'نسخ عنوان الموقع' : 'Copy website address'}
-              </Text>
-            </Pressable>
-
-            {/* Plain-text flow instruction */}
-            <Text style={[styles.flowHint, { color: color.muted }]}>
-              {isRtl
-                ? 'انسخ العنوان ← افتح Safari ← الصق العنوان ← اختر خطتك ← عد وسجّل الدخول'
-                : 'Copy ← open Safari ← paste the address ← choose a plan ← log in here'}
+                ? 'لا يوجد لهذا الحساب اشتراك نشط في SYNAP حالياً.'
+                : "This account doesn't have an active SYNAP plan yet."}
             </Text>
           </LinearGradient>
 
-          {/* What you get */}
-          <Text style={[styles.sectionLabel, { color: color.dim, textAlign: align }]}>
-            {isRtl ? 'ما الذي تحصل عليه' : 'WHAT YOU GET'}
+          {/* Already subscribed? — restore via correct account */}
+          <View style={[styles.card, { backgroundColor: color.surface, borderColor: color.border }]}>
+            <View style={[styles.cardRow, { flexDirection: dir }]}>
+              <Feather name="refresh-cw" size={14} color={color.muted} />
+              <Text style={[styles.cardTitle, { color: color.text }]}>
+                {isRtl ? 'لديك اشتراك بالفعل؟' : 'Already have a plan?'}
+              </Text>
+            </View>
+            <Text style={[styles.cardBody, { color: color.muted, textAlign: align }]}>
+              {isRtl
+                ? 'إذا كان لديك اشتراك بحساب آخر، سجّل الخروج ثم سجّل الدخول بنفس البريد الإلكتروني — يُفعَّل وصولك تلقائياً.'
+                : 'If you have a plan on a different account, sign out and sign back in with that email — your access activates automatically.'}
+            </Text>
+            <Pressable
+              style={[styles.supportBtn, { borderColor: color.border, backgroundColor: color.elevated }]}
+              onPress={contactSupport}
+            >
+              <Feather name="message-circle" size={14} color={color.dim} />
+              <Text style={[styles.supportBtnText, { color: color.dim }]}>
+                {isRtl ? 'تواصل مع الدعم' : 'Contact support'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* What SYNAP includes — informational only */}
+          <Text style={[styles.sectionLabel, { color: color.dim, textAlign: align, marginTop: 24 }]}>
+            {isRtl ? 'ميزات SYNAP' : 'SYNAP FEATURES'}
           </Text>
           <View style={styles.featureGrid}>
             {FEATURES.map((f) => (
@@ -131,79 +131,6 @@ export default function BillingScreen() {
                 </Text>
               </View>
             ))}
-          </View>
-
-          {/* Steps */}
-          <Text style={[styles.sectionLabel, { color: color.dim, textAlign: align, marginTop: 24 }]}>
-            {isRtl ? 'الخطوات' : 'HOW IT WORKS'}
-          </Text>
-          <View style={[styles.stepsCard, { backgroundColor: color.surface, borderColor: color.border }]}>
-            {[
-              {
-                n: '1', icon: 'globe' as const,
-                en: 'Go to synapfit.app in any browser and choose your plan.',
-                ar: 'افتح synapfit.app في أي متصفح واختر خطتك.',
-              },
-              {
-                n: '2', icon: 'user-check' as const,
-                en: 'Complete sign-up in a couple of minutes.',
-                ar: 'أكمل إنشاء حسابك في دقيقتين.',
-              },
-              {
-                n: '3', icon: 'unlock' as const,
-                en: 'Come back to this app and log in — your access activates instantly.',
-                ar: 'عد إلى التطبيق وسجّل الدخول — يُفعَّل وصولك فوراً.',
-              },
-            ].map((step, i, arr) => (
-              <View
-                key={step.n}
-                style={[
-                  styles.stepRow,
-                  { flexDirection: dir },
-                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border },
-                ]}
-              >
-                <View style={[styles.stepCircle, { backgroundColor: color.sparkSoft, borderColor: `${color.spark}40` }]}>
-                  <Text style={[styles.stepNum, { color: color.spark }]}>{step.n}</Text>
-                </View>
-                <View style={[styles.stepBody, { flexDirection: dir, gap: 8, flex: 1 }]}>
-                  <Feather name={step.icon} size={14} color={color.spark} style={{ marginTop: 2 }} />
-                  <Text style={[styles.stepDesc, { color: color.text, flex: 1, textAlign: align }]}>
-                    {isRtl ? step.ar : step.en}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-
-          {/* Already subscribed? */}
-          <View style={[styles.restoreCard, { backgroundColor: color.surface, borderColor: color.border }]}>
-            <View style={[styles.restoreRow, { flexDirection: dir }]}>
-              <Feather name="refresh-cw" size={14} color={color.muted} />
-              <Text style={[styles.restoreTitle, { color: color.text }]}>
-                {isRtl ? 'اشتركت بالفعل؟' : 'Already subscribed?'}
-              </Text>
-            </View>
-            <Text style={[styles.restoreBody, { color: color.muted, textAlign: align }]}>
-              {isRtl
-                ? 'سجّل الخروج من التطبيق ثم سجّل الدخول مرة أخرى بنفس البريد الإلكتروني — يُفعَّل وصولك تلقائياً.'
-                : 'Log out of the app then log back in with the same email address — your access will activate automatically.'}
-            </Text>
-            <Pressable
-              style={[styles.supportBtn, { borderColor: color.border, backgroundColor: color.elevated }]}
-              onPress={() => Alert.alert(
-                isRtl ? 'الدعم' : 'Support',
-                isRtl
-                  ? 'للمساعدة راسلنا على:\nion@synapfit.app'
-                  : 'For help, email us at:\nion@synapfit.app',
-                [{ text: 'OK' }],
-              )}
-            >
-              <Feather name="message-circle" size={14} color={color.dim} />
-              <Text style={[styles.supportBtnText, { color: color.dim }]}>
-                {isRtl ? 'تواصل مع الدعم' : 'Contact support'}
-              </Text>
-            </Pressable>
           </View>
         </>
       ) : (
@@ -255,24 +182,18 @@ export default function BillingScreen() {
           </View>
 
           {/* Manage / support */}
-          <View style={[styles.restoreCard, { backgroundColor: color.surface, borderColor: color.border }]}>
-            <Text style={[styles.restoreTitle, { color: color.text, textAlign: align }]}>
+          <View style={[styles.card, { backgroundColor: color.surface, borderColor: color.border, marginTop: 14 }]}>
+            <Text style={[styles.cardTitle, { color: color.text, textAlign: align }]}>
               {isRtl ? 'إدارة الاشتراك' : 'Manage subscription'}
             </Text>
-            <Text style={[styles.restoreBody, { color: color.muted, textAlign: align }]}>
+            <Text style={[styles.cardBody, { color: color.muted, textAlign: align }]}>
               {isRtl
-                ? 'لإلغاء الاشتراك أو تغيير خطتك، قم بزيارة synapfit.app من متصفح الويب.'
-                : 'To cancel or change your plan, visit synapfit.app from a web browser.'}
+                ? 'لإدارة خطتك أو إلغائها، تواصل مع فريق الدعم.'
+                : 'To manage or cancel your plan, contact our support team.'}
             </Text>
             <Pressable
               style={[styles.supportBtn, { borderColor: color.border, backgroundColor: color.elevated }]}
-              onPress={() => Alert.alert(
-                isRtl ? 'الدعم' : 'Support',
-                isRtl
-                  ? 'للمساعدة راسلنا على:\nion@synapfit.app'
-                  : 'For help, email us at:\nion@synapfit.app',
-                [{ text: 'OK' }],
-              )}
+              onPress={contactSupport}
             >
               <Feather name="message-circle" size={14} color={color.dim} />
               <Text style={[styles.supportBtnText, { color: color.dim }]}>
@@ -291,53 +212,17 @@ const styles = StyleSheet.create({
   backBtn: { alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 8 },
   backText: { fontSize: 14, fontWeight: '700' },
 
-  // Subscribe card (non-subscriber hero)
-  subscribeCard: {
+  // Neutral status hero
+  heroCard: {
     borderRadius: 24,
     borderWidth: 1,
     padding: 24,
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 28,
-  },
-  subscribeTitle: { fontSize: 24, fontWeight: '900', textAlign: 'center' },
-  subscribeSub: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
-
-  // URL display inside subscribe card
-  urlDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    marginTop: 4,
-    width: '100%',
-    justifyContent: 'center',
+    marginBottom: 20,
   },
-  urlDisplayText: { fontSize: 20, fontWeight: '900', letterSpacing: 0.5 },
-
-  // Copy button
-  copyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    minHeight: 52,
-    borderRadius: 16,
-  },
-  copyBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
-
-  // Flow hint
-  flowHint: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 19,
-    marginTop: 2,
-  },
+  heroTitle: { fontSize: 22, fontWeight: '900', textAlign: 'center' },
+  heroSub: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
 
   // Section labels
   sectionLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 12 },
@@ -349,22 +234,11 @@ const styles = StyleSheet.create({
   featureTitle: { fontSize: 13, fontWeight: '900' },
   featureDesc: { fontSize: 11, fontWeight: '600', lineHeight: 16 },
 
-  // Steps
-  stepsCard: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 },
-  stepRow: { alignItems: 'flex-start', gap: 14, paddingVertical: 14 },
-  stepCircle: {
-    width: 34, height: 34, borderRadius: 17, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  stepNum: { fontSize: 14, fontWeight: '900' },
-  stepBody: { alignItems: 'flex-start' },
-  stepDesc: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
-
-  // Restore / already subscribed card
-  restoreCard: { borderWidth: 1, borderRadius: 20, padding: 20, marginTop: 14, gap: 10 },
-  restoreRow: { alignItems: 'center', gap: 8 },
-  restoreTitle: { fontSize: 16, fontWeight: '900' },
-  restoreBody: { fontSize: 13, fontWeight: '600', lineHeight: 20 },
+  // Generic card (already-subscribed / manage)
+  card: { borderWidth: 1, borderRadius: 20, padding: 20, gap: 10 },
+  cardRow: { alignItems: 'center', gap: 8 },
+  cardTitle: { fontSize: 16, fontWeight: '900' },
+  cardBody: { fontSize: 13, fontWeight: '600', lineHeight: 20 },
   supportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, minHeight: 46, borderRadius: 14, borderWidth: 1, marginTop: 2,

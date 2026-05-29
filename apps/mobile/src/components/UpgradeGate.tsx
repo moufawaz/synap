@@ -42,18 +42,18 @@ export function UpgradeGate({ hasAccess, children, featureName, featureNameAr }:
       </Text>
       <Text style={[styles.body, { color: color.muted }]}>
         {isRtl
-          ? 'اشترك في SYNAP للوصول الكامل لكوتش آيون وخطط التغذية وبرامج التمرين.'
-          : 'Subscribe to SYNAP for full access to your Ion coach, nutrition plans, and workout programmes.'}
+          ? 'هذه الميزة جزء من خطة SYNAP المدفوعة، بما فيها كوتش آيون وخطط التغذية وبرامج التمرين.'
+          : 'This feature is part of a SYNAP plan, including your Ion coach, nutrition plans, and workout programmes.'}
       </Text>
 
-      {/* CTA — navigates to the billing screen (no external URL) */}
+      {/* CTA — navigates to the in-app plan status screen (no external URL) */}
       <Pressable
         style={[styles.btn, { backgroundColor: color.spark }]}
         onPress={() => router.push('/billing')}
       >
         <Feather name="star" size={14} color="#fff" />
         <Text style={styles.btnText}>
-          {isRtl ? 'كيفية الاشتراك' : 'How to subscribe'}
+          {isRtl ? 'عرض خطتك' : 'View your plan'}
         </Text>
       </Pressable>
     </View>

@@ -281,10 +281,10 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.upgradeBannerText}>
             <Text style={[styles.upgradeBannerTitle, { color: color.text, textAlign: align }]}>
-              {isRtl ? 'أطلق العنان للتجربة الكاملة' : 'Unlock the full experience'}
+              {isRtl ? 'أنت على خطة Starter' : "You're on the Starter plan"}
             </Text>
             <Text style={[styles.upgradeBannerSub, { color: color.muted, textAlign: align }]}>
-              {isRtl ? 'زر synapfit.app للاشتراك' : 'Visit synapfit.app to subscribe'}
+              {isRtl ? 'اعرض تفاصيل خطتك' : 'View your plan details'}
             </Text>
           </View>
           <Feather name={isRtl ? 'arrow-left' : 'arrow-right'} size={14} color={color.spark} />

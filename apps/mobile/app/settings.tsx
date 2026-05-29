@@ -263,8 +263,8 @@ export default function SettingsScreen() {
             <Feather name="star" size={16} color="#fff" />
             <Text style={styles.billingNavBtnText}>
               {isRtl
-                ? (sub?.access ? 'تفاصيل الاشتراك والميزات' : 'كيفية الاشتراك في SYNAP')
-                : (sub?.access ? 'View plan details & features' : 'How to subscribe to SYNAP')}
+                ? (sub?.access ? 'تفاصيل الاشتراك والميزات' : 'عرض خطتك والميزات')
+                : (sub?.access ? 'View plan details & features' : 'View your plan & features')}
             </Text>
             <Feather name={isRtl ? 'arrow-left' : 'arrow-right'} size={16} color="#fff" />
           </Pressable>

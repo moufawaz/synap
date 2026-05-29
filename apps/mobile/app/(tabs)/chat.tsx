@@ -530,7 +530,7 @@ export default function ChatScreen() {
             </Text>
             {usageNearLimit ? (
               <Pressable onPress={() => router.push('/billing')}>
-                <Text style={[styles.usageText, { color: color.spark }]}>{isRtl ? 'ترقية' : 'Upgrade'}</Text>
+                <Text style={[styles.usageText, { color: color.spark }]}>{isRtl ? 'الخطة' : 'View plan'}</Text>
               </Pressable>
             ) : null}
           </View>

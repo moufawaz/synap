@@ -1,11 +1,9 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
-
-const webBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.synapfit.app'
 
 const UPCOMING_FEATURES = [
   {
@@ -103,26 +101,18 @@ export default function CommunityScreen() {
         </View>
       ))}
 
-      {/* Early access CTA */}
+      {/* Early access note (informational only — no purchase CTA) */}
       <View style={[styles.ctaCard, { backgroundColor: `${color.spark}0F`, borderColor: `${color.spark}26` }]}>
         <Feather name="bell" size={18} color={color.spark} style={{ marginTop: 2 }} />
         <View style={{ flex: 1 }}>
           <Text style={[styles.ctaTitle, { color: color.text }]}>
-            {isRtl ? 'تريد وصولاً مبكراً؟' : 'Want early access?'}
+            {isRtl ? 'قريباً' : 'Coming soon'}
           </Text>
           <Text style={[styles.ctaBody, { color: color.muted }]}>
             {isRtl
-              ? 'يحصل أعضاء Elite على أول وصول عند إطلاق المجتمع. انضم الآن لتكون في المجموعة المؤسِّسة.'
-              : 'Elite members get first access when Community launches. Upgrade now to be in the founding cohort.'}
+              ? 'يحصل أعضاء Elite على أول وصول عند إطلاق المجتمع.'
+              : 'Elite members get first access when Community launches.'}
           </Text>
-          <Pressable
-            onPress={() => Linking.openURL(`${webBaseUrl}/pricing`)}
-            style={[styles.ctaBtn, { backgroundColor: color.spark }]}
-          >
-            <Text style={styles.ctaBtnText}>
-              {isRtl ? 'احصل على وصول Elite →' : 'Get Elite Access →'}
-            </Text>
-          </Pressable>
         </View>
       </View>
     </Screen>
