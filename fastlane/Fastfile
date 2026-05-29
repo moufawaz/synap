@@ -380,10 +380,51 @@ platform :ios do
       team_id:               ENV['APPLE_TEAM_ID'],
     )
 
+    # ── 8b. Sign the Live Activity widget extension ──────────────────────────
+    # The @bacons/apple-targets plugin injects a WidgetKit extension target
+    # ("SynapWidget") whose product bundle id is the app id + ".SynapWidget".
+    # Because we use MANUAL signing, that target needs its OWN App Store
+    # provisioning profile — the main app profile does not cover it. Register an
+    # App ID for `app.synap.fit.SynapWidget` (no special capabilities needed —
+    # Live Activities only require NSSupportsLiveActivities in the app Info.plist),
+    # create an App Store distribution profile for it, base64-encode it, and add
+    # it as the GitHub secret IOS_WIDGET_PROVISION_PROFILE_BASE64.
+    widget_bundle_id    = 'app.synap.fit.SynapWidget'
+    widget_profile_name = nil
+    if ENV['IOS_WIDGET_PROVISION_PROFILE_BASE64'].to_s.strip.empty?
+      UI.important("SYNAP_SIGNING: IOS_WIDGET_PROVISION_PROFILE_BASE64 is not set — the #{widget_bundle_id} Live Activity extension cannot be signed and the archive will fail. Create that App ID + App Store profile and add the secret.")
+    else
+      widget_profile_path = File.join(build_dir, 'Synap_Widget_AppStore.mobileprovision')
+      File.binwrite(widget_profile_path, Base64.decode64(ENV['IOS_WIDGET_PROVISION_PROFILE_BASE64']))
+      FileUtils.cp(widget_profile_path, File.join(profiles_dir, 'Synap_Widget_AppStore.mobileprovision'))
+
+      widget_plist_path  = File.join(build_dir, 'Synap_Widget_AppStore.plist')
+      widget_profile_xml = sh("security cms -D -i '#{widget_profile_path}'", log: false)
+      File.write(widget_plist_path, widget_profile_xml)
+      widget_profile_name = sh("/usr/libexec/PlistBuddy -c 'Print :Name' '#{widget_plist_path}'", log: false).strip
+      UI.message("SYNAP_SIGNING: Widget provisioning profile installed — '#{widget_profile_name}'")
+
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path:                  project_path,
+        bundle_identifier:     widget_bundle_id,
+        profile_name:          widget_profile_name,
+        code_sign_identity:    'iPhone Distribution',
+        team_id:               ENV['APPLE_TEAM_ID'],
+      )
+    end
+
     # ── 9. Build the IPA ──────────────────────────────────────────────────────
     # workspace: is required when CocoaPods is used — it links all pod targets.
     ipa_output_dir = File.join(REPO_ROOT, 'build')
     FileUtils.mkdir_p(ipa_output_dir)
+    # Per-target provisioning map. A global PROVISIONING_PROFILE_SPECIFIER xcarg
+    # would force the main app's profile onto every target (including the widget
+    # extension) and break signing, so we rely on the per-target build settings
+    # written by update_code_signing_settings above plus this export map.
+    provisioning_profiles = { 'app.synap.fit' => profile_name }
+    provisioning_profiles[widget_bundle_id] = widget_profile_name if widget_profile_name
+
     build_app(
       workspace:        workspace_path,
       scheme:           scheme,
@@ -392,9 +433,9 @@ platform :ios do
       export_method:    'app-store',
       output_directory: ipa_output_dir,
       output_name:      'SYNAP-Expo.ipa',
-      xcargs:           "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
+      xcargs:           "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Manual",
       export_options: {
-        provisioningProfiles: { 'app.synap.fit' => profile_name },
+        provisioningProfiles: provisioning_profiles,
         signingStyle:         'manual',
         teamID:               ENV['APPLE_TEAM_ID'],
       },

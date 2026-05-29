@@ -6,3 +6,8 @@ node_modules/
 .env.local
 ios/
 android/
+
+# Local Expo module native sources live under modules/<name>/ios and MUST be
+# tracked — they are real source, not the CNG-generated app-level ios/ above.
+!modules/**/ios/
+!modules/**/ios/**

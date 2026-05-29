@@ -26,6 +26,7 @@
         "NSPhotoLibraryAddUsageDescription": "SYNAP saves progress share cards to your photo library.",
         "NSHealthShareUsageDescription": "SYNAP reads Apple Health data so Ion can personalize coaching.",
         "NSHealthUpdateUsageDescription": "SYNAP writes selected workouts and measurements to Apple Health.",
+        "NSSupportsLiveActivities": true,
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -51,7 +52,8 @@
           "NSHealthUpdateUsageDescription": "SYNAP writes selected workouts and measurements to Apple Health.",
           "background": true
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "splash": {
       "image": "./assets/splash.png",

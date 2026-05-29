@@ -42,6 +42,7 @@
     "react-native-webview": "13.15.0"
   },
   "devDependencies": {
+    "@bacons/apple-targets": "^4.0.7",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
     "typescript": "~5.9.2"
