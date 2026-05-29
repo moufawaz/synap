@@ -246,7 +246,11 @@ export async function POST(req: Request) {
     if (wantsJsonResponse) {
       const finalMessage = await client.messages.create({
         model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
-        max_tokens: 1024,
+        // Headroom for the detailed responses the system prompt permits (Elite
+        // supplement protocols, goal projections, multi-pattern callouts) so they
+        // don't truncate mid-sentence. Short replies are unaffected — the model
+        // stops when done, and rule 4 keeps everyday answers to 2–4 sentences.
+        max_tokens: 2048,
         system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
         messages,
       })
@@ -295,7 +299,7 @@ export async function POST(req: Request) {
     // multiple turns in a session and caching it cuts repeated input cost by ~10x
     const stream = client.messages.stream({
       model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages,
     })
