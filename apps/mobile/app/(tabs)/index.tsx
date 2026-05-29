@@ -6,9 +6,11 @@ import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonAvatar } from '@/components/IonAvatar'
 import { Screen } from '@/components/Screen'
+import { Skeleton } from '@/components/Skeleton'
 import { SynapLogo } from '@/components/SynapLogo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getChatHistory } from '@/features/chat'
+import { loadConnectedHealthSummary } from '@/features/health'
 import { getMealLogs } from '@/features/nutrition'
 import { getProfile } from '@/features/profile'
 import { getSubscriptionStatus } from '@/features/subscription'
@@ -32,6 +34,7 @@ export default function DashboardScreen() {
   const meals        = useAsyncData(getMealLogs,           [], { cacheKey: 'meal-logs-today', cacheTtlMs: 2 * 60 * 1000 })
   const profile      = useAsyncData(getProfile,           [], { cacheKey: 'profile', cacheTtlMs: 10 * 60 * 1000 })
   const chat         = useAsyncData(() => getChatHistory(10), [], { cacheKey: 'chat-last10' })
+  const health       = useAsyncData(loadConnectedHealthSummary, [], { cacheKey: 'health-summary', cacheTtlMs: 5 * 60 * 1000 })
 
   useFocusEffect(
     useCallback(() => {
@@ -39,6 +42,7 @@ export default function DashboardScreen() {
       meals.silentRefresh()
       plan.silentRefresh()
       chat.silentRefresh()
+      health.silentRefresh()
       // Run adaptation check at most once per day — fires smart push notifications
       // (plateau alerts, streak milestones, plan renewal warnings, Ion messages)
       AsyncStorage.getItem('@sdc:adaptation-last').then(last => {
@@ -165,7 +169,13 @@ export default function DashboardScreen() {
             </View>
             <Feather name={isRtl ? 'chevron-left' : 'chevron-right'} size={14} color={color.dim} />
           </View>
-          {workout && !workout.is_rest_day ? (
+          {plan.loading && !plan.data ? (
+            <View style={styles.exercisePreview}>
+              <Skeleton height={36} radius={10} />
+              <Skeleton height={36} radius={10} />
+              <Skeleton height={36} radius={10} />
+            </View>
+          ) : workout && !workout.is_rest_day ? (
             <View style={styles.exercisePreview}>
               {(workout.exercises || []).slice(0, 3).map((ex: any, i: number) => (
                 <View key={i} style={[styles.exRow, { backgroundColor: color.elevated, borderColor: color.border }]}>
@@ -219,6 +229,29 @@ export default function DashboardScreen() {
           </Text>
         </Card>
       </Pressable>
+
+      {/* Apple Health card — only when connected and there's data to show */}
+      {health.data && (health.data.stepsToday != null || health.data.activeEnergyToday != null || health.data.latestWeightKg != null || health.data.restingHeartRate != null) ? (
+        <View style={styles.bigCardWrap}>
+          <Card>
+            <View style={[styles.cardHeader, { flexDirection: rowDir }]}>
+              <View style={[styles.iconBadge, { backgroundColor: 'rgba(16,185,129,0.12)', borderColor: 'rgba(16,185,129,0.25)' }]}>
+                <Feather name="heart" size={16} color={color.pulse} />
+              </View>
+              <View style={styles.cardHeaderText}>
+                <Text style={[styles.eyebrow, { color: color.pulse }]}>{isRtl ? 'آبل هيلث' : 'APPLE HEALTH'}</Text>
+                <Text style={[styles.cardTitle, { color: color.text }]}>{isRtl ? 'نشاط اليوم' : "Today's activity"}</Text>
+              </View>
+            </View>
+            <View style={[styles.healthGrid, { flexDirection: rowDir }]}>
+              <HealthMetric label={isRtl ? 'خطوات' : 'STEPS'} value={health.data.stepsToday != null ? health.data.stepsToday.toLocaleString() : '—'} color={color} />
+              <HealthMetric label={isRtl ? 'سعرات' : 'KCAL'} value={health.data.activeEnergyToday != null ? String(health.data.activeEnergyToday) : '—'} color={color} />
+              <HealthMetric label={isRtl ? 'الوزن' : 'WEIGHT'} value={health.data.latestWeightKg != null ? `${health.data.latestWeightKg.toFixed(1)}kg` : '—'} color={color} />
+              <HealthMetric label={isRtl ? 'النبض' : 'HR'} value={health.data.restingHeartRate != null ? `${Math.round(health.data.restingHeartRate)}` : '—'} color={color} />
+            </View>
+          </Card>
+        </View>
+      ) : null}
 
       {/* Weight delta */}
       {weightDelta !== null ? (
@@ -278,6 +311,15 @@ function StatChip({ icon, label, value, color, bg, border, labelColor, valueColo
   )
 }
 
+function HealthMetric({ label, value, color }: { label: string; value: string; color: any }) {
+  return (
+    <View style={[styles.healthMetric, { backgroundColor: color.elevated, borderColor: color.border }]}>
+      <Text style={[styles.healthMetricLabel, { color: color.dim }]}>{label}</Text>
+      <Text style={[styles.healthMetricValue, { color: color.text }]}>{value}</Text>
+    </View>
+  )
+}
+
 function QuickAction({ icon, label, color, bg, labelColor, onPress }: { icon: string; label: string; color: string; bg: string; labelColor: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={[styles.quickAction, { backgroundColor: bg, borderColor: `${color}30` }]}>
@@ -318,6 +360,10 @@ const styles = StyleSheet.create({
   exMeta: { fontSize: 12, fontWeight: '800', fontVariant: ['tabular-nums'] },
   restText: { marginTop: 10, fontSize: 14, lineHeight: 20 },
   moreText: { fontSize: 12, fontWeight: '600' },
+  healthGrid: { flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  healthMetric: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', minWidth: '22%' },
+  healthMetricLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 1.4 },
+  healthMetricValue: { fontSize: 15, fontWeight: '900', marginTop: 3 },
   barTrack: { height: 6, borderRadius: 999, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 999 },
   weightRow: { alignItems: 'center', gap: 6, marginBottom: 14, paddingHorizontal: 4 },

@@ -1,6 +1,27 @@
 import { Platform } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 type HealthKitModule = typeof import('@kingstinct/react-native-healthkit')
+
+/** Persisted flag: the user has connected Apple Health at least once.
+ *  HealthKit authorization itself is permanent at the OS level, so once this is
+ *  set we can silently re-read on every launch without prompting again. */
+const HEALTH_CONNECTED_KEY = '@synap:health-connected'
+
+export async function isHealthConnected(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(HEALTH_CONNECTED_KEY)) === '1'
+  } catch {
+    return false
+  }
+}
+
+export async function setHealthConnected(connected: boolean): Promise<void> {
+  try {
+    if (connected) await AsyncStorage.setItem(HEALTH_CONNECTED_KEY, '1')
+    else await AsyncStorage.removeItem(HEALTH_CONNECTED_KEY)
+  } catch { /* non-fatal */ }
+}
 
 export type HealthSummary = {
   available: boolean
@@ -108,5 +129,19 @@ export async function requestHealthAccessAndRead(): Promise<HealthSummary> {
     latestWeightKg,
     latestBodyFatPct,
     restingHeartRate,
+  }
+}
+
+/** Dashboard loader: returns a fresh Health summary only when the user has
+ *  previously connected Apple Health. Returns null otherwise (non-iOS, never
+ *  connected, or read failed) so the dashboard can hide the card cleanly.
+ *  Does not prompt — authorization is already granted by the time this runs. */
+export async function loadConnectedHealthSummary(): Promise<HealthSummary | null> {
+  if (Platform.OS !== 'ios') return null
+  if (!(await isHealthConnected())) return null
+  try {
+    return await requestHealthAccessAndRead()
+  } catch {
+    return null
   }
 }

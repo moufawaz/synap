@@ -8,7 +8,7 @@ import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { useAuth } from '@/auth/AuthProvider'
 import { deleteAccount } from '@/features/account'
-import { HealthSummary, requestHealthAccessAndRead } from '@/features/health'
+import { HealthSummary, requestHealthAccessAndRead, setHealthConnected } from '@/features/health'
 import { createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -51,6 +51,8 @@ export default function MoreScreen() {
       } else if (!summary.authorized) {
         Alert.alert('Apple Health not authorized', 'You can enable access later from iOS Settings → Privacy → Health → SYNAP.')
       } else {
+        // Remember the connection so the dashboard can silently re-read on launch
+        await setHealthConnected(true)
         // Auto-sync today's weight to SYNAP measurements if Apple Health has one
         if (summary.latestWeightKg) {
           try {

@@ -8,6 +8,7 @@ import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { VideoModal } from '@/components/VideoModal'
 import { getPlanHistory, logWorkout, TodayWorkout } from '@/features/workout'
+import { notifyError, notifySuccess, tapLight, tapMedium } from '@/lib/haptics'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -208,6 +209,7 @@ export default function TrainScreen() {
 
   function startTimer() {
     if (timerState === 'running') return
+    tapMedium()
     startTimeRef.current = Date.now() - elapsed * 1000
     intervalRef.current = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
@@ -239,6 +241,8 @@ export default function TrainScreen() {
   async function toggleExercise(index: number) {
     // Auto-start timer on first checkbox tap
     if (timerState === 'idle') startTimer()
+    const isCompleting = !completedSet.has(index)
+    if (isCompleting) tapLight()
     const next = completedSet.has(index) ? completed.filter(i => i !== index) : [...completed, index]
     setCompleted(next)
     if (selectedDay === todayCanonical) {
@@ -293,6 +297,7 @@ export default function TrainScreen() {
         notes: workout.muscle_focus,
       })
       resetTimer()
+      notifySuccess()
       Alert.alert(
         isRtl ? '🏁 تم حفظ التمرين' : '🏁 Workout saved',
         isRtl
@@ -300,6 +305,7 @@ export default function TrainScreen() {
           : `${completed.length}/${totalExercises} exercises  ·  ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
       )
     } catch (error) {
+      notifyError()
       Alert.alert(isRtl ? 'تعذر حفظ التمرين' : 'Could not save workout', error instanceof Error ? error.message : 'Try again.')
       if (timerState === 'paused') resumeTimer()
     } finally {

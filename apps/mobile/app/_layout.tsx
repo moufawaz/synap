@@ -6,6 +6,7 @@ import { router } from 'expo-router'
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
 import * as Notifications from 'expo-notifications'
+import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { registerDeviceToken } from '@/features/tools'
@@ -30,6 +31,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
     return this.props.children
   }
 }
+
+// Keep the native splash up until auth has resolved, so users land directly on
+// their data instead of a spinner. A safety timeout (below) guarantees it never
+// hangs — Apple rejects artificially long splash screens.
+SplashScreen.preventAutoHideAsync().catch(() => {})
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -109,6 +115,21 @@ function RootNavigator() {
   const { mode, color } = useTheme()
   const { session, loading } = useAuth()
   const pushRegistered = useRef(false)
+  const splashHidden = useRef(false)
+
+  // Hide the splash as soon as auth resolves (cached data then paints instantly),
+  // with a hard 4s safety cap so a slow network can never strand users on splash.
+  useEffect(() => {
+    if (splashHidden.current) return
+    const hide = () => {
+      if (splashHidden.current) return
+      splashHidden.current = true
+      SplashScreen.hideAsync().catch(() => {})
+    }
+    if (!loading) hide()
+    const safety = setTimeout(hide, 4000)
+    return () => clearTimeout(safety)
+  }, [loading])
 
   // Safety net: any sign-out path (signOut(), token expiry, etc.) redirects to login
   useEffect(() => {
