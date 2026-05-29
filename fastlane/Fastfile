@@ -398,10 +398,19 @@ platform :ios do
     end
 
     # ── 8. Force manual signing in the Xcode project ─────────────────────────
+    # IMPORTANT: scope by TARGET NAME, not by `bundle_identifier`. In this
+    # Fastlane version the `bundle_identifier` option does NOT filter targets —
+    # update_code_signing_settings applies to every target in the project. If we
+    # relied on it, step 8b's widget profile would overwrite the main app's and
+    # the archive fails with "Provisioning profile 'SYNAP Widget AppStore'
+    # doesn't include the HealthKit / Push Notifications capability (in target
+    # 'SYNAP')". The main app gets `profile_name`; the widget target (signed in
+    # 8b) is explicitly excluded here.
+    main_app_targets = proj.targets.map(&:name).reject { |n| n == 'SynapWidget' }
     update_code_signing_settings(
       use_automatic_signing: false,
       path:                  project_path,
-      bundle_identifier:     'app.synap.fit',
+      targets:               main_app_targets,
       profile_name:          profile_name,
       code_sign_identity:    'iPhone Distribution',
       team_id:               ENV['APPLE_TEAM_ID'],
@@ -431,10 +440,12 @@ platform :ios do
       widget_profile_name = sh("/usr/libexec/PlistBuddy -c 'Print :Name' '#{widget_plist_path}'", log: false).strip
       UI.message("SYNAP_SIGNING: Widget provisioning profile installed — '#{widget_profile_name}'")
 
+      # Scope to ONLY the widget target (see the note in step 8) so this profile
+      # does not clobber the main app's signing.
       update_code_signing_settings(
         use_automatic_signing: false,
         path:                  project_path,
-        bundle_identifier:     widget_bundle_id,
+        targets:               ['SynapWidget'],
         profile_name:          widget_profile_name,
         code_sign_identity:    'iPhone Distribution',
         team_id:               ENV['APPLE_TEAM_ID'],
