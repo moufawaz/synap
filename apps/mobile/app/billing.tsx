@@ -1,4 +1,4 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
@@ -8,6 +8,8 @@ import { getSubscriptionStatus } from '@/features/subscription'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+
+const WEB_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.synapfit.app'
 
 // ── Feature list ──────────────────────────────────────────────────────────────
 
@@ -47,7 +49,13 @@ export default function BillingScreen() {
       isRtl
         ? 'للمساعدة بخصوص حسابك أو خطتك راسلنا على:\nion@synapfit.app'
         : 'For help with your account or plan, email us at:\nion@synapfit.app',
-      [{ text: 'OK' }],
+      [
+        {
+          text: isRtl ? 'مركز المساعدة' : 'Help center',
+          onPress: () => Linking.openURL(`${WEB_BASE_URL}/contact`).catch(() => {}),
+        },
+        { text: isRtl ? 'إغلاق' : 'Close', style: 'cancel' },
+      ],
     )
   }
 

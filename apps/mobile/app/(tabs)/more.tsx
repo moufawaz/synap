@@ -201,7 +201,7 @@ export default function MoreScreen() {
         <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{text.support}</Text>
         <NavRowItem icon="shield" label={text.privacy} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/privacy`)} rowDir={rowDir} showDivider />
         <NavRowItem icon="file-text" label={text.terms} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/terms`)} rowDir={rowDir} showDivider />
-        <NavRowItem icon="life-buoy" label={text.support} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/support`)} rowDir={rowDir} />
+        <NavRowItem icon="life-buoy" label={text.support} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/contact`)} rowDir={rowDir} />
       </Card>
     </Screen>
   )
