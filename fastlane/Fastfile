@@ -370,6 +370,33 @@ platform :ios do
     increment_build_number(build_number: build_number, xcodeproj: project_path)
     UI.message("SYNAP_BUILD: Build number set to #{build_number}")
 
+    # ── 7b. Force the Live Activity widget's bundle id ───────────────────────
+    # The @bacons/apple-targets plugin is supposed to set the SynapWidget target's
+    # PRODUCT_BUNDLE_IDENTIFIER to "app.synap.fit.SynapWidget", but in CI prebuild
+    # it resolved to the bare app id "app.synap.fit". An app extension may NOT
+    # share the host app's bundle id — App Store upload then fails with errors
+    # 90685 (CFBundleIdentifier collision) and 90347 (extension id must be a
+    # sub-identifier). Force it deterministically here, directly in the generated
+    # .pbxproj, so it no longer depends on the plugin's behavior. This must run
+    # BEFORE step 8 so the app's signing filter (bundle_identifier: app.synap.fit)
+    # stops matching the widget target.
+    widget_target_bundle_id = 'app.synap.fit.SynapWidget'
+    proj = Xcodeproj::Project.open(project_path)
+    widget_target = proj.targets.find { |t| t.name == 'SynapWidget' }
+    if widget_target
+      widget_target.build_configurations.each do |c|
+        c.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = widget_target_bundle_id
+        # Keep the extension's version in lockstep with the host app, or App Store
+        # Connect rejects the binary for a CFBundleVersion mismatch.
+        c.build_settings['CURRENT_PROJECT_VERSION'] = build_number
+        c.build_settings['MARKETING_VERSION']       = '1.0.0'
+      end
+      proj.save
+      UI.message("SYNAP_BUILD: Forced SynapWidget bundle id → #{widget_target_bundle_id} (version 1.0.0/#{build_number})")
+    else
+      UI.important('SYNAP_BUILD: SynapWidget target not found in project — Live Activity extension may be missing from this build.')
+    end
+
     # ── 8. Force manual signing in the Xcode project ─────────────────────────
     update_code_signing_settings(
       use_automatic_signing: false,

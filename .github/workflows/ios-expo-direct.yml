@@ -109,6 +109,11 @@ jobs:
           IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
           IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          # App Store provisioning profile for the Live Activity widget extension
+          # (app.synap.fit.SynapWidget). Without this in the env, Fastlane's
+          # step 8b skips widget signing and the archive falls back to the main
+          # app profile (wrong bundle id) → App Store upload errors 90347/90685.
+          IOS_WIDGET_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_WIDGET_PROVISION_PROFILE_BASE64 }}
           IOS_BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -o pipefail
