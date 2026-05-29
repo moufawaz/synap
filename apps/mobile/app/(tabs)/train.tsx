@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen'
 import { VideoModal } from '@/components/VideoModal'
 import { getPlanHistory, logWorkout, TodayWorkout } from '@/features/workout'
 import { notifyError, notifySuccess, tapLight, tapMedium } from '@/lib/haptics'
+import { endWorkoutActivity, startWorkoutActivity, updateWorkoutActivity } from '@/lib/liveActivity'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -215,11 +216,20 @@ export default function TrainScreen() {
       setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
     }, 500)
     setTimerState('running')
+    // Surface the timer on the Lock Screen / Dynamic Island (no-op until the
+    // native Live Activity extension is present — see src/lib/liveActivity.ts).
+    startWorkoutActivity({
+      title: workout?.day_name || workout?.muscle_focus || (isRtl ? 'تمرين' : 'Workout'),
+      startedAtMs: startTimeRef.current,
+      completed: completedCount,
+      total: totalExercises,
+    })
   }
 
   function pauseTimer() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
     setTimerState('paused')
+    updateWorkoutActivity({ paused: true, elapsedSec: elapsed, completed: completedCount, total: totalExercises })
   }
 
   function resumeTimer() {
@@ -228,12 +238,14 @@ export default function TrainScreen() {
       setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
     }, 500)
     setTimerState('running')
+    updateWorkoutActivity({ paused: false, elapsedSec: elapsed, completed: completedCount, total: totalExercises })
   }
 
   function resetTimer() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
     setElapsed(0)
     setTimerState('idle')
+    endWorkoutActivity()
   }
 
   // ── Exercise actions ──────────────────────────────────────
@@ -245,6 +257,8 @@ export default function TrainScreen() {
     if (isCompleting) tapLight()
     const next = completedSet.has(index) ? completed.filter(i => i !== index) : [...completed, index]
     setCompleted(next)
+    // Keep the Live Activity progress ring in sync (no-op when unsupported).
+    updateWorkoutActivity({ paused: timerState === 'paused', elapsedSec: elapsed, completed: next.length, total: totalExercises })
     if (selectedDay === todayCanonical) {
       await saveLocalSession(date, next, performance)
     }
