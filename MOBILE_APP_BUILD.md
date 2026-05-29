@@ -1639,3 +1639,94 @@ Audit found **no** `.ttf`/`.otf` assets, no `useFonts`/`Font.loadAsync`, no `fon
 ### Current build
 
 **Build 1051** — all fixes above — auto-building via `iOS Expo Direct Build` GitHub Actions workflow (build 1050 failed on the expo-doctor step, now resolved).
+
+## Pre-App-Store Feature + Compliance Pass (2026-05-29)
+
+Worked on branch `feat/live-activity-native` (native Swift/codesigning changes carry archive-breaking risk, so they were kept off `main` and verified via `workflow_dispatch` before merge). Four feature areas + a hard App Store compliance fix, then the iOS codesigning work to ship a Live Activity widget extension.
+
+### 1. Smarter Ion (server `/api/chat`)
+
+The `buildSystemPrompt` in `src/app/api/chat/route.ts` was already highly detailed (profile, trend vs expected-rate, calorie/protein compliance, workout compliance, plan-change awareness, 21 coaching rules). The only ceiling was truncation: both chat invocations capped at `max_tokens: 1024`, which cut off the longer responses the prompt explicitly permits (Elite supplement protocols, goal projections, multi-pattern callouts). Raised both (stream + non-stream) to `2048`. Short replies are unaffected — the model still stops when done, and rule 4 keeps everyday answers to 2–4 sentences.
+
+### 2. Haptics on key actions
+
+Tactile feedback wired into core interactions (workout set toggles, key confirmations) via Expo Haptics — no-op on devices without a Taptic Engine.
+
+### 3. Branded splash + loading spinner
+
+- `assets/splash.png` → the full SYNAP launch artwork; native splash switched to `cover` / `#000000` so it fills edge-to-edge with no letterbox.
+- New `src/components/LoadingSplash.tsx`: a JS overlay showing the *same* artwork with a live `ActivityIndicator` near the bottom while auth/cached data resolve. It hides the native splash on first layout (seamless handoff), fades out when ready, and keeps a hard 4s safety cap.
+- Wired into `app/_layout.tsx` (`RootNavigator`), replacing the bare native-splash-hide logic.
+
+### 4. Native Live Activity — Dynamic Island + Lock Screen workout timer
+
+The training timer now drives an iOS ActivityKit Live Activity (iOS 16.2+), rendering a self-ticking timer in the Dynamic Island and on the Lock Screen with no per-second JS push.
+
+**Architecture (CNG-safe — `ios/` is generated, so everything is injected via plugins/modules):**
+
+- **Config plugin:** added `@bacons/apple-targets` to `app.json` plugins + `NSSupportsLiveActivities: true` in `ios.infoPlist`.
+- **Widget extension target:** `apps/mobile/targets/widget/` — `expo-target.config.js` (type `widget`, `deploymentTarget 16.2`, SwiftUI/WidgetKit/ActivityKit frameworks, `$accent` color, `SynapMark` image), and `index.swift` (the `WorkoutActivityAttributes` + WidgetKit `ActivityConfiguration` / `DynamicIsland` views).
+- **Local Expo module:** `apps/mobile/modules/synap-live-activity/` — Swift `SynapLiveActivityModule` exposing `areActivitiesEnabled / startWorkoutActivity / updateWorkoutActivity / endWorkoutActivity` over ActivityKit `Activity.request/.update/.end`. The `WorkoutActivityAttributes` struct is duplicated byte-for-byte between the module and the widget — ActivityKit matches a running Activity to its widget by attributes type name + Codable ContentState, so identical structs interoperate across the app + widget targets.
+- **JS bridge:** `src/lib/liveActivity.ts` wraps the module via `requireOptionalNativeModule` — fully crash-safe / no-op on Android, iOS < 16.2, or any build without the extension. `app/(tabs)/train.tsx` calls it on start/pause/resume/reset and on each exercise toggle.
+- **gitignore:** added negations so `modules/**/ios/` Swift sources are tracked (the non-anchored `ios/` ignore was swallowing them).
+
+**Dynamic Island branding:** the transparent SYNAP mark (`targets/widget/synap-mark.png`, cropped/centered from the source art) is registered via the target's `images` map and used as the brand glyph (compactLeading, minimal, expanded-leading, Lock Screen banner) in place of the SF Symbol bolt.
+
+### 5. App Store compliance — remove external purchase steering (Guideline 3.1.1 / 3.1.3)
+
+**The big rejection risk.** The billing flow funneled users to an external website to subscribe, then unlocked features in-app — exactly what 3.1.1 forbids ("buttons, external links, or other calls to action that direct customers to purchasing mechanisms other than IAP"). Fitness coaching does **not** qualify for the reader-app exception.
+
+Chosen path: **"multiplatform" model (3.1.3b)** — the app reflects entitlement only and never markets or directs to an external purchase (keeps 100% of revenue; no Apple cut).
+
+- `billing.tsx`: replaced the "Subscribe to SYNAP / synapfit.app / Copy website / open Safari / choose a plan" funnel with a neutral **"No active plan"** screen (restore-by-correct-account + Contact Support). Subscriber view no longer points to `synapfit.app` for management.
+- `app/(tabs)/community.tsx`: removed the "Get Elite Access" button that opened `${webBaseUrl}/pricing` externally (the most clear-cut violation) → informational "coming soon" note.
+- `app/(tabs)/index.tsx` dashboard banner: dropped "Visit synapfit.app to subscribe".
+- `settings.tsx`, `UpgradeGate.tsx`, `app/(tabs)/chat.tsx`: neutralized "Subscribe / How to subscribe / Upgrade" copy → "View your plan" (all route to the in-app status screen; no external links).
+- Retained Privacy / Terms / Support `Linking.openURL` calls (allowed/required).
+
+### iOS codesigning — shipping the widget extension (manual signing, no EAS)
+
+The Fastlane direct-build pipeline uses manual signing. The new `SynapWidget` extension (`app.synap.fit.SynapWidget`) needed its own App Store provisioning profile and a sequence of fixes, each surfaced by the next CI archive:
+
+1. **Widget App ID + profile (user, Apple portal):** registered `app.synap.fit.SynapWidget`, created an App Store distribution profile ("SYNAP Widget AppStore"), base64-encoded it into GitHub secret `IOS_WIDGET_PROVISION_PROFILE_BASE64`.
+2. **Error 90347 (extension bundle id == app id):** `@bacons/apple-targets` resolved the widget to the bare `app.synap.fit`. Fixed by forcing `bundleIdentifier: '.SynapWidget'` in `expo-target.config.js` **and** deterministically setting `PRODUCT_BUNDLE_IDENTIFIER` (+ matching `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`) on the widget target directly in the generated `.pbxproj` in `fastlane/Fastfile` (step 7b) — independent of the plugin.
+3. **Secret not reaching Fastlane:** the secret existed but the workflow `env:` block never mapped it. Added `IOS_WIDGET_PROVISION_PROFILE_BASE64` to `.github/workflows/ios-expo-direct.yml`.
+4. **Capability mismatch (main app signed with widget profile):** `update_code_signing_settings`'s `bundle_identifier` option does **not** filter targets in this Fastlane version — both signing calls hit every target. Re-scoped by **target name**: step 8 signs all targets except `SynapWidget` with the app profile; step 8b signs only `SynapWidget` with the widget profile.
+
+### CI verification (branch `feat/live-activity-native`, triggered via `workflow_dispatch`)
+
+| Run / build | Commit | Result |
+|---|---|---|
+| Live Activity + signing fixes | `48b9716` | ✅ success (first green archive with the widget extension) |
+| + branded splash + Dynamic Island mark | `3764e8d` (build 1061) | ✅ success |
+| + billing 3.1.1 compliance | `f79ae84` (build 1062) | ✅ success — **submission build** |
+
+### Commits in this pass
+
+| Commit | Description |
+|---|---|
+| `1f43caa` | feat(chat): give Ion headroom for detailed coaching replies (max_tokens 1024→2048) |
+| `6acb9e8` | feat(mobile): wire training timer to iOS Live Activity (no-op safe) |
+| `16fde6a` | feat(mobile): native Live Activity for the workout timer (Dynamic Island) |
+| `a116a31` | fix(mobile): pin SynapWidget extension bundle id to app.synap.fit.SynapWidget |
+| `f646b6f` | fix(ios): force SynapWidget bundle id + pass widget profile secret to Fastlane |
+| `48b9716` | fix(ios): scope code-signing by target so widget profile doesn't clobber app |
+| `3764e8d` | feat(mobile): branded splash with loading spinner + SYNAP mark in Dynamic Island |
+| `f79ae84` | fix(mobile): remove external purchase steering for App Store compliance (3.1.1) |
+
+### Pre-submission checklist (App Store Connect)
+
+- ✅ **Submission build:** 1062 (`f79ae84`) in TestFlight — Live Activity + splash + Dynamic Island + billing compliance.
+- ✅ **Account deletion** present (More → Delete account) — mandatory, satisfied.
+- ✅ **Sign in with Apple** not required — auth is email/password only (no social login → Guideline 4.8 N/A).
+- ✅ **Demo account** ready (pre-subscribed so reviewers see full app) — enter in App Review Information → Sign-In required.
+- ⬜ **App Privacy** questionnaire (health, photos, chat data) + **Privacy Policy URL** set (required for HealthKit).
+- ⬜ **Review notes:** "Subscriptions are managed by our multiplatform service; the app only reflects entitlement" + "HealthKit data is read to personalize coaching."
+- ⬜ Screenshots reflect the real app (no website/subscribe flow).
+- ✅ Encryption compliance (`ITSAppUsesNonExemptEncryption: false`) set.
+
+### On-device verification (recommended before/after submit)
+
+- Launch shows the full SYNAP splash with a loading spinner at the bottom.
+- Start a workout → Dynamic Island + Lock Screen show the SYNAP mark + live ticking timer; pause freezes it; finishing ends the Activity.
+- Billing screen for a non-subscriber shows the neutral "No active plan" state (no website/subscribe CTA).
