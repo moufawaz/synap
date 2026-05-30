@@ -58,9 +58,23 @@ function displayChatContent(content: string) {
   try {
     const match = cleaned.match(/\{[\s\S]*\}/)
     const parsed = JSON.parse(match ? match[0] : cleaned)
-    if (typeof parsed?.message === 'string') return parsed.message.trim()
-    if (typeof parsed?.reply === 'string') return parsed.reply.trim()
-    if (typeof parsed?.content === 'string') return parsed.content.trim()
+    const text =
+      (typeof parsed?.message === 'string' && parsed.message.trim()) ||
+      (typeof parsed?.reply === 'string' && parsed.reply.trim()) ||
+      (typeof parsed?.content === 'string' && parsed.content.trim()) ||
+      (typeof parsed?.text === 'string' && parsed.text.trim()) ||
+      ''
+    if (text) return text
+    // Structured message whose text lives in a list (e.g. a suggestion payload).
+    // Render those lines instead of an empty bubble.
+    const list = parsed?.suggestions ?? parsed?.items ?? parsed?.options
+    if (Array.isArray(list)) {
+      const joined = list.filter((s: any) => typeof s === 'string' && s.trim()).join('\n')
+      if (joined.trim()) return joined.trim()
+    }
+    // Parsed as JSON but nothing displayable — return empty so the caller can
+    // drop the bubble rather than show an empty box or raw JSON.
+    return ''
   } catch {}
   return cleaned
 }
@@ -356,7 +370,16 @@ export default function ChatScreen() {
   const sessions = useMemo(() => buildChatSessions(allMessages, isRtl), [allMessages, isRtl])
   const selectedSession = selectedSessionId ? sessions.find(s => s.id === selectedSessionId) : null
   const visibleMessages = useMemo(() => {
-    const msgs = selectedSession?.messages ?? allMessages
+    // Action cards (with buttons) and plan-edit messages stay even if their text
+    // is short/empty; plain text + suggestion bubbles are dropped when they have
+    // no displayable words, so the thread never shows an empty box.
+    const actionTypes = new Set(['workout_card', 'meal_card', 'new_plan', 'plan_proposal', 'alert', 'milestone', 'renewal_preview'])
+    const msgs = (selectedSession?.messages ?? allMessages).filter(m => {
+      if (m.role === 'user') return true
+      if (actionTypes.has(m.message_type)) return true
+      if (m.metadata?.plan_edit) return true
+      return displayChatContent(m.content).trim().length > 0
+    })
     return [...msgs].reverse()
   }, [selectedSession, allMessages])
 
