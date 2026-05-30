@@ -17,7 +17,16 @@ export function VideoModal({ videoId, onClose }: Props) {
 
   if (!videoId) return null
 
-  const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`
+  // Load the embed inside an HTML document with a real https baseUrl rather than
+  // pointing the WebView straight at youtube.com/embed/... . Loading the embed
+  // URL directly gives YouTube no valid HTTP referer/origin, so many videos
+  // refuse to play with "Video unavailable" / error 150/153 ("playback on other
+  // websites disabled"). Setting baseUrl makes the iframe's origin
+  // https://www.synapfit.app — the same origin the web app embeds from — which
+  // YouTube accepts. The `origin` query param is passed to match.
+  const origin = 'https://www.synapfit.app'
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&fs=1&origin=${origin}`
+  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>*{margin:0;padding:0;box-sizing:border-box}html,body{height:100%;background:#000}.v{position:fixed;inset:0}iframe{width:100%;height:100%;border:0}</style></head><body><div class="v"><iframe src="${embedUrl}" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen></iframe></div></body></html>`
 
   return (
     <Modal
@@ -40,7 +49,8 @@ export function VideoModal({ videoId, onClose }: Props) {
         {/* YouTube embed */}
         <View style={styles.playerWrap}>
           <WebView
-            source={{ uri: embedUrl }}
+            source={{ html, baseUrl: origin }}
+            originWhitelist={['*']}
             style={styles.webview}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}

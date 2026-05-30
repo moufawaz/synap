@@ -197,6 +197,12 @@ export default function TrainScreen() {
   const workoutDays = useMemo(() => {
     if (!planJson) return []
     return getPlanDays(planJson)
+      // Only count actual training days (days that have exercises). A rest day
+      // that still carries a weekday name must not light up a workout dot — this
+      // matches the server's daysPerWeek logic (plan-history route filters days
+      // with exercises > 0) and fixes the dashboard showing 5 days when the plan
+      // has 4 training days + 1 named rest day.
+      .filter((d: any) => Array.isArray(d?.exercises) && d.exercises.length > 0)
       .map((d: any) => dayNameOf(d))
       .filter((d): d is CanonicalDay => d !== null)
   }, [planJson])
