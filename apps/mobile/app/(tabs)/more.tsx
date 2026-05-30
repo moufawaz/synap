@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router, type Href } from 'expo-router'
+import Constants from 'expo-constants'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
@@ -12,6 +13,11 @@ import { HealthSummary, requestHealthAccessAndRead, setHealthConnected } from '@
 import { createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+
+// Bump this every build so we can confirm the installed binary matches the
+// latest code (shown in the More tab footer). Current: web-aligned train day
+// count + legible chat chips.
+const BUILD_TAG = 'fixpack-7'
 
 type NavRow = { label: string; labelAr?: string; href: Href; icon: string; color?: string }
 
@@ -203,6 +209,11 @@ export default function MoreScreen() {
         <NavRowItem icon="file-text" label={text.terms} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/terms`)} rowDir={rowDir} showDivider />
         <NavRowItem icon="life-buoy" label={text.support} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/contact`)} rowDir={rowDir} />
       </Card>
+
+      {/* Build marker — lets us confirm exactly which binary is installed */}
+      <Text style={{ color: color.dim, fontSize: 11, fontWeight: '700', textAlign: 'center', marginTop: 8, marginBottom: 4 }}>
+        SYNAP v{Constants.expoConfig?.version ?? '1.0.0'} · build {Constants.nativeBuildVersion ?? '?'} · {BUILD_TAG}
+      </Text>
     </Screen>
   )
 }
