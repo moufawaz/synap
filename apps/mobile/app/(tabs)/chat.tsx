@@ -24,7 +24,9 @@ import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
-const PLAN_MODIFY_WINDOW_DAYS = 30
+// Fallback cycle length (days) used only if the server doesn't send the plan's
+// real end_date. Matches the server's workout fallback.
+const PLAN_MODIFY_WINDOW_DAYS = 42
 
 const QUICK_PROMPTS_EN = [
   "How am I progressing?",
@@ -373,13 +375,20 @@ export default function ChatScreen() {
   const listRef = useRef<FlatList<ChatMessage>>(null)
   const quickPrompts = isRtl ? QUICK_PROMPTS_AR : QUICK_PROMPTS_EN
 
-  // Plan modification window
+  // Days left in the active plan — driven by the plan's real cycle end (weeks×7,
+  // sent by the server) so it matches the dashboard countdown. Falls back to a
+  // created_at estimate if the server didn't send end_date.
   const planDaysLeft = useMemo(() => {
-    const createdAt = history.data?.activeWorkoutPlan?.created_at
-    if (!createdAt) return null
-    const age = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000)
-    const remaining = PLAN_MODIFY_WINDOW_DAYS - age
-    return remaining > 0 ? remaining : 0
+    const wp = history.data?.activeWorkoutPlan
+    if (!wp) return null
+    if (wp.end_date) {
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const end = new Date(wp.end_date); end.setHours(0, 0, 0, 0)
+      return Math.max(0, Math.ceil((end.getTime() - today.getTime()) / 86400000))
+    }
+    if (!wp.created_at) return null
+    const age = Math.floor((Date.now() - new Date(wp.created_at).getTime()) / 86400000)
+    return Math.max(0, PLAN_MODIFY_WINDOW_DAYS - age)
   }, [history.data])
 
   // Message usage
@@ -483,8 +492,10 @@ export default function ChatScreen() {
               color: planDaysLeft > 7 ? color.pulse : planDaysLeft > 0 ? color.flame : color.danger,
             }]}>
               {planDaysLeft > 0
-                ? `${planDaysLeft} day${planDaysLeft !== 1 ? 's' : ''} left to modify your plan${isRtl ? '' : ' — ask Ion here'}`
-                : (isRtl ? 'انتهت فترة تعديل الخطة' : 'Plan modification window expired — ask Ion for a new plan')}
+                ? (isRtl
+                    ? `${planDaysLeft} يوم متبقٍ في خطتك — اطلب من Ion تعديلها`
+                    : `${planDaysLeft} day${planDaysLeft !== 1 ? 's' : ''} left in your plan — ask Ion to adjust it`)
+                : (isRtl ? 'اكتملت خطتك — اطلب من Ion خطة جديدة' : 'Plan complete — ask Ion to renew it')}
             </Text>
           </View>
         ) : null}

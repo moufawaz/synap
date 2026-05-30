@@ -12,7 +12,7 @@ export type ChatMessage = {
 export type ChatHistoryResponse = {
   profile: { gender?: 'male' | 'female' } | null
   messages: ChatMessage[]
-  activeWorkoutPlan: { created_at: string } | null
+  activeWorkoutPlan: { created_at: string; end_date?: string | null } | null
   usage: { used: number; limit: number; plan: string }
 }
 
