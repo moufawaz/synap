@@ -142,10 +142,21 @@ export function calculateMacros(p: any, latestMeasurement?: any): MacroTargets {
   const leanMass    = weight * (1 - bodyFatPct / 100)
   const usingRealBf = !!(measuredBf ?? inbodyBf)
 
-  // ── TDEE (Mifflin-St Jeor + training burn) ────────────────────────
-  const bmr = female
+  // ── BMR ────────────────────────────────────────────────────────────
+  // Mifflin-St Jeor only knows weight/height/age/sex — it's blind to body
+  // composition. An InBody scan reports a lean-mass-based BMR that is more
+  // accurate for muscular / lean / higher-bodyfat people. Prefer the measured
+  // BMR when a scan provides one, but ONLY if it lands within ±25% of the
+  // formula value — that rejects a bad or stale scan (e.g. big weight change
+  // since the scan) so it can't distort the calorie target. Otherwise Mifflin.
+  const formulaBmr = female
     ? 10 * weight + 6.25 * height - 5 * age - 161
     : 10 * weight + 6.25 * height - 5 * age + 5
+  const inbodyBmr      = p.bmr_kcal != null ? parseFloat(p.bmr_kcal) : NaN
+  const usingInbodyBmr = Number.isFinite(inbodyBmr)
+    && inbodyBmr >= formulaBmr * 0.75
+    && inbodyBmr <= formulaBmr * 1.25
+  const bmr = usingInbodyBmr ? inbodyBmr : formulaBmr
 
   const workType        = (p.work_schedule || 'work').toLowerCase()
   const neatMult        = workType.includes('shift') ? 1.5 : workType === 'flexible' ? 1.45 : 1.4
