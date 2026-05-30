@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View 
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { SynapLogo } from '@/components/SynapLogo'
+import { SocialAuthButtons } from '@/components/SocialAuthButtons'
 import { useAuth } from '@/auth/AuthProvider'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -69,6 +70,8 @@ export default function SignupScreen() {
           <Pressable onPress={() => router.replace('/(auth)/login')}>
             <Text style={[styles.linkText, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{text.haveAccount} {text.login}</Text>
           </Pressable>
+
+          <SocialAuthButtons />
         </View>
       </View>
     </View>

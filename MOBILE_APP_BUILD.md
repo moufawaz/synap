@@ -1730,3 +1730,98 @@ The Fastlane direct-build pipeline uses manual signing. The new `SynapWidget` ex
 - Launch shows the full SYNAP splash with a loading spinner at the bottom.
 - Start a workout → Dynamic Island + Lock Screen show the SYNAP mark + live ticking timer; pause freezes it; finishing ends the Activity.
 - Billing screen for a non-subscriber shows the neutral "No active plan" state (no website/subscribe CTA).
+
+## Support Link, Bug Fixes + Social Sign-In (2026-05-30)
+
+### Compliant help-center link (build 1064, `6449b09`, on `main`)
+
+Added a support-framed website link (not a purchase CTA, so it stays within 3.1.1):
+- `billing.tsx` support dialog gained an "Help center" button → `synapfit.app/contact`.
+- More-tab support row now points to `/contact` (was `/support`).
+
+### Bug fixes (build 1065, `b5e97c1`, on `main`)
+
+**YouTube exercise videos failed with error 150/153.** `VideoModal` pointed the
+WebView straight at `youtube.com/embed/<id>`, giving YouTube no valid HTTP
+referer/origin, so most videos refused to play ("playback on other websites
+disabled"). Fix: load the embed inside an HTML document with a real
+`baseUrl` (`https://www.synapfit.app`) — the same origin the web app embeds
+from — via `source={{ html, baseUrl }}`. Videos now play in-app.
+
+**Training-day count was wrong (showed 5, plan had 4).** The weekly day selector
+in `train.tsx` counted any day carrying a weekday name, including named rest
+days. Fixed `workoutDays` to only count days with `exercises.length > 0`,
+matching the server's `daysPerWeek` logic in `plan-history/route.ts`.
+
+### Google + Sign in with Apple (branch `feat/social-signin`, `6fbf9d2`)
+
+Adds social login to the login + signup screens — Google (matching the web app)
+and Sign in with Apple (required by Guideline 4.8 once any third-party login is
+offered).
+
+- **Packages:** `expo-apple-authentication`, `expo-web-browser`, `expo-crypto`.
+- **AuthProvider:** `signInWithGoogle` (browser OAuth via `expo-web-browser`,
+  PKCE `exchangeCodeForSession`, reuses the web's Google provider) and
+  `signInWithApple` (native identity token → `supabase.auth.signInWithIdToken`
+  with a SHA-256 hashed nonce).
+- **supabase client:** `flowType: 'pkce'` for the native code exchange.
+- **`SocialAuthButtons`** component (Google button + theme-aware native Apple
+  HIG button, iOS-only) wired into both auth screens.
+- **app.json:** `ios.usesAppleSignIn: true` + `expo-web-browser` plugin — adds
+  the `com.apple.developer.applesignin` entitlement (verified via
+  `expo config --type introspect`).
+
+**⚠️ Required external setup before this branch can build + work** (the new
+entitlement breaks signing until the profile includes it):
+
+1. **Apple Developer → Identifiers → `app.synap.fit`:** enable the **Sign in
+   with Apple** capability → Save.
+2. **Regenerate the App Store provisioning profile** for `app.synap.fit` (now
+   with the capability) → base64 → update GitHub secret
+   `IOS_PROVISION_PROFILE_BASE64`. (Same flow as the widget profile.)
+3. **Supabase → Authentication → Providers → Apple:** enable, add
+   `app.synap.fit` to **Client IDs** (native sign-in needs no Services ID/secret).
+4. **Supabase → Authentication → Providers → Google:** confirm enabled (already
+   used by web).
+5. **Supabase → Authentication → URL Configuration → Redirect URLs:** add
+   `synap://auth/callback`.
+
+Only after steps 1–2 will CI signing pass; steps 3–5 make the buttons function
+at runtime. Build dispatched via `workflow_dispatch` on the branch once ready,
+then merge to `main`.
+
+### Build status
+
+| Build | Commit | Branch | Result |
+|---|---|---|---|
+| 1064 | `6449b09` | main | ✅ help-center link |
+| 1065 | `b5e97c1` | main | ✅ YouTube + training-day fixes |
+| social sign-in | `778d4d1` | feat/social-signin | ✅ first build with applesignin entitlement (signing passed) |
+| social sign-in v2 | `2816288` | feat/social-signin | ⏳ rest-day fix + new-user onboarding routing |
+
+### Follow-up fixes after first device test (2026-05-30)
+
+**Train rest day (placeholder encoding).** The day-count fix only checked
+`exercises.length > 0`, but some plans encode a rest day as a single placeholder
+exercise named "Rest Day". That still counted it (5 vs 4) and rendered it as a
+fake exercise. Added `isRestDayData()` in `train.tsx` mirroring the server's
+`is_rest_day` logic (empty OR all exercises named "rest day"); used for both the
+day-dot filter and `buildTodayWorkout` (which now clears exercises + sets
+`is_rest_day` so the Rest Day card shows like web). Commit `2816288`.
+
+**Social sign-in "signed in but everything errors".** New Google/Apple accounts
+have no profile, so routing straight to the tabs dropped them on a dataless
+dashboard where every API call failed. `SocialAuthButtons` now calls
+`getProfile()` after sign-in and routes profile-less users to `/onboarding`
+(like email signup); existing users go to the app. Commit `2816288`.
+
+**Google "opens the website" / no session — Supabase config (not code).** With
+`synap://auth/callback` absent from Supabase's redirect allowlist, Supabase falls
+back to the Site URL after OAuth, so the app never receives the session. Required
+Supabase settings (Authentication):
+- URL Configuration → Redirect URLs → add `synap://auth/callback` (+ `synap://**`).
+- Providers → Apple → enable + add `app.synap.fit` to Client IDs.
+- Providers → Google → confirm enabled.
+
+The Google consent screen showing `xxxx.supabase.co` is cosmetic (brand via the
+Google OAuth consent screen or a Supabase custom domain).

@@ -24,7 +24,9 @@ import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
-const PLAN_MODIFY_WINDOW_DAYS = 30
+// Fallback cycle length (days) used only if the server doesn't send the plan's
+// real end_date. Matches the server's workout fallback.
+const PLAN_MODIFY_WINDOW_DAYS = 42
 
 const QUICK_PROMPTS_EN = [
   "How am I progressing?",
@@ -58,6 +60,7 @@ function displayChatContent(content: string) {
   try {
     const match = cleaned.match(/\{[\s\S]*\}/)
     const parsed = JSON.parse(match ? match[0] : cleaned)
+    // Same field extraction as the web chat page.
     if (typeof parsed?.message === 'string') return parsed.message.trim()
     if (typeof parsed?.reply === 'string') return parsed.reply.trim()
     if (typeof parsed?.content === 'string') return parsed.content.trim()
@@ -356,20 +359,36 @@ export default function ChatScreen() {
   const sessions = useMemo(() => buildChatSessions(allMessages, isRtl), [allMessages, isRtl])
   const selectedSession = selectedSessionId ? sessions.find(s => s.id === selectedSessionId) : null
   const visibleMessages = useMemo(() => {
-    const msgs = selectedSession?.messages ?? allMessages
+    // Action cards (with buttons) and plan-edit messages stay even if their text
+    // is short/empty; plain text + suggestion bubbles are dropped when they have
+    // no displayable words, so the thread never shows an empty box.
+    const actionTypes = new Set(['workout_card', 'meal_card', 'new_plan', 'plan_proposal', 'alert', 'milestone', 'renewal_preview'])
+    const msgs = (selectedSession?.messages ?? allMessages).filter(m => {
+      if (m.role === 'user') return true
+      if (actionTypes.has(m.message_type)) return true
+      if (m.metadata?.plan_edit) return true
+      return displayChatContent(m.content).trim().length > 0
+    })
     return [...msgs].reverse()
   }, [selectedSession, allMessages])
 
   const listRef = useRef<FlatList<ChatMessage>>(null)
   const quickPrompts = isRtl ? QUICK_PROMPTS_AR : QUICK_PROMPTS_EN
 
-  // Plan modification window
+  // Days left in the active plan — driven by the plan's real cycle end (weeks×7,
+  // sent by the server) so it matches the dashboard countdown. Falls back to a
+  // created_at estimate if the server didn't send end_date.
   const planDaysLeft = useMemo(() => {
-    const createdAt = history.data?.activeWorkoutPlan?.created_at
-    if (!createdAt) return null
-    const age = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000)
-    const remaining = PLAN_MODIFY_WINDOW_DAYS - age
-    return remaining > 0 ? remaining : 0
+    const wp = history.data?.activeWorkoutPlan
+    if (!wp) return null
+    if (wp.end_date) {
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const end = new Date(wp.end_date); end.setHours(0, 0, 0, 0)
+      return Math.max(0, Math.ceil((end.getTime() - today.getTime()) / 86400000))
+    }
+    if (!wp.created_at) return null
+    const age = Math.floor((Date.now() - new Date(wp.created_at).getTime()) / 86400000)
+    return Math.max(0, PLAN_MODIFY_WINDOW_DAYS - age)
   }, [history.data])
 
   // Message usage
@@ -473,8 +492,10 @@ export default function ChatScreen() {
               color: planDaysLeft > 7 ? color.pulse : planDaysLeft > 0 ? color.flame : color.danger,
             }]}>
               {planDaysLeft > 0
-                ? `${planDaysLeft} day${planDaysLeft !== 1 ? 's' : ''} left to modify your plan${isRtl ? '' : ' — ask Ion here'}`
-                : (isRtl ? 'انتهت فترة تعديل الخطة' : 'Plan modification window expired — ask Ion for a new plan')}
+                ? (isRtl
+                    ? `${planDaysLeft} يوم متبقٍ في خطتك — اطلب من Ion تعديلها`
+                    : `${planDaysLeft} day${planDaysLeft !== 1 ? 's' : ''} left in your plan — ask Ion to adjust it`)
+                : (isRtl ? 'اكتملت خطتك — اطلب من Ion خطة جديدة' : 'Plan complete — ask Ion to renew it')}
             </Text>
           </View>
         ) : null}
@@ -490,6 +511,12 @@ export default function ChatScreen() {
           keyExtractor={item => item.id}
           renderItem={renderMessage}
           inverted
+          // An inverted FlatList MUST be height-bounded. Without flex:1 it grows
+          // to its full content height once messages load and renders over its
+          // siblings (the quick-prompt chips) — which made the chip text vanish
+          // after the thread populated. flex:1 keeps it scrolling within its own
+          // area so the chips below stay intact.
+          style={styles.list}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.thread}
           ListEmptyComponent={!history.loading ? (
@@ -506,6 +533,10 @@ export default function ChatScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            // flexGrow:0 stops the horizontal ScrollView from expanding to fill
+            // leftover column height (which made the chips balloon vertically);
+            // it now hugs a single row of chips.
+            style={styles.promptsScroll}
             contentContainerStyle={[styles.promptsRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}
             keyboardShouldPersistTaps="handled"
           >
@@ -513,9 +544,9 @@ export default function ChatScreen() {
               <Pressable
                 key={prompt}
                 onPress={() => handleSend(prompt)}
-                style={[styles.promptChip, { backgroundColor: color.elevated, borderColor: color.border }]}
+                style={[styles.promptChip, { backgroundColor: `${color.spark}14`, borderColor: `${color.spark}33` }]}
               >
-                <Text style={[styles.promptText, { color: color.muted }]}>{prompt}</Text>
+                <Text numberOfLines={1} style={[styles.promptText, { color: color.text }]}>{prompt}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -632,6 +663,9 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: '600',
   },
+  list: {
+    flex: 1,
+  },
   thread: {
     flexGrow: 1,
     gap: 12,
@@ -707,7 +741,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontWeight: '700',
   },
+  promptsScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   promptsRow: {
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 8,
     gap: 8,

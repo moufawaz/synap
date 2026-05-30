@@ -72,11 +72,15 @@ function dayNameOf(day: any): CanonicalDay | null {
 }
 
 function getPlanDays(plan: any): any[] {
-  if (Array.isArray(plan?.days)) return plan.days
-  if (Array.isArray(plan?.weeks)) {
+  // Match the web plan page exactly: prefer a weeks[] array (weeks[0].days),
+  // otherwise fall back to the top-level days[]. The web reads `weeks` first;
+  // reading `days` first here was the source of the "5 days vs 4" mismatch when
+  // a plan carried both a legacy days[] and the current weeks[].
+  if (Array.isArray(plan?.weeks) && plan.weeks.length > 0) {
     const first = plan.weeks.find((w: any) => Array.isArray(w?.days) && w.days.length > 0)
-    return first?.days ?? []
+    if (first?.days) return first.days
   }
+  if (Array.isArray(plan?.days)) return plan.days
   return []
 }
 
@@ -84,9 +88,17 @@ function getDayWorkout(plan: any, day: CanonicalDay): any | null {
   return getPlanDays(plan).find((d: any) => dayNameOf(d) === day) ?? null
 }
 
+// Same rule as the web plan page (DayList): a day with no exercises is a rest
+// day; a day with exercises is a training day. No label/placeholder heuristics —
+// keep it identical to the web so the count and rest-day card always match.
+function isRestDayData(dayData: any): boolean {
+  return !Array.isArray(dayData?.exercises) || dayData.exercises.length === 0
+}
+
 function buildTodayWorkout(dayData: any): TodayWorkout | null {
   if (!dayData) return null
-  const exercises = (dayData.exercises ?? []).map((ex: any, i: number) => ({
+  const restDay = isRestDayData(dayData)
+  const exercises = restDay ? [] : (dayData.exercises ?? []).map((ex: any, i: number) => ({
     index: i,
     name: ex.name || ex.exercise || String(ex),
     sets: ex.sets ?? null,
@@ -102,7 +114,7 @@ function buildTodayWorkout(dayData: any): TodayWorkout | null {
     day_name: dayNameOf(dayData) ?? dayData.day_name ?? 'Workout',
     muscle_focus: dayData.muscle_focus ?? null,
     duration_min: dayData.duration_min ?? null,
-    is_rest_day: exercises.length === 0,
+    is_rest_day: restDay,
     exercises,
   }
 }
@@ -197,12 +209,10 @@ export default function TrainScreen() {
   const workoutDays = useMemo(() => {
     if (!planJson) return []
     return getPlanDays(planJson)
-      // Only count actual training days (days that have exercises). A rest day
-      // that still carries a weekday name must not light up a workout dot — this
-      // matches the server's daysPerWeek logic (plan-history route filters days
-      // with exercises > 0) and fixes the dashboard showing 5 days when the plan
-      // has 4 training days + 1 named rest day.
-      .filter((d: any) => Array.isArray(d?.exercises) && d.exercises.length > 0)
+      // A weekday lights up a workout dot only if its plan day has exercises —
+      // the web's rest rule. Combined with reading the same day source as the
+      // web (getPlanDays), the count now matches the web exactly.
+      .filter((d: any) => !isRestDayData(d))
       .map((d: any) => dayNameOf(d))
       .filter((d): d is CanonicalDay => d !== null)
   }, [planJson])

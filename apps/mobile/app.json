@@ -16,6 +16,7 @@
       "bundleIdentifier": "app.synap.fit",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
+      "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.healthkit": true
       },
@@ -53,7 +54,8 @@
           "background": true
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-web-browser"
     ],
     "splash": {
       "image": "./assets/splash.png",

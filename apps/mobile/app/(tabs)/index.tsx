@@ -65,15 +65,23 @@ export default function DashboardScreen() {
   const plannedMeals = Array.isArray(activeDiet?.meals) ? activeDiet.meals : []
   const caloriesLogged = mealLogs.reduce((sum, item) => sum + (item.calories_estimated || 0), 0)
   const calorieTarget  = Number(activeDiet?.daily_calories ?? activeDiet?.calories_per_day ?? 0)
-  const completedMeals = plannedMeals.filter((meal: any) =>
-    mealLogs.some(log => (log.meal_name || '').toLowerCase().startsWith(
-      String(meal.name || meal.meal_name || '').toLowerCase()
-    ))
-  ).length
+  const completedMeals = plannedMeals.filter((meal: any) => {
+    const key = String(meal.name || meal.meal_name || '').toLowerCase()
+    // Guard: an empty meal name would startsWith('')-match every log.
+    return !!key && mealLogs.some(log => (log.meal_name || '').toLowerCase().startsWith(key))
+  }).length
   const trainingDays = plan.data?.timing?.workout?.label ?? ''
 
   const profileMeasurements: Array<{ weight_kg?: number }> = (profile.data as any)?.measurements ?? []
-  const latestWeight: number | undefined = profileMeasurements[0]?.weight_kg
+  // The profile API (/api/save-profile) doesn't return a measurements array, so
+  // fall back to the connected Health weight, then the onboarding profile weight
+  // — otherwise the WEIGHT stat always showed "-" even with data available.
+  const profileWeight: number | undefined =
+    profile.data?.profile?.weight_kg != null && Number.isFinite(Number(profile.data.profile.weight_kg))
+      ? Number(profile.data.profile.weight_kg)
+      : undefined
+  const latestWeight: number | undefined =
+    profileMeasurements[0]?.weight_kg ?? health.data?.latestWeightKg ?? profileWeight
   const prevWeight:   number | undefined = profileMeasurements[1]?.weight_kg
   const weightDelta = latestWeight && prevWeight ? (latestWeight - prevWeight) : null
 
@@ -124,7 +132,7 @@ export default function DashboardScreen() {
         <StatChip icon="target"      label={isRtl ? 'الهدف' : 'GOAL'}      value={goalLabels[goal] || 'Active'}            color={color.spark}      bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
         <StatChip icon="zap"         label={isRtl ? 'السعرات' : 'CALORIES'} value={calorieTarget ? `${calorieTarget} kcal` : '-'} color={color.flame} bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
         <StatChip icon="activity"    label={isRtl ? 'هذا الأسبوع' : 'TRAINING'} value={trainingDays || '-'}               color={color.sparkLight} bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
-        <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}    value={latestWeight ? `${latestWeight} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
+        <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}    value={latestWeight ? `${Math.round(latestWeight * 10) / 10} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
       </View>
 
       {/* Ion coaching engine — always visible */}

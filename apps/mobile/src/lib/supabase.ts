@@ -23,5 +23,9 @@ export const supabase = {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // PKCE is the secure OAuth flow for native: signInWithOAuth stores a code
+    // verifier in AsyncStorage and the provider redirect returns ?code=…, which
+    // we hand to exchangeCodeForSession (see signInWithGoogle in AuthProvider).
+    flowType: 'pkce',
   }),
 }
