@@ -500,6 +500,12 @@ export default function ChatScreen() {
           keyExtractor={item => item.id}
           renderItem={renderMessage}
           inverted
+          // An inverted FlatList MUST be height-bounded. Without flex:1 it grows
+          // to its full content height once messages load and renders over its
+          // siblings (the quick-prompt chips) — which made the chip text vanish
+          // after the thread populated. flex:1 keeps it scrolling within its own
+          // area so the chips below stay intact.
+          style={styles.list}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.thread}
           ListEmptyComponent={!history.loading ? (
@@ -641,6 +647,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600',
+  },
+  list: {
+    flex: 1,
   },
   thread: {
     flexGrow: 1,
