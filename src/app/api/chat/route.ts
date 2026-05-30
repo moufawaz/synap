@@ -51,7 +51,7 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: false })
       .limit(limit),
     admin.from('workout_plans')
-      .select('created_at')
+      .select('created_at, plan_json')
       .eq('user_id', user.id)
       .eq('active', true)
       .order('created_at', { ascending: false })
@@ -60,10 +60,20 @@ export async function GET(req: Request) {
     isLaunchMode() ? Promise.resolve({ allowed: true, used: 0, limit: Infinity, plan: 'elite' }) : canSendMessage(user.id),
   ])
 
+  // Surface the active plan's cycle end so the app's "days left in your plan"
+  // banner follows the real program length (weeks×7) instead of a fixed window.
+  let activeWorkoutPlan: { created_at: string; end_date: string | null } | null = null
+  if (planRes.data?.created_at) {
+    const weeks = Number(planRes.data.plan_json?.weeks)
+    const cycleDays = Number.isFinite(weeks) && weeks > 0 && weeks <= 52 ? weeks * 7 : 42
+    const end = new Date(new Date(planRes.data.created_at).getTime() + cycleDays * 86400000)
+    activeWorkoutPlan = { created_at: planRes.data.created_at, end_date: end.toISOString().slice(0, 10) }
+  }
+
   return NextResponse.json({
     profile: profileRes.data ?? null,
     messages: (historyRes.data ?? []).reverse(),
-    activeWorkoutPlan: planRes.data ?? null,
+    activeWorkoutPlan,
     usage: { used: usageRes.used, limit: usageRes.limit, plan: usageRes.plan },
   })
 }

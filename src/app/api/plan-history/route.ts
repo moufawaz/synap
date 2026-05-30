@@ -69,7 +69,7 @@ function summarizePlan(row: any, planType: PlanType) {
     active: Boolean(row.active),
     created_at: row.created_at,
     start_date: row.start_date ?? row.created_at?.slice(0, 10) ?? null,
-    end_date: row.end_date ?? fallbackEndDate(row.created_at, planType),
+    end_date: row.end_date ?? fallbackEndDate(row.created_at, planType, plan),
     summary,
     renewal: plan._renewal ?? null,
     restored: plan._restored ?? null,
@@ -132,9 +132,20 @@ function summarizeTodayWorkout(plan: any) {
   }
 }
 
-function fallbackEndDate(createdAt: string | null, planType: PlanType) {
+// How long a cycle runs, derived from the plan itself so timing follows the
+// real program rather than a fixed window. Workout plans carry a `weeks` count
+// (e.g. a 12-week mesocycle) — use weeks×7 when present. Diet plans have no
+// explicit length, so they keep a 4-week review cadence (macro adjustments run
+// on their own schedule) unless they declare weeks.
+function planCycleDays(plan: any, planType: PlanType): number {
+  const weeks = Number(plan?.weeks)
+  if (Number.isFinite(weeks) && weeks > 0 && weeks <= 52) return weeks * 7
+  return planType === 'diet' ? 28 : 42
+}
+
+function fallbackEndDate(createdAt: string | null, planType: PlanType, plan?: any) {
   if (!createdAt) return null
-  const days = planType === 'diet' ? 28 : 42
+  const days = planCycleDays(plan, planType)
   return new Date(new Date(createdAt).getTime() + days * 86400000).toISOString().slice(0, 10)
 }
 
