@@ -522,6 +522,10 @@ export default function ChatScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            // flexGrow:0 stops the horizontal ScrollView from expanding to fill
+            // leftover column height (which made the chips balloon vertically);
+            // it now hugs a single row of chips.
+            style={styles.promptsScroll}
             contentContainerStyle={[styles.promptsRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}
             keyboardShouldPersistTaps="handled"
           >
@@ -726,7 +730,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontWeight: '700',
   },
+  promptsScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   promptsRow: {
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 8,
     gap: 8,
