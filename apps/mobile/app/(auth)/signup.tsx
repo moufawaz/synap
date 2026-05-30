@@ -71,7 +71,7 @@ export default function SignupScreen() {
             <Text style={[styles.linkText, { color: color.spark, textAlign: isRtl ? 'right' : 'left' }]}>{text.haveAccount} {text.login}</Text>
           </Pressable>
 
-          <SocialAuthButtons onSuccess={() => router.replace('/(tabs)')} />
+          <SocialAuthButtons />
         </View>
       </View>
     </View>

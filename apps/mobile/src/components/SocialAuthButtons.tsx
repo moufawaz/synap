@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import * as AppleAuthentication from 'expo-apple-authentication'
+import { router } from 'expo-router'
 import FontAwesome from '@expo/vector-icons/FontAwesome'
 import { useAuth } from '@/auth/AuthProvider'
+import { getProfile } from '@/features/profile'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
@@ -13,7 +15,7 @@ import { useTheme } from '@/theme/ThemeProvider'
  *   Apple's guideline 4.8 requires offering Sign in with Apple whenever another
  *   third-party sign-in (Google) is offered.
  */
-export function SocialAuthButtons({ onSuccess }: { onSuccess: () => void }) {
+export function SocialAuthButtons() {
   const { signInWithGoogle, signInWithApple } = useAuth()
   const { isRtl } = useLanguage()
   const { color, mode } = useTheme()
@@ -26,11 +28,24 @@ export function SocialAuthButtons({ onSuccess }: { onSuccess: () => void }) {
     }
   }, [])
 
+  // After a successful social sign-in, send brand-new accounts (no profile yet)
+  // through onboarding — otherwise they land on a dataless dashboard where every
+  // API call fails. Returning users (profile exists) go straight to the app.
+  async function routeAfterAuth() {
+    try {
+      const { profile } = await getProfile()
+      const onboarded = !!profile && Object.keys(profile).length > 0
+      router.replace(onboarded ? '/(tabs)' : '/onboarding')
+    } catch {
+      router.replace('/onboarding')
+    }
+  }
+
   async function handleGoogle() {
     setBusy('google')
     try {
       await signInWithGoogle()
-      onSuccess()
+      await routeAfterAuth()
     } catch (e: any) {
       Alert.alert('SYNAP', e?.message || 'Google sign-in failed')
     } finally {
@@ -42,7 +57,7 @@ export function SocialAuthButtons({ onSuccess }: { onSuccess: () => void }) {
     setBusy('apple')
     try {
       await signInWithApple()
-      onSuccess()
+      await routeAfterAuth()
     } catch (e: any) {
       // User tapping Cancel on the Apple sheet is not an error.
       if (e?.code === 'ERR_REQUEST_CANCELED' || e?.code === 'ERR_CANCELED') {

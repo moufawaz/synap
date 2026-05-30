@@ -71,7 +71,7 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
-          <SocialAuthButtons onSuccess={() => router.replace('/(tabs)')} />
+          <SocialAuthButtons />
         </View>
       </View>
     </View>
