@@ -330,7 +330,7 @@ export default function NutritionScreen() {
 
   async function logPlannedMeal(meal: any) {
     const mealKey = String(meal.name || meal.meal_name || '').toLowerCase()
-    const existing = allLogs.find(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
+    const existing = mealKey ? allLogs.find(log => (log.meal_name || '').toLowerCase().startsWith(mealKey)) : null
     if (existing) {
       await deleteMealLog(existing.id)
       await logs.reload()
@@ -467,7 +467,8 @@ export default function NutritionScreen() {
           <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{isRtl ? 'وجبات اليوم' : "Today's meals"}</Text>
           {plannedMeals.map((meal: any, index: number) => {
             const mealKey = String(meal.name || meal.meal_name || '').toLowerCase()
-            const done = allLogs.some(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
+            // Guard against an empty meal name matching every log via startsWith('').
+            const done = !!mealKey && allLogs.some(log => (log.meal_name || '').toLowerCase().startsWith(mealKey))
             const expanded = expandedMeals[index] ?? false
 
             // Extract food items (web uses meal.foods or meal.items)
@@ -475,11 +476,16 @@ export default function NutritionScreen() {
               : Array.isArray(meal.items) ? meal.items
               : []
 
-            // Extract ingredients
-            const rawIngredients: unknown[] = Array.isArray(meal.ingredients) ? meal.ingredients : []
+            // Extract ingredients. Generated plans nest these under
+            // meal.recipe.ingredients (not meal.ingredients), so check both —
+            // otherwise the ingredients list never renders.
+            const rawIngredients: unknown[] = Array.isArray(meal.ingredients) ? meal.ingredients
+              : Array.isArray(meal.recipe?.ingredients) ? meal.recipe.ingredients
+              : []
             const ingredients: string[] = rawIngredients.map(safeIngredient).filter(Boolean)
 
-            // Recipe text — safely handle object or string
+            // Recipe method text. safeText renders the recipe object's title/
+            // steps/tips/timing (ingredients are shown separately above).
             const recipeText = safeText(meal.recipe || meal.instructions || meal.description || '')
 
             const macros = {
