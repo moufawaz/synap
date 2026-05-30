@@ -137,11 +137,12 @@ function summarizeTodayWorkout(plan: any) {
 // (e.g. a 12-week mesocycle) — use weeks×7 when present. Diet plans have no
 // explicit length, so they keep a 4-week review cadence (macro adjustments run
 // on their own schedule) unless they declare weeks.
-function planCycleDays(plan: any, planType: PlanType): number {
-  const weeks = Number(plan?.weeks)
-  if (Number.isFinite(weeks) && weeks > 0 && weeks <= 52) return weeks * 7
-  // Fallback cycle lengths for plans that don't declare weeks: diet = 2 weeks,
-  // workout = 6 weeks. (Stored end_date on the row takes precedence over this.)
+// Fixed renewal cycle policy: workout = 6 weeks (42 days), diet = 2 weeks (14
+// days). We intentionally do NOT derive this from plan_json.weeks (a program may
+// describe 12 weeks of progression internally, but the renewal cadence is fixed)
+// so older 12-week plans don't show an 84-day cycle. A stored end_date on the row
+// still takes precedence (new plans set one explicitly).
+function planCycleDays(_plan: any, planType: PlanType): number {
   return planType === 'diet' ? 14 : 42
 }
 
