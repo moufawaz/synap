@@ -72,11 +72,15 @@ function dayNameOf(day: any): CanonicalDay | null {
 }
 
 function getPlanDays(plan: any): any[] {
-  if (Array.isArray(plan?.days)) return plan.days
-  if (Array.isArray(plan?.weeks)) {
+  // Match the web plan page exactly: prefer a weeks[] array (weeks[0].days),
+  // otherwise fall back to the top-level days[]. The web reads `weeks` first;
+  // reading `days` first here was the source of the "5 days vs 4" mismatch when
+  // a plan carried both a legacy days[] and the current weeks[].
+  if (Array.isArray(plan?.weeks) && plan.weeks.length > 0) {
     const first = plan.weeks.find((w: any) => Array.isArray(w?.days) && w.days.length > 0)
-    return first?.days ?? []
+    if (first?.days) return first.days
   }
+  if (Array.isArray(plan?.days)) return plan.days
   return []
 }
 
@@ -84,31 +88,11 @@ function getDayWorkout(plan: any, day: CanonicalDay): any | null {
   return getPlanDays(plan).find((d: any) => dayNameOf(d) === day) ?? null
 }
 
-// A plan day is a REST day when it has no exercises, when its only "exercises"
-// are placeholders named "Rest Day", or when the day itself is labelled rest /
-// recovery / off. Generated plans also declare rest days separately in
-// plan_json.rest_days; see restDayNameSet below, which the day-dot filter uses.
+// Same rule as the web plan page (DayList): a day with no exercises is a rest
+// day; a day with exercises is a training day. No label/placeholder heuristics —
+// keep it identical to the web so the count and rest-day card always match.
 function isRestDayData(dayData: any): boolean {
-  const label = `${dayData?.muscle_focus ?? ''} ${dayData?.day_name ?? ''} ${dayData?.session_goal ?? ''}`.toLowerCase()
-  if (/\b(rest|recovery|off day|day off|rest day)\b/.test(label)) return true
-  const ex = Array.isArray(dayData?.exercises) ? dayData.exercises : []
-  if (ex.length === 0) return true
-  return ex.every((e: any) =>
-    /\b(rest|recovery|off)\b/.test(String(e?.name ?? e?.exercise ?? e?.title ?? '').toLowerCase()),
-  )
-}
-
-// Canonical weekday names the plan explicitly marks as rest (plan_json.rest_days
-// is a list like ["Friday"]). Used to keep declared rest days from lighting up a
-// workout dot even when the AI also put them in days[] with active-recovery work.
-function restDayNameSet(plan: any, toCanonical: (v: unknown) => any): Set<string> {
-  const raw = Array.isArray(plan?.rest_days) ? plan.rest_days : []
-  const out = new Set<string>()
-  for (const n of raw) {
-    const c = toCanonical(n)
-    if (c) out.add(c)
-  }
-  return out
+  return !Array.isArray(dayData?.exercises) || dayData.exercises.length === 0
 }
 
 function buildTodayWorkout(dayData: any): TodayWorkout | null {
@@ -224,15 +208,13 @@ export default function TrainScreen() {
 
   const workoutDays = useMemo(() => {
     if (!planJson) return []
-    const restNames = restDayNameSet(planJson, canonicalDay)
     return getPlanDays(planJson)
-      // Only light up a workout dot for actual training days. Exclude rest days
-      // detected by content/label, AND any day the plan explicitly lists in
-      // rest_days — so a 4-training-day plan shows 4 dots, not 5, even when the
-      // rest day is also present in days[] with active-recovery work.
+      // A weekday lights up a workout dot only if its plan day has exercises —
+      // the web's rest rule. Combined with reading the same day source as the
+      // web (getPlanDays), the count now matches the web exactly.
       .filter((d: any) => !isRestDayData(d))
       .map((d: any) => dayNameOf(d))
-      .filter((d): d is CanonicalDay => d !== null && !restNames.has(d))
+      .filter((d): d is CanonicalDay => d !== null)
   }, [planJson])
 
   const completedSet = useMemo(() => new Set(completed), [completed])

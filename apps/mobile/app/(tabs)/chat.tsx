@@ -58,23 +58,10 @@ function displayChatContent(content: string) {
   try {
     const match = cleaned.match(/\{[\s\S]*\}/)
     const parsed = JSON.parse(match ? match[0] : cleaned)
-    const text =
-      (typeof parsed?.message === 'string' && parsed.message.trim()) ||
-      (typeof parsed?.reply === 'string' && parsed.reply.trim()) ||
-      (typeof parsed?.content === 'string' && parsed.content.trim()) ||
-      (typeof parsed?.text === 'string' && parsed.text.trim()) ||
-      ''
-    if (text) return text
-    // Structured message whose text lives in a list (e.g. a suggestion payload).
-    // Render those lines instead of an empty bubble.
-    const list = parsed?.suggestions ?? parsed?.items ?? parsed?.options
-    if (Array.isArray(list)) {
-      const joined = list.filter((s: any) => typeof s === 'string' && s.trim()).join('\n')
-      if (joined.trim()) return joined.trim()
-    }
-    // Parsed as JSON but nothing displayable — return empty so the caller can
-    // drop the bubble rather than show an empty box or raw JSON.
-    return ''
+    // Same field extraction as the web chat page.
+    if (typeof parsed?.message === 'string') return parsed.message.trim()
+    if (typeof parsed?.reply === 'string') return parsed.reply.trim()
+    if (typeof parsed?.content === 'string') return parsed.content.trim()
   } catch {}
   return cleaned
 }
