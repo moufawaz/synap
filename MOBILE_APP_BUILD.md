@@ -1795,5 +1795,33 @@ then merge to `main`.
 | Build | Commit | Branch | Result |
 |---|---|---|---|
 | 1064 | `6449b09` | main | ✅ help-center link |
-| 1065 | `b5e97c1` | main | ⏳ YouTube + training-day fixes (building) |
-| social sign-in | `6fbf9d2` | feat/social-signin | ⏳ pending external setup, then CI |
+| 1065 | `b5e97c1` | main | ✅ YouTube + training-day fixes |
+| social sign-in | `778d4d1` | feat/social-signin | ✅ first build with applesignin entitlement (signing passed) |
+| social sign-in v2 | `2816288` | feat/social-signin | ⏳ rest-day fix + new-user onboarding routing |
+
+### Follow-up fixes after first device test (2026-05-30)
+
+**Train rest day (placeholder encoding).** The day-count fix only checked
+`exercises.length > 0`, but some plans encode a rest day as a single placeholder
+exercise named "Rest Day". That still counted it (5 vs 4) and rendered it as a
+fake exercise. Added `isRestDayData()` in `train.tsx` mirroring the server's
+`is_rest_day` logic (empty OR all exercises named "rest day"); used for both the
+day-dot filter and `buildTodayWorkout` (which now clears exercises + sets
+`is_rest_day` so the Rest Day card shows like web). Commit `2816288`.
+
+**Social sign-in "signed in but everything errors".** New Google/Apple accounts
+have no profile, so routing straight to the tabs dropped them on a dataless
+dashboard where every API call failed. `SocialAuthButtons` now calls
+`getProfile()` after sign-in and routes profile-less users to `/onboarding`
+(like email signup); existing users go to the app. Commit `2816288`.
+
+**Google "opens the website" / no session — Supabase config (not code).** With
+`synap://auth/callback` absent from Supabase's redirect allowlist, Supabase falls
+back to the Site URL after OAuth, so the app never receives the session. Required
+Supabase settings (Authentication):
+- URL Configuration → Redirect URLs → add `synap://auth/callback` (+ `synap://**`).
+- Providers → Apple → enable + add `app.synap.fit` to Client IDs.
+- Providers → Google → confirm enabled.
+
+The Google consent screen showing `xxxx.supabase.co` is cosmetic (brand via the
+Google OAuth consent screen or a Supabase custom domain).
