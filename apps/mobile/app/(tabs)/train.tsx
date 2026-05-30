@@ -84,9 +84,22 @@ function getDayWorkout(plan: any, day: CanonicalDay): any | null {
   return getPlanDays(plan).find((d: any) => dayNameOf(d) === day) ?? null
 }
 
+// A plan day is a REST day when it has no exercises OR when its only
+// "exercises" are placeholders named "Rest Day". This mirrors the server's
+// is_rest_day detection in api/plan-history/route.ts so mobile counts training
+// days and renders the rest-day card the same way the web app does.
+function isRestDayData(dayData: any): boolean {
+  const ex = Array.isArray(dayData?.exercises) ? dayData.exercises : []
+  if (ex.length === 0) return true
+  return ex.every((e: any) =>
+    String(e?.name ?? e?.exercise ?? e?.title ?? '').toLowerCase().includes('rest day'),
+  )
+}
+
 function buildTodayWorkout(dayData: any): TodayWorkout | null {
   if (!dayData) return null
-  const exercises = (dayData.exercises ?? []).map((ex: any, i: number) => ({
+  const restDay = isRestDayData(dayData)
+  const exercises = restDay ? [] : (dayData.exercises ?? []).map((ex: any, i: number) => ({
     index: i,
     name: ex.name || ex.exercise || String(ex),
     sets: ex.sets ?? null,
@@ -102,7 +115,7 @@ function buildTodayWorkout(dayData: any): TodayWorkout | null {
     day_name: dayNameOf(dayData) ?? dayData.day_name ?? 'Workout',
     muscle_focus: dayData.muscle_focus ?? null,
     duration_min: dayData.duration_min ?? null,
-    is_rest_day: exercises.length === 0,
+    is_rest_day: restDay,
     exercises,
   }
 }
@@ -197,12 +210,11 @@ export default function TrainScreen() {
   const workoutDays = useMemo(() => {
     if (!planJson) return []
     return getPlanDays(planJson)
-      // Only count actual training days (days that have exercises). A rest day
-      // that still carries a weekday name must not light up a workout dot — this
-      // matches the server's daysPerWeek logic (plan-history route filters days
-      // with exercises > 0) and fixes the dashboard showing 5 days when the plan
-      // has 4 training days + 1 named rest day.
-      .filter((d: any) => Array.isArray(d?.exercises) && d.exercises.length > 0)
+      // Only light up a workout dot for actual training days. A rest day — even
+      // one with a weekday name or a placeholder "Rest Day" exercise — must not
+      // count. Matches the server's is_rest_day logic so 4 training days show 4
+      // dots, not 5.
+      .filter((d: any) => !isRestDayData(d))
       .map((d: any) => dayNameOf(d))
       .filter((d): d is CanonicalDay => d !== null)
   }, [planJson])
