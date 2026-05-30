@@ -523,9 +523,9 @@ export default function ChatScreen() {
               <Pressable
                 key={prompt}
                 onPress={() => handleSend(prompt)}
-                style={[styles.promptChip, { backgroundColor: color.elevated, borderColor: color.border }]}
+                style={[styles.promptChip, { backgroundColor: `${color.spark}14`, borderColor: `${color.spark}33` }]}
               >
-                <Text style={[styles.promptText, { color: color.muted }]}>{prompt}</Text>
+                <Text numberOfLines={1} style={[styles.promptText, { color: color.text }]}>{prompt}</Text>
               </Pressable>
             ))}
           </ScrollView>
