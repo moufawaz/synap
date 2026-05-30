@@ -157,10 +157,18 @@ export async function POST(req: Request) {
 
     // Insert new plans first (inactive), then atomically activate them by
     // deactivating old plans only after both inserts succeed.
+    // Store real cycle dates so the renewal warning + countdown work from the
+    // first plan: workout cycle = 6 weeks, diet cycle = 2 weeks.
+    const cycleStart   = new Date().toISOString().split('T')[0]
+    const workoutEnd   = new Date(Date.now() + 6 * 7 * 86400000).toISOString().split('T')[0]
+    const dietEnd      = new Date(Date.now() + 2 * 7 * 86400000).toISOString().split('T')[0]
+
     const { data: workoutPlan, error: wpError } = await supabase.from('workout_plans').insert({
       user_id: user.id,
       plan_json: plan.workout_plan,
       active: false,
+      start_date: cycleStart,
+      end_date: workoutEnd,
     }).select().maybeSingle()
 
     if (wpError) {
@@ -182,6 +190,8 @@ export async function POST(req: Request) {
       user_id: user.id,
       plan_json: plan.diet_plan,
       active: false,
+      start_date: cycleStart,
+      end_date: dietEnd,
     }).select().maybeSingle()
 
     if (dpError) {
@@ -392,7 +402,11 @@ function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[]
   const supplements = Array.isArray(p.supplements)
     ? p.supplements : (p.supplements || '').split(',').filter(Boolean)
 
-  return `You are Ion, a world-class AI personal trainer and clinical nutritionist. Build a complete, hyper-personalised 12-week fitness and nutrition plan for this specific client.
+  // The workout cycle is 6 weeks — clamp deload weeks (which default to a 12-week
+  // schedule) into the 6-week window and de-dupe.
+  const deload6 = w.deloadWeeks.map((d: number) => Math.min(d, 6)).filter((d: number, i: number, a: number[]) => a.indexOf(d) === i)
+
+  return `You are Ion, a world-class AI personal trainer and clinical nutritionist. Build a complete, hyper-personalised 6-week fitness and nutrition plan for this specific client.
 
 ${aiLanguageInstruction(language, 'all user-facing JSON string values including plan names, meal names, recipes, exercise tips, coaching notes, summaries, and ion_message')}
 
@@ -520,7 +534,7 @@ CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
   Rest — accessories:     ${w.restSec.accessories}s
   Target RPE:             ${w.targetRPE}/10 (adjusted for stress: ${p.stress_level || 'moderate'}, sleep: ${p.sleep_quality || 'average'})
   Exercises per session:  ~${w.exercisesPerSession} (for ${p.session_duration || 60} min)
-  Deload weeks:           Weeks ${w.deloadWeeks.join(', ')}
+  Deload weeks:           Weeks ${deload6.join(", ")}
 
 1. SPLIT & STRUCTURE:
    - Use the ${w.splitType} split — it is the evidence-based optimal choice for ${p.training_days} days/week at this experience level
@@ -545,7 +559,7 @@ CALCULATED WORKOUT PARAMETERS (derived — adjust only if strongly justified):
 
 4. PROGRESSIVE OVERLOAD — EXPLICIT WEEK-BY-WEEK MODEL:
    ${w.progressionModel}
-   - Include deload protocol for weeks ${w.deloadWeeks.join(', ')}: reduce to 50% of normal volume, keep intensity same, prioritise recovery
+   - Include deload protocol for weeks ${deload6.join(", ")}: reduce to 50% of normal volume, keep intensity same, prioritise recovery
    - The progressive_overload field in JSON must spell out EXACTLY how to progress (not just "add weight")
 
 5. INTENSITY TECHNIQUES:
@@ -581,16 +595,16 @@ IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text.
 JSON key names must stay exactly as shown. For workout day_name, ALWAYS use English weekdays (Sunday–Saturday) even for Arabic users — only translate user-facing display strings.
 
 {
-  "summary": "3-sentence personalised overview: what the approach is, why it fits this person, what result to expect in 12 weeks",
+  "summary": "3-sentence personalised overview: what the approach is, why it fits this person, what result to expect in 6 weeks",
   "workout_plan": {
     "name": "Plan name reflecting goal and split",
     "schedule": "${p.training_days} days/week",
     "split_type": "${w.splitType}",
     "experience_tier": "${w.expTier}",
-    "weeks": 12,
+    "weeks": 6,
     "notes": "2–3 sentences on why this split and approach fits this specific person's goal, experience, and schedule",
     "progressive_overload": "${w.progressionModel}",
-    "deload_weeks": [${w.deloadWeeks.join(', ')}],
+    "deload_weeks": [${deload6.join(", ")}],
     "deload_protocol": "On deload weeks: reduce sets by 50%, keep same weight, focus on form and recovery",
     "rest_days": ["list of rest day names"],
     "days": [

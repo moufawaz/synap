@@ -140,7 +140,9 @@ function summarizeTodayWorkout(plan: any) {
 function planCycleDays(plan: any, planType: PlanType): number {
   const weeks = Number(plan?.weeks)
   if (Number.isFinite(weeks) && weeks > 0 && weeks <= 52) return weeks * 7
-  return planType === 'diet' ? 28 : 42
+  // Fallback cycle lengths for plans that don't declare weeks: diet = 2 weeks,
+  // workout = 6 weeks. (Stored end_date on the row takes precedence over this.)
+  return planType === 'diet' ? 14 : 42
 }
 
 function fallbackEndDate(createdAt: string | null, planType: PlanType, plan?: any) {

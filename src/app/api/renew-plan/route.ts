@@ -212,7 +212,8 @@ async function applyRenewalPreview({
   }
 
   const table = planType === 'diet' ? 'diet_plans' : 'workout_plans'
-  const durationWeeks = planType === 'diet' ? 4 : 6
+  // Cycle lengths: workout = 6 weeks, diet = 2 weeks.
+  const durationWeeks = planType === 'diet' ? 2 : 6
   const startDate = new Date().toISOString().split('T')[0]
   const endDate = new Date(Date.now() + durationWeeks * 7 * 86400000).toISOString().split('T')[0]
   const planJson = {
@@ -501,7 +502,7 @@ function buildDietRenewalPrompt({ profile, language, m, w, progressBlock, oldPla
     ? `Previous plan: ${oldPlan.daily_calories ?? '?'} kcal | ${oldPlan.protein_g ?? '?'}g protein | ${oldPlan.carbs_g ?? '?'}g carbs | ${oldPlan.fat_g ?? '?'}g fat`
     : 'No previous diet plan on record'
 
-  return `You are Ion, a world-class AI nutritionist. Generate a RENEWED 4-week diet plan for this client based on their real progress.
+  return `You are Ion, a world-class AI nutritionist. Generate a RENEWED 2-week diet plan for this client based on their real progress.
 
 ${aiLanguageInstruction(language, 'all user-facing JSON string values including plan name, meal names, recipes, tips, and coaching notes')}
 
