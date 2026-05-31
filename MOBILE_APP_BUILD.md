@@ -1825,3 +1825,105 @@ Supabase settings (Authentication):
 
 The Google consent screen showing `xxxx.supabase.co` is cosmetic (brand via the
 Google OAuth consent screen or a Supabase custom domain).
+
+## Device-Test QA, Plan Timing, InBody, Onboarding Parity (2026-05-30 → 05-31)
+
+A long device-testing pass. A **build marker** was added to the More tab footer
+(`SYNAP v<ver> · build <n> · fixpack-<N>`, `BUILD_TAG` in `more.tsx`) so we can
+confirm exactly which binary is installed — this resolved several "still broken"
+reports that were actually stale TestFlight builds.
+
+### Social sign-in — verified
+Sign in with Apple confirmed working on device after the user enabled the
+Supabase Apple provider (`app.synap.fit` client id) + `synap://auth/callback`
+redirect. The widget App ID profile + Sign-in-with-Apple entitlement archive
+signs cleanly.
+
+### Chat fixes
+- **Empty suggestion bubbles**: `displayChatContent` matched the web exactly and
+  `visibleMessages` now drops assistant bubbles with no displayable text.
+- **Quick-prompt chips invisible then huge**: the chips were visible while the
+  thread was empty but vanished once messages loaded — the `inverted` FlatList
+  had no `flex:1`, so it grew unbounded and rendered over its siblings. Added
+  `style={{flex:1}}` to bound it. Then the chips ballooned vertically (a
+  horizontal ScrollView in a flex column grows to fill leftover height), fixed
+  with `flexGrow:0`/`flexShrink:0` + `alignItems:center`, and bright `color.text`.
+
+### Train — match the web exactly
+Root cause of the persistent "5 days vs 4": the day SOURCE. The web plan page
+reads `weeks[]` first then `days[]`; mobile read `days[]` first, so a plan
+carrying both a legacy `days` and current `weeks` diverged. `getPlanDays` now
+mirrors the web order, and rest detection uses the web's exact rule (a day with
+no exercises is rest). Verified against the real DB plan: dots = Mon/Tue/Thu/Fri.
+
+### Nutrition — recipe ingredients
+Generated plans nest ingredients under `meal.recipe.ingredients`, but the page
+read `meal.ingredients` (always undefined) so ingredients never rendered. Read
+the correct path; guard the planned-meal "done" match against empty names.
+
+### Dashboard
+- **WEIGHT stat** read a non-existent `profile.measurements`. Now uses
+  account-specific data first (this account's measurement → onboarding weight),
+  and **Apple Health weight LAST** — Health is device-level (shared across every
+  account on the phone), which made a different account show the device owner's
+  weight.
+- **No-plan CTA**: a prominent "Let's build your plan →" card (→ onboarding)
+  shows whenever the account has no active workout plan, so users aren't dropped
+  on an empty dashboard.
+- Planned-meal completion count guarded against empty-name matches.
+
+### Social routing
+`SocialAuthButtons` now routes by **active plan** (via `getPlanHistory`), not
+just profile existence — an account that signed up but never generated a plan
+goes to onboarding.
+
+### Plan cycle timing + renewal (server, on `main`)
+- **Fixed cycles**: workout = **6 weeks (42 days)**, diet = **2 weeks (14 days)**.
+  `generate-plan` now produces a 6-week program (was 12), clamps deload weeks
+  into the window, and **stores `start_date`/`end_date` on the initial plans** —
+  previously initial plans had no `end_date`, so the "renews in 3 days"
+  email/push only fired from the 2nd cycle. `renew-plan` diet cycle 4w→2w.
+- `plan-history` + `chat` GET use a **fixed** cycle (not derived from
+  `plan_json.weeks`) so older 12-week plans don't show an 84-day ("68 days left")
+  window; a stored `end_date` always takes precedence. Dashboard + chat banner
+  now agree per user (verified across all 10 active plans — none > 42 days).
+- **Renewal basis** (`renew-plan`): triggered ~3 days before cycle end (email +
+  push via the daily adaptation check); the new plan is built from the user's
+  last 5 measurements (progress), recalculated macros/volume, profile, and the
+  previous plan (workout: ~10% volume progression; diet: calories adjusted to
+  trend). Generates a **preview** the user approves; rollback supported.
+
+### InBody-measured BMR drives calories (server, on `main`)
+`calculateMacros` now uses the InBody-measured BMR (`p.bmr_kcal`, lean-mass based,
+more accurate for atypical body composition) for TDEE when a scan provides one —
+guarded to within ±25% of the Mifflin formula so a bad/stale scan can't distort
+the target; otherwise falls back to Mifflin. Applies to generation + renewal,
+web + app. (Previously InBody only set body-fat → macros and was AI context.)
+
+### Onboarding parity with the web
+Mobile onboarding was a ~13-field form; the web asks ~30 (`onboardingFlow.ts`).
+Rebuilt `app/onboarding.tsx` as a **6-step wizard** (You, Goal, Lifestyle,
+Training, Nutrition, Health) collecting every field `save-profile` already
+accepts: `goal_speed/target/date`, work schedule + wake/sleep times, stress,
+sleep quality, current routine, equipment, training time/style, exercises to
+avoid, optional **strength levels**, dietary prefs + allergies, cooking ability,
+food budget, medical conditions, supplements, and an optional **InBody scan**
+(reuses `analyzeInBodyPhoto` so body composition feeds the plan). No server
+change — `save-profile` + `generate-plan` already read these fields.
+
+### Branches / builds
+- `feat/social-signin` merged to `main` (build 1077) — social sign-in + the
+  YouTube/train/chat/nutrition/dashboard QA fixes.
+- Server changes (plan cycle, InBody BMR, dashboard weight API, chat end_date)
+  committed directly to `main` (web + app share the API).
+- `feat/onboarding-parity` (build ≥1080 / `fixpack-15`) — onboarding parity +
+  dashboard no-plan CTA + account-specific weight + plan-based routing; pending
+  on-device verification, then merge to `main`.
+
+### App Store submission status
+Code-ready (no external purchase steering, account deletion, Sign in with Apple,
+permission strings, encryption flag). Remaining before submit: confirm the
+production build green, verify social sign-in on device (done for Apple), and
+complete App Store Connect metadata (pre-subscribed demo account, App Privacy +
+Privacy Policy URL, review notes, support URL = `synapfit.app/contact`,
+screenshots).
