@@ -72,16 +72,18 @@ export default function DashboardScreen() {
   }).length
   const trainingDays = plan.data?.timing?.workout?.label ?? ''
 
+  const hasPlan = !plan.loading && !!plan.data?.activeWorkoutPlan
   const profileMeasurements: Array<{ weight_kg?: number }> = (profile.data as any)?.measurements ?? []
-  // The profile API (/api/save-profile) doesn't return a measurements array, so
-  // fall back to the connected Health weight, then the onboarding profile weight
-  // — otherwise the WEIGHT stat always showed "-" even with data available.
+  // Weight priority must be ACCOUNT-specific first: this account's measurement,
+  // then this account's onboarding weight. Apple Health weight is device-level
+  // (shared across every account signed in on this phone), so it comes LAST —
+  // otherwise a fresh account shows the device owner's Health weight.
   const profileWeight: number | undefined =
     profile.data?.profile?.weight_kg != null && Number.isFinite(Number(profile.data.profile.weight_kg))
       ? Number(profile.data.profile.weight_kg)
       : undefined
   const latestWeight: number | undefined =
-    profileMeasurements[0]?.weight_kg ?? health.data?.latestWeightKg ?? profileWeight
+    profileMeasurements[0]?.weight_kg ?? profileWeight ?? health.data?.latestWeightKg
   const prevWeight:   number | undefined = profileMeasurements[1]?.weight_kg
   const weightDelta = latestWeight && prevWeight ? (latestWeight - prevWeight) : null
 
@@ -134,6 +136,31 @@ export default function DashboardScreen() {
         <StatChip icon="activity"    label={isRtl ? 'هذا الأسبوع' : 'TRAINING'} value={trainingDays || '-'}               color={color.sparkLight} bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
         <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}    value={latestWeight ? `${Math.round(latestWeight * 10) / 10} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
       </View>
+
+      {/* No-plan CTA — guides users who haven't generated a plan yet */}
+      {!hasPlan && !plan.loading ? (
+        <Pressable onPress={() => router.push('/onboarding')} style={styles.bigCardWrap}>
+          <LinearGradient
+            colors={[color.spark, '#7B2FFF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.noPlanCard}
+          >
+            <View style={[styles.noPlanRow, { flexDirection: rowDir }]}>
+              <Feather name="zap" size={20} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.noPlanTitle, { textAlign: align }]}>
+                  {isRtl ? 'لنبنِ خطتك' : "Let's build your plan"}
+                </Text>
+                <Text style={[styles.noPlanSub, { textAlign: align }]}>
+                  {isRtl ? 'أجب على أسئلة آيون لتحصل على خطة تمرين وتغذية مخصصة.' : 'Answer a few questions and Ion builds your custom training + nutrition plan.'}
+                </Text>
+              </View>
+              <Feather name={isRtl ? 'chevron-left' : 'chevron-right'} size={18} color="#fff" />
+            </View>
+          </LinearGradient>
+        </Pressable>
+      ) : null}
 
       {/* Ion coaching engine — always visible */}
       <Pressable
@@ -357,6 +384,10 @@ const styles = StyleSheet.create({
   ionLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 4 },
   ionMsg: { fontSize: 13, lineHeight: 18, fontWeight: '500' },
   bigCardWrap: { marginBottom: 12 },
+  noPlanCard: { borderRadius: 18, padding: 16 },
+  noPlanRow: { alignItems: 'center', gap: 12 },
+  noPlanTitle: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  noPlanSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600', lineHeight: 17, marginTop: 2 },
   cardHeader: { alignItems: 'center', gap: 12, marginBottom: 4 },
   iconBadge: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   cardHeaderText: { flex: 1 },
