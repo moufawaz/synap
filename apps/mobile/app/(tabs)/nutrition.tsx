@@ -223,6 +223,8 @@ export default function NutritionScreen() {
   // ── Data ────────────────────────────────────────────────
 
   const activeDiet = plan.data?.activeDietPlan?.plan_json
+  // Nutrition cycle is 2 weeks; the server returns its countdown in timing.diet.
+  const dietTiming = plan.data?.timing?.diet ?? null
   const plannedMeals: any[] = Array.isArray(activeDiet?.meals) ? activeDiet.meals : []
   const mealTimingNote: string = safeText(activeDiet?.meal_timing_note)
   const preWorkout: string = safeText(activeDiet?.pre_workout)
@@ -412,6 +414,24 @@ export default function NutritionScreen() {
         title={text.nutrition}
         subtitle={`${Math.round(totalCalories)}${targets.calories ? `/${targets.calories}` : ''} kcal · P ${Math.round(totalProtein)}g`}
       />
+
+      {/* ── Nutrition plan renewal countdown (2-week cycle) ── */}
+      {dietTiming ? (
+        <View style={[styles.renewBanner, {
+          backgroundColor: dietTiming.daysLeft > 4 ? `${color.pulse}14` : dietTiming.daysLeft > 0 ? `${color.flame}14` : `${color.danger}14`,
+          borderColor: dietTiming.daysLeft > 4 ? `${color.pulse}33` : dietTiming.daysLeft > 0 ? `${color.flame}33` : `${color.danger}33`,
+          flexDirection: isRtl ? 'row-reverse' : 'row',
+        }]}>
+          <Feather name="refresh-cw" size={13} color={dietTiming.daysLeft > 4 ? color.pulse : dietTiming.daysLeft > 0 ? color.flame : color.danger} />
+          <Text style={[styles.renewText, { color: dietTiming.daysLeft > 4 ? color.pulse : dietTiming.daysLeft > 0 ? color.flame : color.danger, textAlign: align }]}>
+            {dietTiming.daysLeft > 0
+              ? (isRtl
+                  ? `${dietTiming.daysLeft} يوم متبقٍ في خطة التغذية`
+                  : `${dietTiming.daysLeft} day${dietTiming.daysLeft !== 1 ? 's' : ''} left in your nutrition plan`)
+              : (isRtl ? 'خطة التغذية جاهزة للتجديد — اطلب من آيون' : 'Nutrition plan ready to renew — ask Ion')}
+          </Text>
+        </View>
+      ) : null}
 
       {/* ── Macro summary ── */}
       <Card>
@@ -788,6 +808,17 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1,
   },
+  // Renewal countdown banner
+  renewBanner: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  renewText: { flex: 1, fontSize: 12, fontWeight: '800' },
   // Note banners
   noteBanner: {
     flexDirection: 'row',
