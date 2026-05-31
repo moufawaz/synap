@@ -83,7 +83,7 @@ export default function DashboardScreen() {
       ? Number(profile.data.profile.weight_kg)
       : undefined
   const latestWeight: number | undefined =
-    profileMeasurements[0]?.weight_kg ?? profileWeight ?? health.data?.latestWeightKg
+    profileMeasurements[0]?.weight_kg ?? profileWeight ?? (health.data?.latestWeightKg ?? undefined)
   const prevWeight:   number | undefined = profileMeasurements[1]?.weight_kg
   const weightDelta = latestWeight && prevWeight ? (latestWeight - prevWeight) : null
 
