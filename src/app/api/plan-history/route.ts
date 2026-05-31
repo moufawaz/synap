@@ -96,7 +96,18 @@ function summarizeTodayWorkout(plan: any) {
     return name.includes(today.toLowerCase())
   })
 
-  // 2) Index-based: Monday-first week → Mon=0, Tue=1, Wed=2, …, Sun=6
+  // 1b) If the plan is scheduled by weekday and today is NOT one of its training
+  // days, today is a REST day — do not fall back to a random day's workout
+  // (that made a rest day like Sunday show another day's session, looking like an
+  // extra/duplicate training day).
+  const weekdayScheduled = days.some((day: any) =>
+    weekDays.some(wd => String(day?.day_name ?? day?.day ?? '').toLowerCase().includes(wd.toLowerCase())),
+  )
+  if (!selected && weekdayScheduled) {
+    return { day_name: today, muscle_focus: null, duration_min: null, is_rest_day: true, exercises: [] }
+  }
+
+  // 2) Index-based fallback (only for plans NOT named by weekday — e.g. "Day 1")
   if (!selected) {
     const mondayIndex = (dayOfWeek + 6) % 7
     selected = days[mondayIndex % days.length]
