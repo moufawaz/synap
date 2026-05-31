@@ -204,9 +204,16 @@ export default function TrainScreen() {
   // ── Plan / workout derivation ─────────────────────────────
   const planJson = plan.data?.activeWorkoutPlan?.plan_json ?? null
   const workout: TodayWorkout | null = useMemo(() => {
+    // A weekday that isn't one of the plan's training days is a REST day — show
+    // the rest card, not "No workout plan" (which is only for having no plan).
+    const restDay = (d: CanonicalDay): TodayWorkout => ({
+      day_name: d, muscle_focus: null, duration_min: null, is_rest_day: true, exercises: [],
+    })
     if (!planJson) return plan.data?.todayWorkout ?? null
-    if (selectedDay === todayCanonical) return plan.data?.todayWorkout ?? buildTodayWorkout(getDayWorkout(planJson, selectedDay))
-    return buildTodayWorkout(getDayWorkout(planJson, selectedDay))
+    if (selectedDay === todayCanonical) {
+      return plan.data?.todayWorkout ?? buildTodayWorkout(getDayWorkout(planJson, selectedDay)) ?? restDay(selectedDay)
+    }
+    return buildTodayWorkout(getDayWorkout(planJson, selectedDay)) ?? restDay(selectedDay)
   }, [plan.data, planJson, selectedDay, todayCanonical])
 
   const workoutDays = useMemo(() => {
