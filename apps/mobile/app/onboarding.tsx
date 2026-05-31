@@ -32,6 +32,76 @@ const STRENGTH_LIFTS: Array<[string, string]> = [
 
 const STEPS = ['You', 'Goal', 'Lifestyle', 'Training', 'Nutrition', 'Health'] as const
 
+// ── Module-level inputs ───────────────────────────────────────────────────────
+// IMPORTANT: these MUST live outside the screen component. If they're defined
+// inside, every keystroke re-renders the screen, React remounts the TextInput,
+// and the keyboard dismisses after one character.
+
+function Field({ label, value, onChangeText, keyboardType, placeholder, color, isRtl }: {
+  label: string; value: string; onChangeText: (v: string) => void
+  keyboardType?: 'default' | 'number-pad' | 'decimal-pad'; placeholder?: string; color: any; isRtl: boolean
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.label, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        placeholder={placeholder}
+        placeholderTextColor={color.dim}
+        style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: isRtl ? 'right' : 'left' }]}
+      />
+    </View>
+  )
+}
+
+function Segment({ label, value, options, onChange, wrap, color, isRtl }: {
+  label: string; value: string; options: Array<[string, string]>; onChange: (v: string) => void
+  wrap?: boolean; color: any; isRtl: boolean
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.label, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>{label}</Text>
+      <View style={[styles.segmentRow, wrap && { flexWrap: 'wrap' }]}>
+        {options.map(([val, lbl]) => {
+          const active = value === val
+          return (
+            <Pressable key={val} onPress={() => onChange(val)}
+              style={[styles.segment, { borderColor: active ? color.spark : color.border, backgroundColor: active ? color.sparkSoft : color.elevated }]}>
+              <Text style={[styles.segmentText, { color: active ? color.spark : color.text }]}>{lbl}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+function MultiSelect({ label, selected, onToggle, options, color, isRtl }: {
+  label: string; selected: string; onToggle: (v: string) => void; options: Array<[string, string]>; color: any; isRtl: boolean
+}) {
+  const list = String(selected || '').split(',').filter(Boolean)
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.label, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>{label}</Text>
+      <View style={[styles.segmentRow, { flexWrap: 'wrap' }]}>
+        {options.map(([val, lbl]) => {
+          const active = list.includes(val)
+          return (
+            <Pressable key={val} onPress={() => onToggle(val)}
+              style={[styles.segment, { borderColor: active ? color.spark : color.border, backgroundColor: active ? color.sparkSoft : color.elevated }]}>
+              <Text style={[styles.segmentText, { color: active ? color.spark : color.text }]}>{lbl}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
 export default function OnboardingScreen() {
   const { color } = useTheme()
   const { language, isRtl } = useLanguage()
@@ -46,14 +116,10 @@ export default function OnboardingScreen() {
     setProfile(current => ({ ...current, [key]: value }))
   }
 
-  // ── CSV multi-select helpers ──────────────────────────────
   function toggleCsv(field: keyof MobileProfileInput, value: string) {
     const list = String(profile[field] || '').split(',').filter(Boolean)
     const next = list.includes(value) ? list.filter(v => v !== value) : [...list, value]
     update(field, next.join(',') as MobileProfileInput[typeof field])
-  }
-  function csvHas(field: keyof MobileProfileInput, value: string) {
-    return String(profile[field] || '').split(',').filter(Boolean).includes(value)
   }
 
   function validateStep(): string | null {
@@ -105,18 +171,16 @@ export default function OnboardingScreen() {
   async function submit() {
     setLoading(true)
     try {
-      // Serialize the optional strength inputs into the strength_levels JSON the
-      // plan generator expects (e.g. {"squat":"100kg"}).
       const filledStrength = Object.fromEntries(
         Object.entries(strength).filter(([, v]) => String(v).trim()).map(([k, v]) => [k, `${String(v).trim()}kg`]),
       )
-      const next: MobileProfileInput = {
+      const payload: MobileProfileInput = {
         ...profile,
         language,
         strength_levels: Object.keys(filledStrength).length ? JSON.stringify(filledStrength) : '',
       }
-      await saveMobileProfile(next)
-      await generateMobilePlan(next)
+      await saveMobileProfile(payload)
+      await generateMobilePlan(payload)
       Alert.alert('SYNAP', 'Your personalised plan is ready.')
       router.replace('/(tabs)')
     } catch (error) {
@@ -127,6 +191,7 @@ export default function OnboardingScreen() {
   }
 
   const showStrength = profile.gym_access === 'gym' || profile.currently_training === 'already'
+  const align = isRtl ? 'right' : 'left'
 
   return (
     <Screen>
@@ -136,7 +201,6 @@ export default function OnboardingScreen() {
         subtitle="The more Ion knows, the more personal your plan."
       />
 
-      {/* Progress dots */}
       <View style={styles.progressRow}>
         {STEPS.map((_, i) => (
           <View key={i} style={[styles.progressDot, { backgroundColor: i <= step ? color.spark : color.elevated }]} />
@@ -144,87 +208,83 @@ export default function OnboardingScreen() {
       </View>
 
       <Card>
-        {/* ── STEP 0: You ── */}
         {step === 0 ? (
           <>
-            <Field label="Name" value={profile.name} onChangeText={v => update('name', v)} />
+            <Field label="Name" value={profile.name} onChangeText={v => update('name', v)} color={color} isRtl={isRtl} />
             <View style={styles.row}>
-              <Field label="Age" value={profile.age} keyboardType="number-pad" onChangeText={v => update('age', v)} />
-              <Field label="Weight (kg)" value={profile.weight_kg} keyboardType="decimal-pad" onChangeText={v => update('weight_kg', v)} />
+              <Field label="Age" value={profile.age} keyboardType="number-pad" onChangeText={v => update('age', v)} color={color} isRtl={isRtl} />
+              <Field label="Weight (kg)" value={profile.weight_kg} keyboardType="decimal-pad" onChangeText={v => update('weight_kg', v)} color={color} isRtl={isRtl} />
             </View>
-            <Field label="Height (cm)" value={profile.height_cm} keyboardType="decimal-pad" onChangeText={v => update('height_cm', v)} />
-            <Segment label="Gender" value={profile.gender} options={[['male', 'Male'], ['female', 'Female']]} onChange={v => update('gender', v as MobileProfileInput['gender'])} />
-            <Segment label="Ion avatar" value={profile.ion_gender} options={[['male', 'Male'], ['female', 'Female']]} onChange={v => update('ion_gender', v as MobileProfileInput['ion_gender'])} />
+            <Field label="Height (cm)" value={profile.height_cm} keyboardType="decimal-pad" onChangeText={v => update('height_cm', v)} color={color} isRtl={isRtl} />
+            <Segment label="Gender" value={profile.gender} options={[['male', 'Male'], ['female', 'Female']]} onChange={v => update('gender', v as MobileProfileInput['gender'])} color={color} isRtl={isRtl} />
+            <Segment label="Ion avatar" value={profile.ion_gender} options={[['male', 'Male'], ['female', 'Female']]} onChange={v => update('ion_gender', v as MobileProfileInput['ion_gender'])} color={color} isRtl={isRtl} />
           </>
         ) : null}
 
-        {/* ── STEP 1: Goal ── */}
         {step === 1 ? (
           <>
-            <Segment label="Main goal" value={profile.goal} wrap
+            <Segment label="Main goal" value={profile.goal} wrap color={color} isRtl={isRtl}
               options={[['lose_fat', 'Lose fat'], ['build_muscle', 'Build muscle'], ['recomposition', 'Recomp'], ['improve_fitness', 'Fitness'], ['be_healthier', 'Be healthier']]}
               onChange={v => update('goal', v)} />
-            <Segment label="How aggressive?" value={profile.goal_speed}
+            <Segment label="How aggressive?" value={profile.goal_speed} color={color} isRtl={isRtl}
               options={[['slow', 'Slow & steady'], ['moderate', 'Moderate'], ['aggressive', 'Aggressive']]}
               onChange={v => update('goal_speed', v)} />
-            <Field label="Specific target (optional)" value={profile.goal_target} onChangeText={v => update('goal_target', v)} placeholder="e.g. reach 80kg, fit into a suit" />
-            <Field label="Timeframe (optional)" value={profile.goal_date} onChangeText={v => update('goal_date', v)} placeholder="e.g. 3 months, by summer" />
+            <Field label="Specific target (optional)" value={profile.goal_target} onChangeText={v => update('goal_target', v)} placeholder="e.g. reach 80kg, fit into a suit" color={color} isRtl={isRtl} />
+            <Field label="Timeframe (optional)" value={profile.goal_date} onChangeText={v => update('goal_date', v)} placeholder="e.g. 3 months, by summer" color={color} isRtl={isRtl} />
           </>
         ) : null}
 
-        {/* ── STEP 2: Lifestyle ── */}
         {step === 2 ? (
           <>
-            <Segment label="Work / study" value={profile.work_schedule} wrap
+            <Segment label="Work / study" value={profile.work_schedule} wrap color={color} isRtl={isRtl}
               options={[['work', 'Work'], ['study', 'Study'], ['both', 'Both'], ['neither', 'Neither']]}
               onChange={v => update('work_schedule', v)} />
             {profile.work_schedule !== 'neither' ? (
-              <Field label="Your hours (optional)" value={profile.work_hours} onChangeText={v => update('work_hours', v)} placeholder="e.g. 9–5, rotating shifts" />
+              <Field label="Your hours (optional)" value={profile.work_hours} onChangeText={v => update('work_hours', v)} placeholder="e.g. 9–5, rotating shifts" color={color} isRtl={isRtl} />
             ) : null}
-            <Segment label="Wake up" value={profile.wake_time} wrap
+            <Segment label="Wake up" value={profile.wake_time} wrap color={color} isRtl={isRtl}
               options={[['5:30', '5–6 AM'], ['6:30', '6–7 AM'], ['7:30', '7–8 AM'], ['8:30', '8–9 AM'], ['9:30', '9 AM+']]}
               onChange={v => update('wake_time', v)} />
-            <Segment label="Sleep" value={profile.sleep_time} wrap
+            <Segment label="Sleep" value={profile.sleep_time} wrap color={color} isRtl={isRtl}
               options={[['22:00', 'Before 10 PM'], ['22:30', '10–11 PM'], ['23:30', '11 PM–12'], ['01:00', 'After 12']]}
               onChange={v => update('sleep_time', v)} />
-            <Segment label="Stress level" value={profile.stress_level}
+            <Segment label="Stress level" value={profile.stress_level} color={color} isRtl={isRtl}
               options={[['low', 'Calm'], ['moderate', 'Moderate'], ['high', 'High']]}
               onChange={v => update('stress_level', v)} />
-            <Segment label="Sleep quality" value={profile.sleep_quality}
+            <Segment label="Sleep quality" value={profile.sleep_quality} color={color} isRtl={isRtl}
               options={[['solid', 'Sleep well'], ['average', 'Hit or miss'], ['struggling', 'Struggle']]}
               onChange={v => update('sleep_quality', v)} />
           </>
         ) : null}
 
-        {/* ── STEP 3: Training ── */}
         {step === 3 ? (
           <>
-            <Segment label="Currently training?" value={profile.currently_training}
+            <Segment label="Currently training?" value={profile.currently_training} color={color} isRtl={isRtl}
               options={[['already', 'Already training'], ['fresh', 'Starting fresh']]}
               onChange={v => update('currently_training', v)} />
             {profile.currently_training === 'already' ? (
-              <Field label="Your current routine" value={profile.current_training_desc} onChangeText={v => update('current_training_desc', v)} placeholder="gym, home, sports, cardio…" />
+              <Field label="Your current routine" value={profile.current_training_desc} onChangeText={v => update('current_training_desc', v)} placeholder="gym, home, sports, cardio…" color={color} isRtl={isRtl} />
             ) : null}
-            <Segment label="Where?" value={profile.gym_access} options={[['gym', 'Gym'], ['home', 'Home']]} onChange={v => update('gym_access', v as MobileProfileInput['gym_access'])} />
+            <Segment label="Where?" value={profile.gym_access} options={[['gym', 'Gym'], ['home', 'Home']]} onChange={v => update('gym_access', v as MobileProfileInput['gym_access'])} color={color} isRtl={isRtl} />
             {profile.gym_access === 'home' ? (
-              <MultiSelect label="Equipment" field="equipment"
+              <MultiSelect label="Equipment" selected={profile.equipment} onToggle={v => toggleCsv('equipment', v)} color={color} isRtl={isRtl}
                 options={[['bodyweight', 'Bodyweight'], ['bands', 'Bands'], ['dumbbells', 'Dumbbells'], ['pullup_bar', 'Pull-up bar'], ['mixed', 'Mixed']]} />
             ) : (
-              <Segment label="Training style" value={profile.training_style} wrap
+              <Segment label="Training style" value={profile.training_style} wrap color={color} isRtl={isRtl}
                 options={[['heavy_compound', 'Heavy compound'], ['machines', 'Machines'], ['cables', 'Cables'], ['mix', 'Mix']]}
                 onChange={v => update('training_style', v)} />
             )}
-            <Segment label="Days / week" value={profile.training_days} wrap
+            <Segment label="Days / week" value={profile.training_days} wrap color={color} isRtl={isRtl}
               options={[['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6']]} onChange={v => update('training_days', v)} />
-            <Segment label="Session length" value={profile.session_duration} wrap
+            <Segment label="Session length" value={profile.session_duration} wrap color={color} isRtl={isRtl}
               options={[['30', '30 min'], ['45', '45 min'], ['60', '1 hour'], ['90', '90 min']]} onChange={v => update('session_duration', v)} />
-            <Segment label="Train when?" value={profile.training_time} wrap
+            <Segment label="Train when?" value={profile.training_time} wrap color={color} isRtl={isRtl}
               options={[['morning', 'Morning'], ['afternoon', 'Afternoon'], ['evening', 'Evening'], ['late_night', 'Late night']]}
               onChange={v => update('training_time', v)} />
-            <Field label="Exercises to avoid (optional)" value={profile.exercises_hated} onChangeText={v => update('exercises_hated', v)} placeholder="anything painful or disliked" />
+            <Field label="Exercises to avoid (optional)" value={profile.exercises_hated} onChangeText={v => update('exercises_hated', v)} placeholder="anything painful or disliked" color={color} isRtl={isRtl} />
             {showStrength ? (
               <View style={styles.field}>
-                <Text style={[styles.label, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>Current strength (optional, kg for ~5 reps)</Text>
+                <Text style={[styles.label, { color: color.muted, textAlign: align }]}>Current strength (optional, kg for ~5 reps)</Text>
                 {STRENGTH_LIFTS.map(([key, lbl]) => (
                   <View key={key} style={[styles.row, { alignItems: 'center', marginBottom: 8 }]}>
                     <Text style={[styles.strengthLabel, { color: color.text }]}>{lbl}</Text>
@@ -234,7 +294,7 @@ export default function OnboardingScreen() {
                       keyboardType="decimal-pad"
                       placeholder="kg"
                       placeholderTextColor={color.dim}
-                      style={[styles.input, { flex: 1, backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: isRtl ? 'right' : 'left' }]}
+                      style={[styles.input, { flex: 1, backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: align }]}
                     />
                   </View>
                 ))}
@@ -243,37 +303,32 @@ export default function OnboardingScreen() {
           </>
         ) : null}
 
-        {/* ── STEP 4: Nutrition ── */}
         {step === 4 ? (
           <>
-            <Field label="Foods you love" value={profile.foods_loved} onChangeText={v => update('foods_loved', v)} placeholder="be specific — these go in your meals" />
-            <Field label="Foods to avoid (optional)" value={profile.foods_hated} onChangeText={v => update('foods_hated', v)} />
-            <MultiSelect label="Dietary rules" field="dietary_preference"
+            <Field label="Foods you love" value={profile.foods_loved} onChangeText={v => update('foods_loved', v)} placeholder="be specific — these go in your meals" color={color} isRtl={isRtl} />
+            <Field label="Foods to avoid (optional)" value={profile.foods_hated} onChangeText={v => update('foods_hated', v)} color={color} isRtl={isRtl} />
+            <MultiSelect label="Dietary rules" selected={profile.dietary_preference} onToggle={v => toggleCsv('dietary_preference', v)} color={color} isRtl={isRtl}
               options={[['none', 'None'], ['halal', 'Halal'], ['no_pork', 'No pork'], ['vegetarian', 'Vegetarian'], ['vegan', 'Vegan'], ['lactose_free', 'Lactose-free'], ['gluten_free', 'Gluten-free']]} />
-            <Field label="Allergies (optional)" value={profile.allergies} onChangeText={v => update('allergies', v)} />
-            <Segment label="Meals / day" value={profile.meals_per_day} wrap
+            <Field label="Allergies (optional)" value={profile.allergies} onChangeText={v => update('allergies', v)} color={color} isRtl={isRtl} />
+            <Segment label="Meals / day" value={profile.meals_per_day} wrap color={color} isRtl={isRtl}
               options={[['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6']]} onChange={v => update('meals_per_day', v)} />
-            <Segment label="Cooking" value={profile.cooking_ability} wrap
+            <Segment label="Cooking" value={profile.cooking_ability} wrap color={color} isRtl={isRtl}
               options={[['cook', 'I cook'], ['quick', 'Quick & simple'], ['eat_out', 'Eat out']]} onChange={v => update('cooking_ability', v)} />
-            <Segment label="Food budget" value={profile.food_budget}
+            <Segment label="Food budget" value={profile.food_budget} color={color} isRtl={isRtl}
               options={[['tight', 'Tight'], ['moderate', 'Moderate'], ['flexible', 'Flexible']]} onChange={v => update('food_budget', v)} />
           </>
         ) : null}
 
-        {/* ── STEP 5: Health ── */}
         {step === 5 ? (
           <>
-            <Field label="Injuries / limitations (optional)" value={profile.injuries} onChangeText={v => update('injuries', v)} />
-            <Field label="Medical conditions (optional)" value={profile.medical_conditions} onChangeText={v => update('medical_conditions', v)} placeholder="diabetes, blood pressure, etc." />
-            <MultiSelect label="Supplements" field="supplements"
+            <Field label="Injuries / limitations (optional)" value={profile.injuries} onChangeText={v => update('injuries', v)} color={color} isRtl={isRtl} />
+            <Field label="Medical conditions (optional)" value={profile.medical_conditions} onChangeText={v => update('medical_conditions', v)} placeholder="diabetes, blood pressure, etc." color={color} isRtl={isRtl} />
+            <MultiSelect label="Supplements" selected={profile.supplements} onToggle={v => toggleCsv('supplements', v)} color={color} isRtl={isRtl}
               options={[['none', 'None'], ['protein', 'Protein'], ['creatine', 'Creatine'], ['vitamins', 'Vitamins'], ['multiple', 'Multiple']]} />
             <View style={styles.field}>
-              <Text style={[styles.label, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>InBody scan (optional)</Text>
-              <Pressable
-                disabled={scanningInbody}
-                onPress={scanInBody}
-                style={[styles.inbodyBtn, { borderColor: inbodyDone ? color.pulse : color.spark, backgroundColor: color.elevated }]}
-              >
+              <Text style={[styles.label, { color: color.muted, textAlign: align }]}>InBody scan (optional)</Text>
+              <Pressable disabled={scanningInbody} onPress={scanInBody}
+                style={[styles.inbodyBtn, { borderColor: inbodyDone ? color.pulse : color.spark, backgroundColor: color.elevated }]}>
                 {scanningInbody ? <ActivityIndicator color={color.spark} /> : (
                   <>
                     <Feather name={inbodyDone ? 'check-circle' : 'camera'} size={16} color={inbodyDone ? color.pulse : color.spark} />
@@ -283,7 +338,7 @@ export default function OnboardingScreen() {
                   </>
                 )}
               </Pressable>
-              <Text style={[styles.hint, { color: color.dim, textAlign: isRtl ? 'right' : 'left' }]}>
+              <Text style={[styles.hint, { color: color.dim, textAlign: align }]}>
                 Gives Ion your real muscle/fat for more accurate calories. You can also add it later in Measurements.
               </Text>
             </View>
@@ -291,7 +346,6 @@ export default function OnboardingScreen() {
         ) : null}
       </Card>
 
-      {/* ── Nav buttons ── */}
       <View style={[styles.navRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
         {step > 0 ? (
           <Pressable disabled={loading} onPress={back} style={[styles.backBtn, { borderColor: color.border, backgroundColor: color.elevated }]}>
@@ -306,61 +360,6 @@ export default function OnboardingScreen() {
       </View>
     </Screen>
   )
-
-  // ── Reusable inputs ───────────────────────────────────────
-  function Field(props: { label: string; value: string; onChangeText: (v: string) => void; keyboardType?: 'default' | 'number-pad' | 'decimal-pad'; placeholder?: string }) {
-    return (
-      <View style={styles.field}>
-        <Text style={[styles.label, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>{props.label}</Text>
-        <TextInput
-          value={props.value}
-          onChangeText={props.onChangeText}
-          keyboardType={props.keyboardType}
-          placeholder={props.placeholder}
-          placeholderTextColor={color.dim}
-          style={[styles.input, { backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: isRtl ? 'right' : 'left' }]}
-        />
-      </View>
-    )
-  }
-
-  function Segment(props: { label: string; value: string; options: Array<[string, string]>; onChange: (v: string) => void; wrap?: boolean }) {
-    return (
-      <View style={styles.field}>
-        <Text style={[styles.label, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>{props.label}</Text>
-        <View style={[styles.segmentRow, props.wrap && { flexWrap: 'wrap' }]}>
-          {props.options.map(([value, lbl]) => {
-            const active = props.value === value
-            return (
-              <Pressable key={value} onPress={() => props.onChange(value)}
-                style={[styles.segment, { borderColor: active ? color.spark : color.border, backgroundColor: active ? color.sparkSoft : color.elevated }]}>
-                <Text style={[styles.segmentText, { color: active ? color.spark : color.text }]}>{lbl}</Text>
-              </Pressable>
-            )
-          })}
-        </View>
-      </View>
-    )
-  }
-
-  function MultiSelect(props: { label: string; field: keyof MobileProfileInput; options: Array<[string, string]> }) {
-    return (
-      <View style={styles.field}>
-        <Text style={[styles.label, { color: color.muted, textAlign: isRtl ? 'right' : 'left' }]}>{props.label}</Text>
-        <View style={[styles.segmentRow, { flexWrap: 'wrap' }]}>
-          {props.options.map(([value, lbl]) => {
-            const active = csvHas(props.field, value)
-            return (
-              <Pressable key={value} onPress={() => toggleCsv(props.field, value)}
-                style={[styles.segment, { borderColor: active ? color.spark : color.border, backgroundColor: active ? color.sparkSoft : color.elevated }]}>
-                <Text style={[styles.segmentText, { color: active ? color.spark : color.text }]}>{lbl}</Text>
-              </Pressable>
-            )
-          })}
-        </View>
-      </View>
-    )
-  }
 }
 
 const styles = StyleSheet.create({
