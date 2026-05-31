@@ -4,7 +4,7 @@ import * as AppleAuthentication from 'expo-apple-authentication'
 import { router } from 'expo-router'
 import FontAwesome from '@expo/vector-icons/FontAwesome'
 import { useAuth } from '@/auth/AuthProvider'
-import { getProfile } from '@/features/profile'
+import { getPlanHistory } from '@/features/workout'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
@@ -28,14 +28,15 @@ export function SocialAuthButtons() {
     }
   }, [])
 
-  // After a successful social sign-in, send brand-new accounts (no profile yet)
-  // through onboarding — otherwise they land on a dataless dashboard where every
-  // API call fails. Returning users (profile exists) go straight to the app.
+  // After a successful social sign-in, route by whether the account has an
+  // active plan — the app is unusable without one. No plan (new account, or
+  // signed up but never finished) → onboarding to build it; has a plan →
+  // straight to the app.
   async function routeAfterAuth() {
     try {
-      const { profile } = await getProfile()
-      const onboarded = !!profile && Object.keys(profile).length > 0
-      router.replace(onboarded ? '/(tabs)' : '/onboarding')
+      const history = await getPlanHistory()
+      const hasPlan = !!history?.activeWorkoutPlan
+      router.replace(hasPlan ? '/(tabs)' : '/onboarding')
     } catch {
       router.replace('/onboarding')
     }

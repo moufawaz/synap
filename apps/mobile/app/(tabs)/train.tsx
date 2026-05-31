@@ -183,9 +183,12 @@ export default function TrainScreen() {
   const date = todayKey()
   const align = isRtl ? 'right' : 'left'
 
-  // Reload session when the tab comes into focus (AsyncStorage — instant, no network)
+  // On focus: reload the local session AND silently re-fetch the plan, so plan
+  // changes made elsewhere (e.g. Ion swapping a training day) show up without an
+  // app restart — otherwise the tab keeps the plan it loaded on first mount.
   useFocusEffect(
     useCallback(() => {
+      plan.silentRefresh()
       loadLocalSession(date).then(session => {
         if (session) {
           setCompleted(session.completedExercises ?? [])
@@ -201,9 +204,16 @@ export default function TrainScreen() {
   // ── Plan / workout derivation ─────────────────────────────
   const planJson = plan.data?.activeWorkoutPlan?.plan_json ?? null
   const workout: TodayWorkout | null = useMemo(() => {
+    // A weekday that isn't one of the plan's training days is a REST day — show
+    // the rest card, not "No workout plan" (which is only for having no plan).
+    const restDay = (d: CanonicalDay): TodayWorkout => ({
+      day_name: d, muscle_focus: null, duration_min: null, is_rest_day: true, exercises: [],
+    })
     if (!planJson) return plan.data?.todayWorkout ?? null
-    if (selectedDay === todayCanonical) return plan.data?.todayWorkout ?? buildTodayWorkout(getDayWorkout(planJson, selectedDay))
-    return buildTodayWorkout(getDayWorkout(planJson, selectedDay))
+    if (selectedDay === todayCanonical) {
+      return plan.data?.todayWorkout ?? buildTodayWorkout(getDayWorkout(planJson, selectedDay)) ?? restDay(selectedDay)
+    }
+    return buildTodayWorkout(getDayWorkout(planJson, selectedDay)) ?? restDay(selectedDay)
   }, [plan.data, planJson, selectedDay, todayCanonical])
 
   const workoutDays = useMemo(() => {
