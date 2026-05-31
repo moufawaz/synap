@@ -1927,3 +1927,49 @@ production build green, verify social sign-in on device (done for Apple), and
 complete App Store Connect metadata (pre-subscribed demo account, App Privacy +
 Privacy Policy URL, review notes, support URL = `synapfit.app/contact`,
 screenshots).
+
+## Onboarding/Train/Nutrition polish + merge to main (2026-05-31)
+
+Final device-test round, then consolidation.
+
+### Onboarding
+- **Keyboard dismissing after one character**: `Field`/`Segment`/`MultiSelect`
+  were defined *inside* the screen component, so each keystroke re-rendered the
+  screen and remounted the `TextInput`. Moved them to **module-level** components
+  (color/isRtl passed as props) so inputs keep focus. (Classic
+  don't-define-components-in-render bug.)
+
+### Nutrition
+- **Renewal countdown banner**: the Nutrition page now shows "X days left in your
+  nutrition plan" from `timing.diet` (2-week cycle), turning amber/red as it
+  nears zero, and "ready to renew — ask Ion" at zero — mirroring training.
+
+### Train / data freshness
+- **Stale plan on the Train tab**: the tab loaded the plan once on mount and kept
+  it in memory, so a plan change made elsewhere (Ion swapping Friday→Saturday)
+  kept showing the old day set (a lingering "5 days") until restart. Train and
+  Nutrition now `silentRefresh()` the plan on focus.
+- **Rest days were showing a fallback workout**: `summarizeTodayWorkout` (server)
+  fell back to a random plan day when today's weekday wasn't in the plan, so a
+  rest day (e.g. Sunday) showed another day's session — reading as an extra /
+  duplicate training day. Now, for weekday-scheduled plans, a non-training day
+  returns `is_rest_day`. (Server fix, live for web + app.)
+- **Browsing a non-training weekday**: the Train tab now renders the **Rest Day**
+  card for any non-training weekday instead of "No workout plan" (which is now
+  reserved for actually having no plan).
+- Confirmed the day-selector "today" dot is `isToday`-driven (distinct purple,
+  vs green workout dots) — not hardcoded.
+
+### Build marker
+`More` tab footer shows `SYNAP v… · build … · fixpack-<N>` (`BUILD_TAG` in
+`more.tsx`), bumped each build, to verify the installed binary — this ended
+several "still broken" reports that were stale TestFlight builds. Reached
+`fixpack-19` (build 1084) before merge.
+
+### Merge to main (build 1085)
+`feat/onboarding-parity` merged into `main` (no conflicts) — onboarding parity +
+keyboard fix, dashboard no-plan CTA / account-specific weight / plan-based
+routing, Train+Nutrition focus refresh, rest-day card, nutrition countdown.
+Server changes (plan cycles, InBody BMR, rest-day-aware today) were committed
+directly to `main` and are already deployed. `main` is now the single source of
+truth for web + app; production build 1085 is the submission build.
