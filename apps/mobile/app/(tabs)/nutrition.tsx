@@ -195,6 +195,7 @@ export default function NutritionScreen() {
     useCallback(() => {
       logs.reload()
       hydration.reload()
+      plan.silentRefresh()
     }, [])
   )
 

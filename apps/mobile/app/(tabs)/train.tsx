@@ -183,9 +183,12 @@ export default function TrainScreen() {
   const date = todayKey()
   const align = isRtl ? 'right' : 'left'
 
-  // Reload session when the tab comes into focus (AsyncStorage — instant, no network)
+  // On focus: reload the local session AND silently re-fetch the plan, so plan
+  // changes made elsewhere (e.g. Ion swapping a training day) show up without an
+  // app restart — otherwise the tab keeps the plan it loaded on first mount.
   useFocusEffect(
     useCallback(() => {
+      plan.silentRefresh()
       loadLocalSession(date).then(session => {
         if (session) {
           setCompleted(session.completedExercises ?? [])
