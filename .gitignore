@@ -63,3 +63,10 @@ SYNAP_PROJECT_KNOWLEDGE.md
 fix_*.mjs
 handoff/
 patch-for-synap-app/
+
+# ── Secrets & credentials — NEVER commit (provisioning profiles → GitHub secrets only) ──
+**/credentials.json
+*.mobileprovision
+*.p12
+*.p8
+tmp_*.json
