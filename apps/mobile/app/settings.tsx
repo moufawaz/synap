@@ -11,7 +11,7 @@ import {
   DEFAULT_NOTIF_PREFS,
   loadNotifPrefs,
   saveNotifPrefs,
-  scheduleSynapReminders,
+  syncSynapReminders,
   type NotifPrefs,
 } from '@/features/notifications'
 import { apiFetch } from '@/lib/api'
@@ -112,10 +112,9 @@ export default function SettingsScreen() {
   function toggleNotif(key: keyof NotifPrefs) {
     setNotifPrefs(prev => {
       const next = { ...prev, [key]: !prev[key] }
-      // Persist immediately and re-apply the local reminder schedule so the
-      // toggle takes real effect (workout/meal/hydration are local reminders).
-      saveNotifPrefs(next)
-      scheduleSynapReminders({ prefs: next }).catch(() => {})
+      // Persist immediately, then re-sync so the toggle takes real effect
+      // (re-reads prefs + plan and reschedules water/meals/training/check-ins).
+      saveNotifPrefs(next).then(() => syncSynapReminders()).catch(() => {})
       return next
     })
   }

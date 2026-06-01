@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import LoadingSplash from '@/components/LoadingSplash'
 import { registerDeviceToken } from '@/features/tools'
-import { scheduleSynapReminders } from '@/features/notifications'
+import { syncSynapReminders } from '@/features/notifications'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 
@@ -77,38 +77,27 @@ function parsePlanTime(raw: string | undefined): { hour: number; minute: number 
   return { hour, minute }
 }
 
-/** Silently register push token if permission is already granted — no prompt shown */
+/** When signed in: silently register the push token (if already granted) and
+ * (re)schedule the full set of proactive local reminders — water, meals,
+ * pre/workout/post on training days, morning brief, evening check-in. The local
+ * reminders are NOT gated on the push token: syncSynapReminders does its own
+ * permission check and pulls the user's plan + profile to build the schedule. */
 async function tryAutoRegisterPush() {
   try {
     if (!Device.isDevice) return
     const { status } = await Notifications.getPermissionsAsync()
-    if (status !== 'granted') return  // don't prompt here; user can enable in Notifications screen
-
-    const projectId =
-      Constants.expoConfig?.extra?.eas?.projectId ||
-      (Constants as any).easConfig?.projectId ||
-      '5fb169d2-85c2-48ef-990f-960a395e7c6a' // fallback for Direct Builds
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId })
-    await registerDeviceToken({ token, platform: Platform.OS })
-
-    // Build meal reminders from cached plan times so each meal gets its own reminder
-    let mealTimes: Array<{ hour: number; minute: number; name: string }> | undefined
-    try {
-      const raw = await AsyncStorage.getItem('@sdc:plan-history')
-      if (raw) {
-        const cached = JSON.parse(raw)
-        const meals: any[] = cached?.data?.activeDietPlan?.plan_json?.meals || []
-        const parsed = meals
-          .map((m: any) => {
-            const t = parsePlanTime(m.time || m.meal_time)
-            return t ? { ...t, name: m.name || m.meal_name || 'Meal' } : null
-          })
-          .filter((x): x is { hour: number; minute: number; name: string } => x !== null)
-        if (parsed.length) mealTimes = parsed
-      }
-    } catch {}
-
-    await scheduleSynapReminders({ mealTimes })
+    if (status === 'granted') {
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ||
+        (Constants as any).easConfig?.projectId ||
+        '5fb169d2-85c2-48ef-990f-960a395e7c6a' // fallback for Direct Builds
+      try {
+        const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId })
+        await registerDeviceToken({ token, platform: Platform.OS })
+      } catch { /* push token optional — local reminders still work below */ }
+    }
+    // Local proactive reminders (re-synced each session so plan changes apply).
+    await syncSynapReminders()
   } catch { /* non-fatal */ }
 }
 

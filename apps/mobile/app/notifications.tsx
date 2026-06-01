@@ -9,7 +9,7 @@ import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
 import { registerDeviceToken } from '@/features/tools'
-import { cancelSynapReminders, getSynapScheduledReminders, scheduleSynapReminders } from '@/features/notifications'
+import { cancelSynapReminders, getSynapScheduledReminders, syncSynapReminders } from '@/features/notifications'
 import { useTheme } from '@/theme/ThemeProvider'
 
 const PUSH_TOKEN_KEY = '@synap:push-token'
@@ -62,9 +62,9 @@ export default function NotificationsScreen() {
       setToken(res.data)
       await AsyncStorage.setItem(PUSH_TOKEN_KEY, res.data).catch(() => {})
       await registerDeviceToken({ token: res.data, platform: Platform.OS })
-      const scheduledIds = await scheduleSynapReminders()
-      setScheduledCount(scheduledIds.length)
-      Alert.alert('Notifications enabled', 'This device is registered for push and daily reminders are scheduled.')
+      const { scheduled } = await syncSynapReminders(true)
+      setScheduledCount(scheduled)
+      Alert.alert('Notifications enabled', `Push is registered and ${scheduled} smart reminders are scheduled — water, meals, training, and daily check-ins.`)
     } catch (error) {
       Alert.alert('Push', error instanceof Error ? error.message : 'Could not enable push.')
     } finally {
