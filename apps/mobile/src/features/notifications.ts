@@ -90,6 +90,7 @@ type WeeklyReminder = DailyReminder & { weekday: number }
 
 export type ReminderData = {
   prefs: NotifPrefs
+  lang: 'en' | 'ar'
   name?: string
   wake: HM
   sleep: HM
@@ -105,6 +106,7 @@ export type ReminderData = {
 // ── Build the schedule ────────────────────────────────────────────────────────
 
 function buildHydration(data: ReminderData): DailyReminder[] {
+  const ar = data.lang === 'ar'
   const count = Math.max(5, data.hydrationCount || 6)
   const start = toMin(data.wake) + 45            // ~45 min after waking
   const end = toMin(data.sleep) - 60             // stop ~1h before sleep
@@ -116,8 +118,10 @@ function buildHydration(data: ReminderData): DailyReminder[] {
     const at = fromMin(Math.round(start + step * i))
     out.push({
       id: `${REMINDER_PREFIX}water_${i}`,
-      title: '💧 Hydration',
-      body: waterMl ? `Drink ~${waterMl} ml now — tap to log it.` : 'Time to drink water — tap to log a glass.',
+      title: ar ? '💧 ترطيب' : '💧 Hydration',
+      body: ar
+        ? (waterMl ? `اشرب ~${waterMl} مل الآن — اضغط للتسجيل.` : 'حان وقت شرب الماء — اضغط لتسجيل كوب.')
+        : (waterMl ? `Drink ~${waterMl} ml now — tap to log it.` : 'Time to drink water — tap to log a glass.'),
       at,
       url: '/(tabs)/nutrition',
     })
@@ -126,42 +130,51 @@ function buildHydration(data: ReminderData): DailyReminder[] {
 }
 
 function buildMeals(data: ReminderData): DailyReminder[] {
-  return data.meals.map((mt, i) => ({
-    id: `${REMINDER_PREFIX}meal_${i}`,
-    title: `🍽️ ${mt.name || 'Meal'} time`,
-    body: mt.calories
-      ? `${mt.name || 'Meal'} — ~${mt.calories} kcal. Tap to log it while it's fresh.`
-      : `Time for your ${mt.name || 'meal'}. Tap to log it.`,
-    at: mt.at,
-    url: '/(tabs)/nutrition',
-  }))
+  const ar = data.lang === 'ar'
+  return data.meals.map((mt, i) => {
+    const name = mt.name || (ar ? 'وجبة' : 'Meal')
+    return {
+      id: `${REMINDER_PREFIX}meal_${i}`,
+      title: ar ? `🍽️ وقت ${name}` : `🍽️ ${name} time`,
+      body: ar
+        ? (mt.calories ? `${name} — ~${mt.calories} سعرة. اضغط لتسجيلها الآن.` : `حان وقت ${name}. اضغط لتسجيلها.`)
+        : (mt.calories ? `${name} — ~${mt.calories} kcal. Tap to log it while it's fresh.` : `Time for your ${name}. Tap to log it.`),
+      at: mt.at,
+      url: '/(tabs)/nutrition',
+    }
+  })
 }
 
 function buildTraining(data: ReminderData): WeeklyReminder[] {
+  const ar = data.lang === 'ar'
   const out: WeeklyReminder[] = []
   for (const wd of data.trainingWeekdays) {
     const focus = data.trainingFocusByWeekday[wd]
     // Pre-workout (~75 min before)
     out.push({
       id: `${REMINDER_PREFIX}pre_${wd}`, weekday: wd,
-      title: '⚡ Pre-workout fuel',
-      body: 'Eat your pre-workout meal — carbs + moderate protein, ~60–90 min before training.',
+      title: ar ? '⚡ وجبة ما قبل التمرين' : '⚡ Pre-workout fuel',
+      body: ar
+        ? 'تناول وجبة ما قبل التمرين — كربوهيدرات وبروتين معتدل، قبل ~60–90 دقيقة من التمرين.'
+        : 'Eat your pre-workout meal — carbs + moderate protein, ~60–90 min before training.',
       at: fromMin(toMin(data.training) - 75),
       url: '/(tabs)/nutrition',
     })
     // Workout
     out.push({
       id: `${REMINDER_PREFIX}workout_${wd}`, weekday: wd,
-      title: focus ? `💪 ${focus}` : '💪 Training time',
-      body: "It's training time. Open today's session and let's move.",
+      title: focus ? `💪 ${focus}` : (ar ? '💪 وقت التمرين' : '💪 Training time'),
+      body: ar ? 'حان وقت التمرين. افتح جلسة اليوم ولنبدأ.' : "It's training time. Open today's session and let's move.",
       at: data.training,
       url: '/(tabs)/train',
     })
     // Post-workout (~75 min after)
     out.push({
       id: `${REMINDER_PREFIX}post_${wd}`, weekday: wd,
-      title: '🥤 Post-workout recovery',
-      body: 'Protein + carbs within 45 min to recover and grow. Tap to log it.',
+      title: ar ? '🥤 تعافي ما بعد التمرين' : '🥤 Post-workout recovery',
+      body: ar
+        ? 'بروتين وكربوهيدرات خلال 45 دقيقة للتعافي والنمو. اضغط للتسجيل.'
+        : 'Protein + carbs within 45 min to recover and grow. Tap to log it.',
       at: fromMin(toMin(data.training) + 75),
       url: '/(tabs)/nutrition',
     })
@@ -170,22 +183,29 @@ function buildTraining(data: ReminderData): WeeklyReminder[] {
 }
 
 function buildCheckins(data: ReminderData): DailyReminder[] {
+  const ar = data.lang === 'ar'
   const out: DailyReminder[] = []
   // Morning brief
   out.push({
     id: `${REMINDER_PREFIX}morning`,
-    title: `☀️ Good morning${data.name ? `, ${data.name}` : ''}`,
-    body: data.calorieTarget
-      ? `Today: ~${data.calorieTarget} kcal${data.waterLiters ? ` · ${data.waterLiters}L water` : ''}. Let's make it count.`
-      : "Let's make today count — fuel up, hydrate, and check your plan.",
+    title: ar ? `☀️ صباح الخير${data.name ? `، ${data.name}` : ''}` : `☀️ Good morning${data.name ? `, ${data.name}` : ''}`,
+    body: ar
+      ? (data.calorieTarget
+          ? `اليوم: ~${data.calorieTarget} سعرة${data.waterLiters ? ` · ${data.waterLiters} لتر ماء` : ''}. لنجعله يوماً مثمراً.`
+          : 'لنجعل اليوم مثمراً — تغذّى، اشرب الماء، وراجع خطتك.')
+      : (data.calorieTarget
+          ? `Today: ~${data.calorieTarget} kcal${data.waterLiters ? ` · ${data.waterLiters}L water` : ''}. Let's make it count.`
+          : "Let's make today count — fuel up, hydrate, and check your plan."),
     at: data.wake,
     url: '/(tabs)',
   })
   // Evening check-in (~90 min before sleep)
   out.push({
     id: `${REMINDER_PREFIX}evening`,
-    title: '🌙 Evening check-in',
-    body: 'Log anything you missed today — meals, water, your workout. Ion is watching your progress.',
+    title: ar ? '🌙 مراجعة المساء' : '🌙 Evening check-in',
+    body: ar
+      ? 'سجّل ما فاتك اليوم — وجبات، ماء، تمرينك. آيون يتابع تقدّمك.'
+      : 'Log anything you missed today — meals, water, your workout. Ion is watching your progress.',
     at: fromMin(toMin(data.sleep) - 90),
     url: '/(tabs)/chat',
   })
@@ -239,6 +259,7 @@ export async function gatherReminderData(prefs?: NotifPrefs): Promise<ReminderDa
   const resolvedPrefs = prefs ?? (await loadNotifPrefs())
   const data: ReminderData = {
     prefs: resolvedPrefs,
+    lang: 'en',
     wake: { hour: 7, minute: 30 },
     sleep: { hour: 23, minute: 0 },
     training: { hour: 18, minute: 0 },
@@ -255,6 +276,7 @@ export async function gatherReminderData(prefs?: NotifPrefs): Promise<ReminderDa
 
     if (profile) {
       data.name = profile.name || undefined
+      data.lang = String(profile.language).toLowerCase() === 'ar' ? 'ar' : 'en'
       data.wake = parseClock(profile.wake_time) ?? data.wake
       data.sleep = parseClock(profile.sleep_time) ?? data.sleep
       data.training = TRAINING_TIME_MAP[String(profile.training_time || '').toLowerCase()] ?? data.training
