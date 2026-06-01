@@ -1973,3 +1973,25 @@ routing, Train+Nutrition focus refresh, rest-day card, nutrition countdown.
 Server changes (plan cycles, InBody BMR, rest-day-aware today) were committed
 directly to `main` and are already deployed. `main` is now the single source of
 truth for web + app; production build 1085 is the submission build.
+
+## Proactive notification system (2026-05-31, build 1087)
+
+The old reminders were limited (3 generic) and, worse, **gated behind push-token
+registration** — so new/social-sign-in users never got any. Rebuilt
+`src/features/notifications.ts`:
+
+- **`scheduleSynapReminders(data)`** now builds the full set from the user's plan
+  + profile: hydration (**≥5/day**, evenly spread wake→~1h before sleep, with the
+  per-glass ml target), a reminder at **each plan meal time** (name + calories),
+  **pre-workout / workout / post-workout** as WEEKLY reminders on each training
+  weekday (with muscle focus), plus a **morning brief** (calorie + water target)
+  and **evening check-in**.
+- **`syncSynapReminders(requestPermission?)`** ensures notification permission
+  (optionally prompting), gathers plan/profile via `getPlanHistory` + `getProfile`,
+  and reschedules. **Decoupled from the push token.**
+- Wired in: app launch (`_layout.tsx`, re-sync each session, no token gate),
+  onboarding completion (prompts), the Notifications screen ("Enable"), and the
+  Settings notification toggles.
+- Tap-routing unchanged (each reminder carries `data.url`).
+
+Merged `feat/notifications` → `main` (build 1087).
