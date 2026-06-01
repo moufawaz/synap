@@ -7,6 +7,7 @@ import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { generateMobilePlan, MobileProfileInput, saveMobileProfile } from '@/features/onboarding'
+import { syncSynapReminders } from '@/features/notifications'
 import { analyzeInBodyPhoto } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -181,6 +182,9 @@ export default function OnboardingScreen() {
       }
       await saveMobileProfile(payload)
       await generateMobilePlan(payload)
+      // Now that there's a plan, ask for notification permission and schedule the
+      // full proactive reminder set (water, meals, training, check-ins).
+      syncSynapReminders(true).catch(() => {})
       Alert.alert('SYNAP', 'Your personalised plan is ready.')
       router.replace('/(tabs)')
     } catch (error) {
