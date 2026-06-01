@@ -335,6 +335,29 @@ export async function syncSynapReminders(requestPermission = false): Promise<{ g
   }
 }
 
+/** Fire an immediate confirmation so the user gets instant feedback that
+ * reminders are on (DAILY/WEEKLY triggers otherwise only fire at their clock
+ * times, so a freshly-enabled user would see nothing for hours). */
+export async function sendTestReminder(lang: 'en' | 'ar' = 'en', scheduled?: number): Promise<boolean> {
+  try {
+    const ar = lang === 'ar'
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: ar ? '🔔 تم تفعيل التذكيرات' : '🔔 Reminders are on',
+        body: ar
+          ? `سيذكّرك آيون بالماء والوجبات والتمرين في أوقاتها${scheduled ? ` (${scheduled} تذكيراً مجدولاً)` : ''}.`
+          : `Ion will nudge you for water, meals and training at the right times${scheduled ? ` (${scheduled} scheduled)` : ''}.`,
+        data: { reminderId: `${REMINDER_PREFIX}test`, url: '/(tabs)' },
+        sound: true,
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 },
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function cancelSynapReminders() {
   const scheduled = await Notifications.getAllScheduledNotificationsAsync()
   await Promise.all(

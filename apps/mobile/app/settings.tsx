@@ -12,6 +12,7 @@ import {
   loadNotifPrefs,
   saveNotifPrefs,
   syncSynapReminders,
+  sendTestReminder,
   type NotifPrefs,
 } from '@/features/notifications'
 import { apiFetch } from '@/lib/api'
@@ -109,14 +110,30 @@ export default function SettingsScreen() {
     }
   }
 
-  function toggleNotif(key: keyof NotifPrefs) {
-    setNotifPrefs(prev => {
-      const next = { ...prev, [key]: !prev[key] }
-      // Persist immediately, then re-sync so the toggle takes real effect
-      // (re-reads prefs + plan and reschedules water/meals/training/check-ins).
-      saveNotifPrefs(next).then(() => syncSynapReminders()).catch(() => {})
-      return next
-    })
+  async function toggleNotif(key: keyof NotifPrefs) {
+    const justEnabled = !notifPrefs[key]
+    const next = { ...notifPrefs, [key]: justEnabled }
+    setNotifPrefs(next)
+    try {
+      await saveNotifPrefs(next)
+      // When turning a reminder ON, prompt for OS permission if not yet granted
+      // — otherwise the schedule silently no-ops. Re-sync re-reads prefs + plan
+      // and reschedules water/meals/training/check-ins.
+      const res = await syncSynapReminders(justEnabled)
+      if (justEnabled) {
+        if (!res.granted) {
+          Alert.alert(
+            isRtl ? 'الإشعارات معطّلة' : 'Notifications are off',
+            isRtl
+              ? 'فعّل الإشعارات لتطبيق سناب من إعدادات الـ iPhone حتى تصلك التذكيرات.'
+              : 'Turn on notifications for SYNAP in iPhone Settings → Notifications so reminders can reach you.',
+          )
+        } else {
+          // Instant confirmation so the user sees it works right away.
+          await sendTestReminder(isRtl ? 'ar' : 'en', res.scheduled)
+        }
+      }
+    } catch { /* non-fatal */ }
   }
 
   const sub = subscription.data
