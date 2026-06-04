@@ -36,12 +36,16 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { profileData } = body
     // Generation runs in phases so each request finishes well within the
-    // serverless time limit: 'workout' → 'diet' → 'videos'. 'all' keeps the
-    // original single-shot behaviour. The 'videos' phase makes no AI call — it
-    // enriches the saved workout plan's exercise videos, kept off the generation
-    // critical path so workout generation stays under 60s.
-    const phase: 'all' | 'workout' | 'diet' | 'videos' =
-      ['workout', 'diet', 'videos'].includes(body.phase) ? body.phase : 'all'
+    // serverless time limit: 'workout' → 'workout2' → 'diet' → 'videos'. The
+    // workout itself is split in two by training day ('workout' = first half +
+    // meta, 'workout2' = remaining days, merged into the saved plan). 'videos'
+    // makes no AI call. 'all' keeps the original single-shot behaviour.
+    const phase: 'all' | 'workout' | 'workout2' | 'diet' | 'videos' =
+      ['workout', 'workout2', 'diet', 'videos'].includes(body.phase) ? body.phase : 'all'
+    // Which half of the workout to write (0 = all days in one call).
+    const workoutPart: 0 | 1 | 2 = phase === 'workout' ? 1 : phase === 'workout2' ? 2 : 0
+    // Both workout halves use the 'workout' prompt focus.
+    const promptFocus: 'all' | 'workout' | 'diet' = phase === 'workout' || phase === 'workout2' ? 'workout' : phase === 'diet' ? 'diet' : 'all'
 
     const supabase = await createRouteClient(req)
     const { user, error: authError } = await getAuthenticatedUser(req)
@@ -84,8 +88,9 @@ export async function POST(req: Request) {
     }
 
     // Rate limit: max 3 plan generations per user per 24 hours. Count on the
-    // workout/all phase only so the paired diet call doesn't double-count.
-    if (phase !== 'diet') {
+    // first workout phase / single-shot only so the paired phases don't
+    // double-count (workout2/diet are part of the same generation).
+    if (phase === 'workout' || phase === 'all') {
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       const { count: recentGenerations } = await admin
         .from('workout_plans')
@@ -135,7 +140,7 @@ export async function POST(req: Request) {
       } : {}),
       language: languageRow.data?.language ?? profileData?.language ?? 'en',
     }
-    const prompt = buildPrompt(profileForPlan, latestMeasurement, measurementHistory, phase)
+    const prompt = buildPrompt(profileForPlan, latestMeasurement, measurementHistory, promptFocus, workoutPart)
 
     const message = await withAnthropicRetry(() => client.messages.create({
       model: process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5',
@@ -204,6 +209,40 @@ export async function POST(req: Request) {
           }
         })
       )
+    }
+
+    // ── 'workout2' phase: merge the remaining training days into the workout plan
+    // that the 'workout' phase already saved (no new row, no swap). ────────────
+    if (phase === 'workout2') {
+      const newDays: any[] = plan.workout_plan?.days || []
+      const { data: wp } = await supabase
+        .from('workout_plans')
+        .select('id, plan_json')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (!wp?.plan_json) {
+        return NextResponse.json({ error: 'No base workout plan to extend. Please retry.' }, { status: 409 })
+      }
+      const base: any = wp.plan_json
+      const existing: any[] = Array.isArray(base.days) ? base.days : []
+      // Append only days whose weekday isn't already present (avoid duplicates).
+      const seen = new Set(existing.map((d: any) => String(d?.day_name ?? d?.day ?? '').toLowerCase()))
+      const merged = [...existing]
+      for (const d of newDays) {
+        const key = String(d?.day_name ?? d?.day ?? '').toLowerCase()
+        if (!key || !seen.has(key)) { merged.push(d); seen.add(key) }
+      }
+      const mergedPlan = normalizeWorkoutPlanDays({ ...base, days: merged })
+      await supabase.from('workout_plans').update({ plan_json: mergedPlan }).eq('id', wp.id)
+      await recordAppEvent({
+        userId: user.id, eventType: 'plan_generation_succeeded', severity: 'info',
+        source: 'api/generate-plan', message: 'Workout part 2 merged',
+        metadata: { workout_plan_id: wp.id, phase, days: merged.length },
+      })
+      return NextResponse.json({ success: true, phase, workout_plan_id: wp.id, days: merged.length })
     }
 
     // Insert new plans first (inactive), then atomically activate them by
@@ -427,16 +466,29 @@ function repairTruncatedJSON(s: string): string | null {
 
 // calculateMacros and calculateWorkoutParams are imported from @/lib/plan-builder
 
-function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[], focus: 'all' | 'workout' | 'diet' = 'all'): string {
+function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[], focus: 'all' | 'workout' | 'diet' = 'all', workoutPart: 0 | 1 | 2 = 0): string {
   const language = normalizeAiLanguage(p.language)
   const m = calculateMacros(p, latestMeasurement)
   const w = calculateWorkoutParams(p)
   const ar = language === 'ar'
-  // Two-phase generation: each phase emits only its half so the request finishes
+  // Phased generation: each phase emits only its half so the request finishes
   // inside the serverless time limit. 'all' emits both (single-shot fallback).
   const wantWorkout = focus === 'all' || focus === 'workout'
   const wantDiet = focus === 'all' || focus === 'diet'
   const planScope = focus === 'workout' ? '6-week training plan' : focus === 'diet' ? '2-week nutrition plan' : '6-week fitness and nutrition plan'
+
+  // The workout writing alone can exceed the 60s function limit, so the workout
+  // phase is itself split into two halves by training day: part 1 builds the
+  // plan-level meta + the first half of training days, part 2 builds the rest.
+  // They are merged server-side. workoutPart 0 = all days in one call.
+  const trainingDayCount = Math.max(1, parseInt(p.training_days || '4') || 4)
+  const firstHalfDays = Math.ceil(trainingDayCount / 2)
+  const partDayInstruction =
+    workoutPart === 1
+      ? `\nSPLIT GENERATION — PART 1 OF 2: Output ONLY the FIRST ${firstHalfDays} training days (the earliest ${firstHalfDays} weekdays of the ${w.splitType} split). Include all plan-level fields. Do NOT output the later training days — they are generated separately and merged.`
+      : workoutPart === 2
+      ? `\nSPLIT GENERATION — PART 2 OF 2: Output ONLY the REMAINING training days (training days ${firstHalfDays + 1} through ${trainingDayCount} of the ${w.splitType} split), continuing the SAME split so they fit seamlessly with part 1. Keep day_name weekdays consistent and non-overlapping with the first ${firstHalfDays} training days.`
+      : ''
 
   const goalLabels: Record<string, string> = {
     lose_fat:       'Lose Body Fat',
@@ -647,12 +699,13 @@ ${p.goal === 'improve_fitness' || p.goal === 'be_healthier' ? `   - Balance resi
    - Include at least one full-body circuit or conditioning session per week
    - Emphasise movement quality over load — especially for beginners
    - Include active recovery or flexibility work on lighter days` : ''}
+${partDayInstruction}
 ` : ''}
 IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text.
 JSON key names must stay exactly as shown. For workout day_name, ALWAYS use English weekdays (Sunday–Saturday) even for Arabic users — only translate user-facing display strings.
 
 {
-${wantWorkout ? `  "summary": "3-sentence personalised overview: what the approach is, why it fits this person, what result to expect in 6 weeks",
+${wantWorkout ? `${workoutPart === 2 ? `  "workout_plan": {` : `  "summary": "3-sentence personalised overview: what the approach is, why it fits this person, what result to expect in 6 weeks",
   "workout_plan": {
     "name": "Plan name reflecting goal and split",
     "schedule": "${p.training_days} days/week",
@@ -663,7 +716,7 @@ ${wantWorkout ? `  "summary": "3-sentence personalised overview: what the approa
     "progressive_overload": "${w.progressionModel}",
     "deload_weeks": [${deload6.join(", ")}],
     "deload_protocol": "On deload weeks: reduce sets by 50%, keep same weight, focus on form and recovery",
-    "rest_days": ["list of rest day names"],
+    "rest_days": ["list of rest day names"],`}
     "days": [
       {
         "day_name": "Monday",

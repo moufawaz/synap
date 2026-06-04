@@ -204,15 +204,16 @@ export default function OnboardingScreen() {
         name={(profile.name || '').trim() || (language === 'ar' ? 'بطل' : 'Athlete')}
         task={async () => {
           await saveMobileProfile(genPayload)
-          // Phase 1: workout plan (skipped if a prior attempt already built it).
+          // Workout is written in two halves so each request stays under the 60s
+          // serverless limit; skip already-completed halves on Try Again.
           if (!workoutPhaseDone.current) {
             await generateMobilePlan(genPayload, 'workout')
+            await generateMobilePlan(genPayload, 'workout2')
             workoutPhaseDone.current = true
           }
-          // Phase 2: nutrition plan.
+          // Nutrition plan.
           await generateMobilePlan(genPayload, 'diet')
-          // Phase 3: enrich exercise videos (non-fatal — the plan is already
-          // complete and usable without it).
+          // Enrich exercise videos (non-fatal — the plan is already complete).
           await generateMobilePlan(genPayload, 'videos').catch(() => {})
         }}
         onComplete={() => {

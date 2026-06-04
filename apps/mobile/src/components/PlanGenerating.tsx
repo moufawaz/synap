@@ -68,9 +68,9 @@ export function PlanGenerating({
     setProgress(0)
     setStepIndex(0)
 
-    // Climb through the "thinking" steps to ~90% while the two generation phases
-    // run (~60–90s total). Pace the steps over that window so the bar tracks real
-    // progress instead of racing to 90% and sitting.
+    // Climb through the "thinking" steps to ~90% while the generation phases run
+    // (workout ×2 + diet + videos ≈ 90–120s total). Pace the steps over that
+    // window so the bar tracks real progress instead of racing to 90% and sitting.
     let i = 0
     const ticker = setInterval(() => {
       i++
@@ -78,7 +78,7 @@ export function PlanGenerating({
         setStepIndex(i)
         setProgress(Math.round((i / (steps.length - 1)) * 90))
       }
-    }, 7000)
+    }, 13000)
 
     try {
       await task()

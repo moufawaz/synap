@@ -68,7 +68,7 @@ export async function saveMobileProfile(profile: MobileProfileInput) {
  */
 export async function generateMobilePlan(
   profile: MobileProfileInput,
-  phase: 'workout' | 'diet' | 'videos' | 'all' = 'all',
+  phase: 'workout' | 'workout2' | 'diet' | 'videos' | 'all' = 'all',
 ) {
   return apiFetch<{ success: boolean; phase?: string; workout_plan_id?: string; diet_plan_id?: string }>(
     '/api/generate-plan',

@@ -67,7 +67,7 @@ export default function PlanGenerating({ lang, name, data, onComplete }: PlanGen
 
       // 2. Generate the plan in two phases so each request finishes well within
       //    the serverless time limit: workout first, then nutrition.
-      const runPhase = async (phase: 'workout' | 'diet' | 'videos') => {
+      const runPhase = async (phase: 'workout' | 'workout2' | 'diet' | 'videos') => {
         const res = await fetch('/api/generate-plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -78,7 +78,9 @@ export default function PlanGenerating({ lang, name, data, onComplete }: PlanGen
           throw new Error(err.error || 'Plan generation failed')
         }
       }
+      // Workout is written in two halves to stay under the serverless time limit.
       await runPhase('workout')
+      await runPhase('workout2')
       await runPhase('diet')
       // Enrich exercise videos last — non-fatal, the plan is already complete.
       await runPhase('videos').catch(() => {})
