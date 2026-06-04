@@ -61,8 +61,12 @@ export async function saveMobileProfile(profile: MobileProfileInput) {
 }
 
 export async function generateMobilePlan(profile: MobileProfileInput) {
+  // Plan generation is a long AI job (the server allows up to 300s). Give the
+  // client a matching window so a real result is never cut off early, while
+  // still bounding it so a dead connection eventually fails gracefully.
   return apiFetch<{ success: boolean; workout_plan_id: string; diet_plan_id: string }>('/api/generate-plan', {
     method: 'POST',
     body: JSON.stringify({ profileData: profile }),
+    timeoutMs: 290_000,
   })
 }

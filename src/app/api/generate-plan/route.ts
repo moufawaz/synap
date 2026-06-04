@@ -13,6 +13,12 @@ import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
 import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntelligenceRule } from '@/lib/plan-builder'
 
+// Plan generation is a large Opus completion + YouTube enrichment. 60 is the
+// Vercel Hobby maximum — give the function all the room the plan allows so it
+// never gets cut short. (On Vercel Pro you can raise this to 300.)
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function POST(req: Request) {
   // Guard: API key must be set
   const apiKey = process.env.ANTHROPIC_API_KEY

@@ -13,6 +13,11 @@ import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntell
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 import { recordAppEvent } from '@/lib/app-events'
 
+// Renewal regenerates a full plan, same as generate-plan. 60 is the Vercel
+// Hobby maximum. (On Vercel Pro you can raise this to 300.)
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 // POST /api/renew-plan  — called when a user's plan cycle expires
 export async function POST(req: Request) {
   try {

@@ -4,6 +4,11 @@ import Anthropic from '@anthropic-ai/sdk'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 
+// Vision analysis of an InBody photo — 60 is the Vercel Hobby maximum, well
+// above the ~10s default that was cutting analysis off.
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
