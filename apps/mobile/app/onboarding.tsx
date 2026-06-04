@@ -6,6 +6,7 @@ import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
+import { PlanGenerating } from '@/components/PlanGenerating'
 import { generateMobilePlan, MobileProfileInput, saveMobileProfile } from '@/features/onboarding'
 import { syncSynapReminders } from '@/features/notifications'
 import { analyzeInBodyPhoto } from '@/features/measurements'
@@ -109,6 +110,8 @@ export default function OnboardingScreen() {
   const [profile, setProfile] = useState<MobileProfileInput>({ ...initialProfile, language })
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [genPayload, setGenPayload] = useState<MobileProfileInput | null>(null)
   const [scanningInbody, setScanningInbody] = useState(false)
   const [inbodyDone, setInbodyDone] = useState(false)
   const [strength, setStrength] = useState<Record<string, string>>({})
@@ -136,7 +139,7 @@ export default function OnboardingScreen() {
     const err = validateStep()
     if (err) { Alert.alert('SYNAP', err); return }
     if (step < STEPS.length - 1) setStep(step + 1)
-    else submit()
+    else beginGeneration()
   }
   function back() { if (step > 0) setStep(step - 1) }
 
@@ -169,33 +172,45 @@ export default function OnboardingScreen() {
     }
   }
 
-  async function submit() {
-    setLoading(true)
-    try {
-      const filledStrength = Object.fromEntries(
-        Object.entries(strength).filter(([, v]) => String(v).trim()).map(([k, v]) => [k, `${String(v).trim()}kg`]),
-      )
-      const payload: MobileProfileInput = {
-        ...profile,
-        language,
-        strength_levels: Object.keys(filledStrength).length ? JSON.stringify(filledStrength) : '',
-      }
-      await saveMobileProfile(payload)
-      await generateMobilePlan(payload)
-      // Now that there's a plan, ask for notification permission and schedule the
-      // full proactive reminder set (water, meals, training, check-ins).
-      syncSynapReminders(true).catch(() => {})
-      Alert.alert('SYNAP', 'Your personalised plan is ready.')
-      router.replace('/(tabs)')
-    } catch (error) {
-      Alert.alert('Could not create plan', error instanceof Error ? error.message : 'Try again in a moment.')
-    } finally {
-      setLoading(false)
+  // Build the final payload and hand off to the full-screen PlanGenerating
+  // overlay, which animates real progress while save-profile + generate-plan run
+  // (and offers Try Again on error) — instead of a static spinner that reads as
+  // a frozen screen during the 30–60s generation.
+  function beginGeneration() {
+    const filledStrength = Object.fromEntries(
+      Object.entries(strength).filter(([, v]) => String(v).trim()).map(([k, v]) => [k, `${String(v).trim()}kg`]),
+    )
+    const payload: MobileProfileInput = {
+      ...profile,
+      language,
+      strength_levels: Object.keys(filledStrength).length ? JSON.stringify(filledStrength) : '',
     }
+    setGenPayload(payload)
+    setGenerating(true)
   }
 
   const showStrength = profile.gym_access === 'gym' || profile.currently_training === 'already'
   const align = isRtl ? 'right' : 'left'
+
+  // Full-screen animated progress while the plan is generated (mirrors web).
+  if (generating && genPayload) {
+    return (
+      <PlanGenerating
+        lang={language}
+        name={(profile.name || '').trim() || (language === 'ar' ? 'بطل' : 'Athlete')}
+        task={async () => {
+          await saveMobileProfile(genPayload)
+          await generateMobilePlan(genPayload)
+        }}
+        onComplete={() => {
+          // Plan exists now — request notification permission and schedule the
+          // full proactive reminder set, then land on the dashboard.
+          syncSynapReminders(true).catch(() => {})
+          router.replace('/(tabs)')
+        }}
+      />
+    )
+  }
 
   return (
     <Screen>
