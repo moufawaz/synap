@@ -211,6 +211,9 @@ export default function OnboardingScreen() {
           }
           // Phase 2: nutrition plan.
           await generateMobilePlan(genPayload, 'diet')
+          // Phase 3: enrich exercise videos (non-fatal — the plan is already
+          // complete and usable without it).
+          await generateMobilePlan(genPayload, 'videos').catch(() => {})
         }}
         onComplete={() => {
           // Plan exists now — request notification permission and schedule the

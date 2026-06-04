@@ -35,10 +35,13 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { profileData } = body
-    // Generation can run in two phases so each request finishes well within the
-    // serverless time limit: 'workout' then 'diet'. 'all' keeps the original
-    // single-shot behaviour (used by the web onboarding fallback).
-    const phase: 'all' | 'workout' | 'diet' = body.phase === 'workout' || body.phase === 'diet' ? body.phase : 'all'
+    // Generation runs in phases so each request finishes well within the
+    // serverless time limit: 'workout' → 'diet' → 'videos'. 'all' keeps the
+    // original single-shot behaviour. The 'videos' phase makes no AI call — it
+    // enriches the saved workout plan's exercise videos, kept off the generation
+    // critical path so workout generation stays under 60s.
+    const phase: 'all' | 'workout' | 'diet' | 'videos' =
+      ['workout', 'diet', 'videos'].includes(body.phase) ? body.phase : 'all'
 
     const supabase = await createRouteClient(req)
     const { user, error: authError } = await getAuthenticatedUser(req)
@@ -47,6 +50,38 @@ export async function POST(req: Request) {
     }
 
     const admin = createAdminClient()
+
+    // ── 'videos' phase: enrich the saved workout plan with verified YouTube IDs.
+    // No AI call, so it's fast and never blocks generation. Non-fatal by design.
+    if (phase === 'videos') {
+      const { data: wp } = await supabase
+        .from('workout_plans')
+        .select('id, plan_json')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (!wp?.plan_json) {
+        return NextResponse.json({ success: true, phase: 'videos', enriched: 0 })
+      }
+      const planJson: any = wp.plan_json
+      const exercises: any[] = (planJson?.days || []).flatMap((d: any) => d.exercises || [])
+      await Promise.all(
+        exercises.map(async (ex: any) => {
+          try {
+            ex.video_id = await Promise.race([
+              resolveExerciseVideo(ex.name),
+              new Promise<null>(res => setTimeout(() => res(null), 8_000)),
+            ])
+          } catch {
+            ex.video_id = ex.video_id ?? null
+          }
+        }),
+      )
+      await supabase.from('workout_plans').update({ plan_json: planJson }).eq('id', wp.id)
+      return NextResponse.json({ success: true, phase: 'videos', enriched: exercises.length })
+    }
 
     // Rate limit: max 3 plan generations per user per 24 hours. Count on the
     // workout/all phase only so the paired diet call doesn't double-count.
@@ -149,24 +184,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Ion returned an invalid plan format. Please try again.' }, { status: 500 })
     }
 
-    // Enrich every exercise with a verified YouTube video ID
-    // Run all lookups in parallel (static-map hits are instant; dynamic
-    // searches run concurrently so the total wait is ~one search, not N).
-    const allExercises: any[] = (plan.workout_plan?.days || []).flatMap(
-      (day: any) => day.exercises || []
-    )
-    await Promise.all(
-      allExercises.map(async (ex: any) => {
-        try {
-          ex.video_id = await Promise.race([
-            resolveExerciseVideo(ex.name),
-            new Promise<null>(res => setTimeout(() => res(null), 10_000)),
-          ])
-        } catch {
-          ex.video_id = null
-        }
-      })
-    )
+    // Enrich exercise videos inline only for the single-shot 'all' path. In the
+    // phased flow the dedicated 'videos' phase handles this AFTER the workout is
+    // saved, so workout generation itself never pays the enrichment cost (which
+    // was pushing it past the 60s function limit).
+    if (phase === 'all' && plan.workout_plan) {
+      const allExercises: any[] = (plan.workout_plan?.days || []).flatMap(
+        (day: any) => day.exercises || []
+      )
+      await Promise.all(
+        allExercises.map(async (ex: any) => {
+          try {
+            ex.video_id = await Promise.race([
+              resolveExerciseVideo(ex.name),
+              new Promise<null>(res => setTimeout(() => res(null), 10_000)),
+            ])
+          } catch {
+            ex.video_id = null
+          }
+        })
+      )
+    }
 
     // Insert new plans first (inactive), then atomically activate them by
     // deactivating old plans only after both inserts succeed.
