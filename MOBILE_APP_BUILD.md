@@ -1995,3 +1995,95 @@ registration** — so new/social-sign-in users never got any. Rebuilt
 - Tap-routing unchanged (each reminder carries `data.url`).
 
 Merged `feat/notifications` → `main` (build 1087).
+
+## App Store submission, rejection & fixes (2026-06, builds 1090–1097)
+
+First submission to App Review surfaced two issues; both were resolved and the
+app resubmitted on **build 1097**. This section captures everything done in that
+cycle.
+
+### Pre-submission polish
+- **Tab-bar black band (build 1090, fixpack-22)** — `Screen.tsx` was insetting
+  the bottom safe area while the tab bar *also* adds its own, leaving an empty
+  bg-colored strip above the tab bar on every screen. Fixed by insetting only
+  `['top','left','right']` (the tab bar owns the bottom). `src/components/Screen.tsx`.
+- **Notifications never firing (build 1092, fixpack-23)** — root cause: the
+  Settings toggle called `syncSynapReminders()` **without requesting OS
+  permission**, so accounts created before the onboarding-permission flow (e.g.
+  the admin account) silently scheduled nothing. Also DAILY/WEEKLY triggers only
+  fire at clock time, so there was no feedback. Fixes:
+  - `settings.tsx` `toggleNotif` is now async: requests permission when enabling,
+    alerts the user to enable in iOS Settings if denied, and fires
+    `sendTestReminder()` for an **instant bilingual confirmation** (with the
+    scheduled count).
+  - `notifications.ts` `sendTestReminder(lang, scheduled)` — one-off
+    TIME_INTERVAL confirmation.
+- **`.gitignore` hardening** — `credentials.json`, `*.mobileprovision`, `*.p12`,
+  `*.p8`, `tmp_*.json` were untracked but **not ignored** (a `git add -A` could
+  have committed them). Added ignore rules; verified blocked. Provisioning
+  profiles live in GitHub secrets (base64) only.
+
+### Apple demo account
+Created/repaired `apple-review@synapfit.app` (password reset to a known value,
+verified via a real anon password sign-in). Granted an explicit **active Elite
+subscription through 2027** so the reviewer sees full access even though the
+account's free trial had expired. Seed data: profile, active workout plan, active
+diet plan, baseline measurement. Setup script: `scripts/setup-apple-review-user.mjs`.
+
+### Subscription model & 3.1.1 compliance (audited)
+- **Tiers** (from `src/lib/subscription.ts`): **Free 7-day trial** (Elite access,
+  set automatically by DB trigger `trg_set_profile_trial` = signup + 7 days) →
+  **Starter** (free, 5 Ion messages/day, keeps plan + progress) → **Pro**
+  (unlimited chat + food scan / eating-out + meal-recipe regen) → **Elite** (Pro +
+  form-check, auto macro-adjustment, supplement/vitamin recommendations).
+- **iOS app is 3.1.1-clean**: no prices, no "subscribe/buy" CTA, no external
+  purchase steering anywhere. The dashboard banner and `UpgradeGate` navigate to
+  an **internal** `/billing` status screen; the only outbound link is to the
+  `synapfit.app/contact` support page. Billing screen shows plan status + feature
+  list + support contact only.
+- Drafted the App Review reply (EN + AR) answering the 5 business-model questions
+  (multiplatform "reader" model: subscriptions bought on the web, app only unlocks
+  the existing account, free + 7-day trial signup).
+
+### Rejection 2.1(a) — "Plan generation loaded indefinitely" (iPad Air)
+Real cause (proven by on-device screenshots showing `FUNCTION_INVOCATION_TIMEOUT`
+and confirmed by timing production): a single Opus call generating the **full**
+plan exceeds **Vercel Hobby's hard 60s function limit**, so the request was
+killed mid-generation. A progress bar alone can't fix a request that can't finish
+in 60s. The web app had the same hidden risk.
+
+Fix evolved in three steps, all keeping **full Opus quality**:
+1. **Animated progress UI (build 1094, fixpack-24)** — new mobile `PlanGenerating`
+   overlay (0–100% ring, cycling step messages EN/AR, smooth bar, Try
+   Again/Continue) mirroring the web `PlanGenerating.tsx`; replaces the static
+   spinner. `apiFetch` gained an `AbortController` `timeoutMs`. Heavy AI routes
+   (`generate-plan`, `renew-plan`, `analyze-inbody`) pinned to
+   `runtime='nodejs'` + `maxDuration=60` (the Hobby max).
+2. **Two-phase generation (fixpack-25)** — `generate-plan` is phase-aware
+   (`workout` | `diet` | `videos` | `all`). `buildPrompt(…, focus)` emits only
+   that half's rules + JSON; saves/swaps/email guarded per phase. YouTube
+   enrichment moved off the critical path into a no-AI **`videos`** phase that
+   enriches the saved workout plan. Onboarding runs the phases sequentially.
+   Measured: diet ~50s ✅, videos ~2s ✅, but **workout still 504'd at 62s** — the
+   workout *writing* alone exceeds 60s.
+3. **Workout split (build 1097, fixpack-26)** — the workout itself is now written
+   in two halves by training day: **`workout`** (plan meta + first half of days)
+   then **`workout2`** (remaining days), merged server-side into the saved plan by
+   weekday (de-duped). `buildPrompt` gained a `workoutPart` arg; part 2 emits only
+   `workout_plan.days`. Onboarding flow: **workout → workout2 → diet → videos**,
+   each request well under 60s. Rate limit counts the first workout phase only.
+
+**Production verification** (throwaway user, `synapfit.app`): workout 53.2s,
+workout2 46.7s, diet 46.2s, videos 3.0s — all HTTP 200, all <60s. Merged plan: 4
+training days (Mon/Tue/Thu/Fri), 28 exercises, **all 28 with YouTube videos**.
+
+Residual note: phases land at 46–53s, comfortable for 3–5 training-day plans;
+6-day plans have thinner margins (≈40s fixed Opus overhead + ~5.5s/day). Optional
+future hardening: adaptive ≤2-days-per-call split, or upgrade to Vercel Pro
+(`maxDuration=300`, which makes the whole split unnecessary).
+
+### Build/branch trail
+`fix/ui-and-qa` (1090) → `fix/notifications-enable` (1092) → `fix/plan-gen-timeout`
+(1094) → `fix/plan-gen-chunked` → `fix/plan-gen-videos-phase` (1096) →
+`fix/workout-split` (1097), each merged cleanly to `main`. `main` is the single
+source of truth for web + app. **Submission build: 1.0 (1097).**
