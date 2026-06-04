@@ -65,19 +65,23 @@ export default function PlanGenerating({ lang, name, data, onComplete }: PlanGen
         body: JSON.stringify({ data: { ...data, language: lang } }),
       })
 
-      // 2. Generate plan with Claude
-      const res = await fetch('/api/generate-plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileData: data }),
-      })
+      // 2. Generate the plan in two phases so each request finishes well within
+      //    the serverless time limit: workout first, then nutrition.
+      const runPhase = async (phase: 'workout' | 'diet') => {
+        const res = await fetch('/api/generate-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profileData: data, phase }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Plan generation failed')
+        }
+      }
+      await runPhase('workout')
+      await runPhase('diet')
 
       clearInterval(stepInterval)
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Plan generation failed')
-      }
 
       // Show final step
       setCurrentStep(steps.length - 1)
