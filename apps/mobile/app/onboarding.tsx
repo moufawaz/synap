@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
@@ -112,6 +112,10 @@ export default function OnboardingScreen() {
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genPayload, setGenPayload] = useState<MobileProfileInput | null>(null)
+  // Tracks whether the workout phase already succeeded, so a "Try Again" after a
+  // diet-phase failure doesn't needlessly regenerate (and re-charge rate limit
+  // for) the workout plan.
+  const workoutPhaseDone = useRef(false)
   const [scanningInbody, setScanningInbody] = useState(false)
   const [inbodyDone, setInbodyDone] = useState(false)
   const [strength, setStrength] = useState<Record<string, string>>({})
@@ -200,7 +204,13 @@ export default function OnboardingScreen() {
         name={(profile.name || '').trim() || (language === 'ar' ? 'بطل' : 'Athlete')}
         task={async () => {
           await saveMobileProfile(genPayload)
-          await generateMobilePlan(genPayload)
+          // Phase 1: workout plan (skipped if a prior attempt already built it).
+          if (!workoutPhaseDone.current) {
+            await generateMobilePlan(genPayload, 'workout')
+            workoutPhaseDone.current = true
+          }
+          // Phase 2: nutrition plan.
+          await generateMobilePlan(genPayload, 'diet')
         }}
         onComplete={() => {
           // Plan exists now — request notification permission and schedule the

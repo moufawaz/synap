@@ -68,7 +68,9 @@ export function PlanGenerating({
     setProgress(0)
     setStepIndex(0)
 
-    // Climb through the "thinking" steps to ~90% while the request is in flight.
+    // Climb through the "thinking" steps to ~90% while the two generation phases
+    // run (~60–90s total). Pace the steps over that window so the bar tracks real
+    // progress instead of racing to 90% and sitting.
     let i = 0
     const ticker = setInterval(() => {
       i++
@@ -76,7 +78,7 @@ export function PlanGenerating({
         setStepIndex(i)
         setProgress(Math.round((i / (steps.length - 1)) * 90))
       }
-    }, 1400)
+    }, 7000)
 
     try {
       await task()

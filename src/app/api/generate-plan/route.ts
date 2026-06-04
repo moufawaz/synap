@@ -35,6 +35,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { profileData } = body
+    // Generation can run in two phases so each request finishes well within the
+    // serverless time limit: 'workout' then 'diet'. 'all' keeps the original
+    // single-shot behaviour (used by the web onboarding fallback).
+    const phase: 'all' | 'workout' | 'diet' = body.phase === 'workout' || body.phase === 'diet' ? body.phase : 'all'
 
     const supabase = await createRouteClient(req)
     const { user, error: authError } = await getAuthenticatedUser(req)
@@ -44,18 +48,21 @@ export async function POST(req: Request) {
 
     const admin = createAdminClient()
 
-    // Rate limit: max 3 plan generations per user per 24 hours
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const { count: recentGenerations } = await admin
-      .from('workout_plans')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('created_at', since24h)
-    if ((recentGenerations ?? 0) >= 3) {
-      return NextResponse.json(
-        { error: 'Plan generation limit reached. You can generate up to 3 plans per day. Try again tomorrow.' },
-        { status: 429 }
-      )
+    // Rate limit: max 3 plan generations per user per 24 hours. Count on the
+    // workout/all phase only so the paired diet call doesn't double-count.
+    if (phase !== 'diet') {
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const { count: recentGenerations } = await admin
+        .from('workout_plans')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('created_at', since24h)
+      if ((recentGenerations ?? 0) >= 3) {
+        return NextResponse.json(
+          { error: 'Plan generation limit reached. You can generate up to 3 plans per day. Try again tomorrow.' },
+          { status: 429 }
+        )
+      }
     }
 
     const [languageRow, latestMeasurementRow, measurementHistoryRow, profileRow] = await Promise.all([
@@ -93,7 +100,7 @@ export async function POST(req: Request) {
       } : {}),
       language: languageRow.data?.language ?? profileData?.language ?? 'en',
     }
-    const prompt = buildPrompt(profileForPlan, latestMeasurement, measurementHistory)
+    const prompt = buildPrompt(profileForPlan, latestMeasurement, measurementHistory, phase)
 
     const message = await withAnthropicRetry(() => client.messages.create({
       model: process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5',
@@ -169,63 +176,73 @@ export async function POST(req: Request) {
     const workoutEnd   = new Date(Date.now() + 6 * 7 * 86400000).toISOString().split('T')[0]
     const dietEnd      = new Date(Date.now() + 2 * 7 * 86400000).toISOString().split('T')[0]
 
-    const { data: workoutPlan, error: wpError } = await supabase.from('workout_plans').insert({
-      user_id: user.id,
-      plan_json: plan.workout_plan,
-      active: false,
-      start_date: cycleStart,
-      end_date: workoutEnd,
-    }).select().maybeSingle()
+    let workoutPlanId: string | undefined
+    let dietPlanId: string | undefined
 
-    if (wpError) {
-      console.error('Workout plan save error:', wpError)
-      await recordAppEvent({
-        userId: user.id,
-        eventType: 'plan_generation_failed',
-        severity: 'error',
-        source: 'api/generate-plan',
-        message: `Workout plan save failed: ${wpError.message}`,
-      })
-      if (user.email) {
-        sendPlanErrorEmailIfNeeded(user.id, user.email, profileData?.name || 'Athlete').catch(() => {})
+    // ── Workout plan (workout / all phases) ───────────────────────────────────
+    if (plan.workout_plan) {
+      const { data: workoutPlan, error: wpError } = await supabase.from('workout_plans').insert({
+        user_id: user.id,
+        plan_json: plan.workout_plan,
+        active: false,
+        start_date: cycleStart,
+        end_date: workoutEnd,
+      }).select().maybeSingle()
+
+      if (wpError) {
+        console.error('Workout plan save error:', wpError)
+        await recordAppEvent({
+          userId: user.id, eventType: 'plan_generation_failed', severity: 'error',
+          source: 'api/generate-plan', message: `Workout plan save failed: ${wpError.message}`,
+        })
+        if (user.email) {
+          sendPlanErrorEmailIfNeeded(user.id, user.email, profileData?.name || 'Athlete').catch(() => {})
+        }
+        return NextResponse.json({ error: `Failed to save workout plan: ${wpError.message}` }, { status: 500 })
       }
-      return NextResponse.json({ error: `Failed to save workout plan: ${wpError.message}` }, { status: 500 })
+      workoutPlanId = workoutPlan!.id
+      // Atomic swap: deactivate prior workout plans, then activate the new one.
+      await supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id).neq('id', workoutPlanId)
+      await supabase.from('workout_plans').update({ active: true }).eq('id', workoutPlanId)
     }
 
-    const { data: dietPlan, error: dpError } = await supabase.from('diet_plans').insert({
-      user_id: user.id,
-      plan_json: plan.diet_plan,
-      active: false,
-      start_date: cycleStart,
-      end_date: dietEnd,
-    }).select().maybeSingle()
+    // ── Diet plan (diet / all phases) ─────────────────────────────────────────
+    if (plan.diet_plan) {
+      const { data: dietPlan, error: dpError } = await supabase.from('diet_plans').insert({
+        user_id: user.id,
+        plan_json: plan.diet_plan,
+        active: false,
+        start_date: cycleStart,
+        end_date: dietEnd,
+      }).select().maybeSingle()
 
-    if (dpError) {
-      console.error('Diet plan save error:', dpError)
-      await recordAppEvent({
-        userId: user.id,
-        eventType: 'plan_generation_failed',
-        severity: 'error',
-        source: 'api/generate-plan',
-        message: `Diet plan save failed: ${dpError.message}`,
-      })
-      if (user.email) {
-        sendPlanErrorEmailIfNeeded(user.id, user.email, profileData?.name || 'Athlete').catch(() => {})
+      if (dpError) {
+        console.error('Diet plan save error:', dpError)
+        await recordAppEvent({
+          userId: user.id, eventType: 'plan_generation_failed', severity: 'error',
+          source: 'api/generate-plan', message: `Diet plan save failed: ${dpError.message}`,
+        })
+        if (user.email) {
+          sendPlanErrorEmailIfNeeded(user.id, user.email, profileData?.name || 'Athlete').catch(() => {})
+        }
+        return NextResponse.json({ error: `Failed to save diet plan: ${dpError.message}` }, { status: 500 })
       }
-      return NextResponse.json({ error: `Failed to save diet plan: ${dpError.message}` }, { status: 500 })
+      dietPlanId = dietPlan!.id
+      await supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id).neq('id', dietPlanId)
+      await supabase.from('diet_plans').update({ active: true }).eq('id', dietPlanId)
+
+      // Supplement + vitamin recommendations need the diet plan (Elite only, non-blocking)
+      generateSupplementRecsIfElite(
+        supabase,
+        client,
+        user.id,
+        { ...profileForPlan, body_fat_pct: latestMeasurement?.body_fat_pct ?? profileForPlan.body_fat_pct },
+        plan.diet_plan,
+        normalizeAiLanguage(profileForPlan.language),
+      ).catch(e => console.error('[generate-plan] supplement gen failed:', e))
     }
 
-    // Both rows saved — now safely swap: deactivate old, activate new
-    await Promise.all([
-      supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id).neq('id', workoutPlan!.id),
-      supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id).neq('id', dietPlan!.id),
-    ])
-    await Promise.all([
-      supabase.from('workout_plans').update({ active: true }).eq('id', workoutPlan!.id),
-      supabase.from('diet_plans').update({ active: true }).eq('id', dietPlan!.id),
-    ])
-
-    // Save Ion's personal message as first chat message
+    // Save Ion's personal message as first chat message (comes with the diet phase)
     if (plan.ion_message) {
       await supabase.from('chat_messages').insert({
         user_id: user.id,
@@ -251,25 +268,15 @@ export async function POST(req: Request) {
       eventType: 'plan_generation_succeeded',
       severity: 'info',
       source: 'api/generate-plan',
-      message: 'Plan generated and saved',
-      metadata: { workout_plan_id: workoutPlan?.id, diet_plan_id: dietPlan?.id },
+      message: `Plan generated and saved (phase: ${phase})`,
+      metadata: { workout_plan_id: workoutPlanId, diet_plan_id: dietPlanId, phase },
     })
 
-    // Fire supplement + vitamin recommendations (Elite only, non-blocking)
-    generateSupplementRecsIfElite(
-      supabase,
-      client,
-      user.id,
-      // Use measured BF% from latest measurement row if available; fall back to InBody profile value (never null it out)
-      { ...profileForPlan, body_fat_pct: latestMeasurement?.body_fat_pct ?? profileForPlan.body_fat_pct },
-      plan.diet_plan,
-      normalizeAiLanguage(profileForPlan.language),
-    ).catch(e => console.error('[generate-plan] supplement gen failed:', e))
-
-    // Send post-generation email (fire-and-forget; do not block response).
-    // If the user previously had a failed attempt, send the resolution email.
-    // Otherwise send the standard welcome email.
-    if (user.email) {
+    // Send post-generation email (fire-and-forget; do not block response). Only on
+    // the finishing phase ('diet' or single-shot 'all') so the two-phase flow
+    // doesn't send two emails. If the user previously had a failed attempt, send
+    // the resolution email; otherwise the standard welcome email.
+    if (user.email && phase !== 'workout') {
       sendPlanResolvedEmailIfNeeded(user.id, user.email, profileData.name || 'Athlete')
         .then((resolvedSent) => {
           if (!resolvedSent) {
@@ -285,8 +292,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      workout_plan_id: workoutPlan?.id,
-      diet_plan_id: dietPlan?.id,
+      phase,
+      workout_plan_id: workoutPlanId,
+      diet_plan_id: dietPlanId,
     })
   } catch (err: any) {
     console.error('Generate plan error:', err?.message || err)
@@ -381,11 +389,16 @@ function repairTruncatedJSON(s: string): string | null {
 
 // calculateMacros and calculateWorkoutParams are imported from @/lib/plan-builder
 
-function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[]): string {
+function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[], focus: 'all' | 'workout' | 'diet' = 'all'): string {
   const language = normalizeAiLanguage(p.language)
   const m = calculateMacros(p, latestMeasurement)
   const w = calculateWorkoutParams(p)
   const ar = language === 'ar'
+  // Two-phase generation: each phase emits only its half so the request finishes
+  // inside the serverless time limit. 'all' emits both (single-shot fallback).
+  const wantWorkout = focus === 'all' || focus === 'workout'
+  const wantDiet = focus === 'all' || focus === 'diet'
+  const planScope = focus === 'workout' ? '6-week training plan' : focus === 'diet' ? '2-week nutrition plan' : '6-week fitness and nutrition plan'
 
   const goalLabels: Record<string, string> = {
     lose_fat:       'Lose Body Fat',
@@ -412,7 +425,7 @@ function buildPrompt(p: any, latestMeasurement?: any, measurementHistory?: any[]
   // schedule) into the 6-week window and de-dupe.
   const deload6 = w.deloadWeeks.map((d: number) => Math.min(d, 6)).filter((d: number, i: number, a: number[]) => a.indexOf(d) === i)
 
-  return `You are Ion, a world-class AI personal trainer and clinical nutritionist. Build a complete, hyper-personalised 6-week fitness and nutrition plan for this specific client.
+  return `You are Ion, a world-class AI personal trainer and clinical nutritionist. Build a complete, hyper-personalised ${planScope} for this specific client.
 
 ${aiLanguageInstruction(language, 'all user-facing JSON string values including plan names, meal names, recipes, exercise tips, coaching notes, summaries, and ion_message')}
 
@@ -448,7 +461,7 @@ TRAINING:
   Exercises to NEVER program: ${p.exercises_hated || 'None'}
   Injuries: ${p.injuries || 'None'} | Medical: ${p.medical_conditions || 'None'}
   Strength levels: ${p.strength_levels || 'Not provided'}
-
+${wantDiet ? `
 ????????????????????????????
 NUTRITION PROFILE — READ CAREFULLY
 ????????????????????????????
@@ -526,7 +539,7 @@ ${p.goal === 'build_muscle' ? `   - Sufficient carbs to fuel training and recove
 ${p.goal === 'recomposition' ? `   - Calorie cycling: slightly higher on training days, maintenance on rest
    - Protein at every meal is non-negotiable for simultaneous fat loss + muscle retention
    - Carb timing is critical — carbs mostly around training` : ''}
-
+` : ''}${wantWorkout ? `
 ????????????????????????????
 WORKOUT PLAN BUILDING RULES
 ????????????????????????????
@@ -596,12 +609,12 @@ ${p.goal === 'improve_fitness' || p.goal === 'be_healthier' ? `   - Balance resi
    - Include at least one full-body circuit or conditioning session per week
    - Emphasise movement quality over load — especially for beginners
    - Include active recovery or flexibility work on lighter days` : ''}
-
+` : ''}
 IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no extra text.
 JSON key names must stay exactly as shown. For workout day_name, ALWAYS use English weekdays (Sunday–Saturday) even for Arabic users — only translate user-facing display strings.
 
 {
-  "summary": "3-sentence personalised overview: what the approach is, why it fits this person, what result to expect in 6 weeks",
+${wantWorkout ? `  "summary": "3-sentence personalised overview: what the approach is, why it fits this person, what result to expect in 6 weeks",
   "workout_plan": {
     "name": "Plan name reflecting goal and split",
     "schedule": "${p.training_days} days/week",
@@ -638,8 +651,8 @@ JSON key names must stay exactly as shown. For workout day_name, ALWAYS use Engl
         "session_notes": "Recovery or technique focus for this day"
       }
     ]
-  },
-  "diet_plan": {
+  }${wantDiet ? ',' : ''}` : ''}
+${wantDiet ? `  "diet_plan": {
     "daily_calories": ${m.calories},
     "protein_g": ${m.protein},
     "carbs_g": ${m.carbs},
@@ -679,6 +692,6 @@ JSON key names must stay exactly as shown. For workout day_name, ALWAYS use Engl
       }
     ]
   },
-  "ion_message": "Warm, direct, personal 3-4 sentence message from Ion. Reference the client's name, their specific goal target, one thing from their food preferences, and what to expect. Sound like a real elite coach."
+  "ion_message": "Warm, direct, personal 3-4 sentence message from Ion. Reference the client's name, their specific goal target, one thing from their food preferences, and what to expect. Sound like a real elite coach."` : ''}
 }`
 }
