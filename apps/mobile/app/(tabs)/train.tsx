@@ -6,6 +6,7 @@ import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
+import { MedicalDisclaimer } from '@/components/MedicalDisclaimer'
 import { VideoModal } from '@/components/VideoModal'
 import { getPlanHistory, logWorkout, TodayWorkout } from '@/features/workout'
 import { notifyError, notifySuccess, tapLight, tapMedium } from '@/lib/haptics'
@@ -684,6 +685,8 @@ export default function TrainScreen() {
           )}
         </>
       )}
+
+      <MedicalDisclaimer context="training" />
     </Screen>
   )
 }

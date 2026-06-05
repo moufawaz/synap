@@ -108,6 +108,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       nonce: rawNonce,
     })
     if (error) throw error
+
+    // Apple returns the user's full name ONLY on the first authorization. Persist
+    // it to the account so the app never has to ask for it again (App Store
+    // Guideline 4 / Sign in with Apple). The onboarding name field reads this.
+    const given = credential.fullName?.givenName?.trim() || ''
+    const family = credential.fullName?.familyName?.trim() || ''
+    const fullName = `${given} ${family}`.trim()
+    if (fullName) {
+      try {
+        await supabase.auth.updateUser({ data: { full_name: fullName, name: fullName } })
+      } catch { /* non-fatal — name is a convenience prefill, not required */ }
+    }
   }
 
   async function resetPassword(email: string) {
