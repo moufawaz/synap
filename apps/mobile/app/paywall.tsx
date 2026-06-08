@@ -85,8 +85,11 @@ export default function PaywallScreen() {
       } else {
         Alert.alert(isRtl ? 'لا يوجد اشتراك' : 'Nothing to restore', isRtl ? 'لم نعثر على اشتراك نشط على هذا الحساب.' : 'We didn’t find an active subscription on this Apple ID.')
       }
-    } catch (e: any) {
-      Alert.alert(isRtl ? 'تعذّرت الاستعادة' : 'Restore failed', e?.message || (isRtl ? 'حاول مرة أخرى.' : 'Please try again.'))
+    } catch {
+      Alert.alert(
+        isRtl ? 'تعذّرت الاستعادة' : 'Restore failed',
+        isRtl ? 'تعذّر الوصول إلى المتجر. حاول مرة أخرى لاحقاً.' : "Couldn't reach the store. Please try again later.",
+      )
     } finally {
       setBusyId(null)
     }

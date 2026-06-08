@@ -40,6 +40,16 @@ export default function BillingScreen() {
     sub?.tier === 'elite' ? color.flame :
     sub?.tier === 'pro'   ? color.spark : color.muted
 
+  // Free-trial users have full access without paying — show that clearly so they
+  // know it's a 7-day trial and when it ends.
+  const onTrial = !!sub?.isTrial
+  const trialDays = sub?.trialDaysLeft ?? null
+  const badgeLabel = onTrial
+    ? (isRtl
+        ? `تجربة ${tierLabel} مجانية${trialDays != null ? ` — ${trialDays} يوم متبقٍ` : ''}`
+        : `${tierLabel} free trial${trialDays != null ? ` — ${trialDays} day${trialDays === 1 ? '' : 's'} left` : ''}`)
+    : (isRtl ? `مشترك — ${tierLabel}` : `Subscribed — ${tierLabel}`)
+
   const align = isRtl ? 'right' : 'left'
   const dir   = isRtl ? 'row-reverse' : 'row'
 
@@ -161,18 +171,24 @@ export default function BillingScreen() {
           >
             <IonAvatar size="lg" />
             <View style={[styles.planBadge, { backgroundColor: `${tierColor}20`, borderColor: `${tierColor}40` }]}>
-              <Feather name="check-circle" size={14} color={tierColor} />
+              <Feather name={onTrial ? 'gift' : 'check-circle'} size={14} color={tierColor} />
               <Text style={[styles.planBadgeText, { color: tierColor }]}>
-                {isRtl ? `مشترك — ${tierLabel}` : `Subscribed — ${tierLabel}`}
+                {badgeLabel}
               </Text>
             </View>
             <Text style={[styles.planHeroTitle, { color: color.text }]}>
-              {isRtl ? 'وصول كامل مفعّل' : 'Full access active'}
+              {onTrial
+                ? (isRtl ? 'تجربتك المجانية فعّالة' : 'Your free trial is active')
+                : (isRtl ? 'وصول كامل مفعّل' : 'Full access active')}
             </Text>
             <Text style={[styles.planHeroSub, { color: color.muted }]}>
-              {isRtl
-                ? 'يمكنك الاستمتاع بجميع ميزات SYNAP بما فيها كوتش آيون وخطط التغذية والتمرين.'
-                : 'You have full access to all SYNAP features including your Ion coach, nutrition plans, and workout programme.'}
+              {onTrial
+                ? (isRtl
+                    ? `أنت على تجربة Elite مجانية مع وصول كامل لكل ميزات SYNAP${trialDays != null ? ` لمدة ${trialDays} يوم` : ''}. اشترك للاستمرار بعد انتهاء التجربة.`
+                    : `You're on a free Elite trial with full access to every SYNAP feature${trialDays != null ? ` for ${trialDays} more day${trialDays === 1 ? '' : 's'}` : ''}. Subscribe to keep your access when the trial ends.`)
+                : (isRtl
+                    ? 'يمكنك الاستمتاع بجميع ميزات SYNAP بما فيها كوتش آيون وخطط التغذية والتمرين.'
+                    : 'You have full access to all SYNAP features including your Ion coach, nutrition plans, and workout programme.')}
             </Text>
           </LinearGradient>
 
