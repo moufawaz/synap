@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
@@ -6,6 +6,7 @@ import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
+import { useAuth } from '@/auth/AuthProvider'
 import { PlanGenerating } from '@/components/PlanGenerating'
 import { generateMobilePlan, MobileProfileInput, saveMobileProfile } from '@/features/onboarding'
 import { syncSynapReminders } from '@/features/notifications'
@@ -107,8 +108,18 @@ function MultiSelect({ label, selected, onToggle, options, color, isRtl }: {
 export default function OnboardingScreen() {
   const { color } = useTheme()
   const { language, isRtl } = useLanguage()
+  const { session } = useAuth()
   const [profile, setProfile] = useState<MobileProfileInput>({ ...initialProfile, language })
   const [step, setStep] = useState(0)
+
+  // Pre-fill the name from the signed-in account (Sign in with Apple / Google
+  // provide it via the auth framework) so we never re-ask for info the user
+  // already supplied — App Store Guideline 4 / Sign in with Apple.
+  useEffect(() => {
+    const meta = (session?.user?.user_metadata ?? {}) as Record<string, any>
+    const authName = String(meta.full_name || meta.name || '').trim()
+    if (authName) setProfile(p => (p.name.trim() ? p : { ...p, name: authName }))
+  }, [session])
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genPayload, setGenPayload] = useState<MobileProfileInput | null>(null)

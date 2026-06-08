@@ -95,6 +95,13 @@ export default function BillingScreen() {
                 ? 'لا يوجد لهذا الحساب اشتراك نشط في SYNAP حالياً.'
                 : "This account doesn't have an active SYNAP plan yet."}
             </Text>
+            <Pressable
+              onPress={() => router.push('/paywall')}
+              style={[styles.seePlansBtn, { backgroundColor: color.spark }]}
+            >
+              <Feather name="star" size={14} color="#fff" />
+              <Text style={styles.seePlansText}>{isRtl ? 'عرض الخطط والاشتراك' : 'See plans & subscribe'}</Text>
+            </Pressable>
           </LinearGradient>
 
           {/* Already subscribed? — restore via correct account */}
@@ -231,6 +238,8 @@ const styles = StyleSheet.create({
   },
   heroTitle: { fontSize: 22, fontWeight: '900', textAlign: 'center' },
   heroSub: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
+  seePlansBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8, paddingHorizontal: 22, paddingVertical: 13, borderRadius: 14 },
+  seePlansText: { color: '#fff', fontSize: 14, fontWeight: '900' },
 
   // Section labels
   sectionLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 12 },

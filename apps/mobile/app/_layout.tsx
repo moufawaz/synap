@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import LoadingSplash from '@/components/LoadingSplash'
 import { registerDeviceToken } from '@/features/tools'
 import { syncSynapReminders } from '@/features/notifications'
+import { configurePurchases, identifyPurchaser, resetPurchaser } from '@/features/purchases'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 
@@ -37,6 +38,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
 // their data instead of a spinner. A safety timeout (below) guarantees it never
 // hangs — Apple rejects artificially long splash screens.
 SplashScreen.preventAutoHideAsync().catch(() => {})
+
+// Configure the In-App Purchase SDK once at startup (no-op without an iOS key).
+configurePurchases()
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -120,11 +124,14 @@ function RootNavigator() {
   useEffect(() => {
     if (!loading && session === null) {
       pushRegistered.current = false
+      resetPurchaser()
       router.replace('/(auth)/login')
     }
     // Auto-register push token once per session when user is authenticated
     if (!loading && session !== null && !pushRegistered.current) {
       pushRegistered.current = true
+      // Tie StoreKit purchases to this account so the webhook maps them correctly.
+      identifyPurchaser(session.user?.id)
       tryAutoRegisterPush()
     }
   }, [session, loading])

@@ -46,14 +46,14 @@ export function UpgradeGate({ hasAccess, children, featureName, featureNameAr }:
           : 'This feature is part of a SYNAP plan, including your Ion coach, nutrition plans, and workout programmes.'}
       </Text>
 
-      {/* CTA — navigates to the in-app plan status screen (no external URL) */}
+      {/* CTA — opens the in-app subscription paywall (StoreKit In-App Purchase) */}
       <Pressable
         style={[styles.btn, { backgroundColor: color.spark }]}
-        onPress={() => router.push('/billing')}
+        onPress={() => router.push('/paywall')}
       >
         <Feather name="star" size={14} color="#fff" />
         <Text style={styles.btnText}>
-          {isRtl ? 'عرض خطتك' : 'View your plan'}
+          {isRtl ? 'عرض الخطط' : 'See plans'}
         </Text>
       </Pressable>
     </View>

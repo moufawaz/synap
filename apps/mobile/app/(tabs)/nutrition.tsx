@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
+import { MedicalDisclaimer } from '@/components/MedicalDisclaimer'
 import { Screen } from '@/components/Screen'
 import {
   createMealLog,
@@ -698,6 +699,8 @@ export default function NutritionScreen() {
           </View>
         ) : null}
       </View>
+
+      <MedicalDisclaimer context="nutrition" />
 
       {/* ── Barcode camera modal ── */}
       <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => setScannerOpen(false)}>
