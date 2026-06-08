@@ -196,6 +196,17 @@ export default function BillingScreen() {
             ))}
           </View>
 
+          {/* View all plans — keep the In-App Purchase paywall reachable even for
+              active subscribers (so users can change plan and App Review can
+              always find the IAP offering). */}
+          <Pressable
+            onPress={() => router.push('/paywall')}
+            style={[styles.seePlansBtn, { backgroundColor: color.spark, marginTop: 14 }]}
+          >
+            <Feather name="grid" size={14} color="#fff" />
+            <Text style={styles.seePlansText}>{isRtl ? 'عرض كل الخطط' : 'View all plans'}</Text>
+          </Pressable>
+
           {/* Manage / support */}
           <View style={[styles.card, { backgroundColor: color.surface, borderColor: color.border, marginTop: 14 }]}>
             <Text style={[styles.cardTitle, { color: color.text, textAlign: align }]}>
