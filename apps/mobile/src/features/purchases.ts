@@ -78,11 +78,14 @@ export async function restore(): Promise<CustomerInfo | null> {
   return Purchases.restorePurchases()
 }
 
-/** Highest active entitlement from a CustomerInfo (elite outranks pro). */
+/** Highest active entitlement from a CustomerInfo (elite outranks pro).
+ *  Matches the entitlement identifier case-insensitively so "Pro"/"pro" and
+ *  "Elite"/"elite" all resolve correctly. */
 export function tierFromCustomerInfo(info: CustomerInfo | null | undefined): EntitlementTier {
   const active = info?.entitlements?.active ?? {}
-  if (active[RC_ENTITLEMENTS.elite]) return 'elite'
-  if (active[RC_ENTITLEMENTS.pro]) return 'pro'
+  const keys = Object.keys(active).map(k => k.toLowerCase())
+  if (keys.includes(RC_ENTITLEMENTS.elite)) return 'elite'
+  if (keys.includes(RC_ENTITLEMENTS.pro)) return 'pro'
   return null
 }
 
