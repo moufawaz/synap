@@ -46,7 +46,22 @@ export type Buyable = {
   title: string
   description: string
   priceString: string
+  period: 'month' | 'year' | null
   purchase: () => Promise<CustomerInfo | null>
+}
+
+function periodFromId(id: string): 'month' | 'year' | null {
+  const s = id.toLowerCase()
+  if (s.includes('year') || s.includes('annual')) return 'year'
+  if (s.includes('month')) return 'month'
+  return null
+}
+// Sort order: Pro Monthly, Pro Annual, Elite Monthly, Elite Annual.
+function rankFromId(id: string): number {
+  const s = id.toLowerCase()
+  const tier = s.includes('elite') ? 1 : 0
+  const yearly = s.includes('year') || s.includes('annual') ? 1 : 0
+  return tier * 2 + yearly
 }
 
 /** Configure the SDK once at app launch. Safe to call repeatedly. */
@@ -100,25 +115,31 @@ export async function loadBuyables(): Promise<Buyable[]> {
     const offerings = await Purchases.getOfferings()
     const pkgs = offerings.current?.availablePackages ?? []
     if (pkgs.length) {
-      return pkgs.map((pkg): Buyable => ({
-        id: pkg.identifier,
-        title: pkg.product.title,
-        description: pkg.product.description,
-        priceString: pkg.product.priceString,
-        purchase: async () => (await Purchases.purchasePackage(pkg)).customerInfo,
-      }))
+      return pkgs
+        .map((pkg): Buyable => ({
+          id: pkg.identifier,
+          title: pkg.product.title,
+          description: pkg.product.description,
+          priceString: pkg.product.priceString,
+          period: periodFromId(pkg.identifier) ?? periodFromId(pkg.product.identifier),
+          purchase: async () => (await Purchases.purchasePackage(pkg)).customerInfo,
+        }))
+        .sort((a, b) => rankFromId(a.id + a.title) - rankFromId(b.id + b.title))
     }
   } catch { /* fall through to direct product fetch */ }
   // 2) Direct product fetch (covers an offering that isn't wired up yet).
   try {
     const products = await Purchases.getProducts(PRODUCT_IDS)
-    return products.map((p): Buyable => ({
-      id: p.identifier,
-      title: p.title,
-      description: p.description,
-      priceString: p.priceString,
-      purchase: async () => (await Purchases.purchaseStoreProduct(p)).customerInfo,
-    }))
+    return products
+      .map((p): Buyable => ({
+        id: p.identifier,
+        title: p.title,
+        description: p.description,
+        priceString: p.priceString,
+        period: periodFromId(p.identifier),
+        purchase: async () => (await Purchases.purchaseStoreProduct(p)).customerInfo,
+      }))
+      .sort((a, b) => rankFromId(a.id) - rankFromId(b.id))
   } catch { /* nothing available */ }
   return []
 }

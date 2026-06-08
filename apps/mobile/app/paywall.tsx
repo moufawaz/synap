@@ -138,6 +138,16 @@ export default function PaywallScreen() {
         <View style={styles.plans}>
           {items.map(item => {
             const busy = busyId === item.id
+            const periodLabel = item.period === 'year'
+              ? (isRtl ? 'سنوي' : 'Yearly')
+              : item.period === 'month'
+              ? (isRtl ? 'شهري' : 'Monthly')
+              : ''
+            const priceSuffix = item.period === 'year'
+              ? (isRtl ? '/سنة' : '/yr')
+              : item.period === 'month'
+              ? (isRtl ? '/شهر' : '/mo')
+              : ''
             return (
               <Pressable
                 key={item.id}
@@ -146,13 +156,20 @@ export default function PaywallScreen() {
                 style={[styles.plan, { borderColor: color.spark, backgroundColor: color.sparkSoft }]}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.planTitle, { color: color.text, textAlign: align }]}>{item.title}</Text>
+                  <View style={[styles.planTitleRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
+                    <Text style={[styles.planTitle, { color: color.text }]}>{item.title}</Text>
+                    {periodLabel ? (
+                      <View style={[styles.periodPill, { backgroundColor: color.spark }]}>
+                        <Text style={styles.periodPillText}>{periodLabel}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   {item.description ? (
                     <Text style={[styles.planDesc, { color: color.muted, textAlign: align }]}>{item.description}</Text>
                   ) : null}
                 </View>
                 {busy ? <ActivityIndicator color={color.spark} /> : (
-                  <Text style={[styles.planPrice, { color: color.spark }]}>{item.priceString}</Text>
+                  <Text style={[styles.planPrice, { color: color.spark }]}>{item.priceString}{priceSuffix}</Text>
                 )}
               </Pressable>
             )
@@ -181,6 +198,11 @@ export default function PaywallScreen() {
           <Text style={[styles.legalLink, { color: color.muted }]}>{isRtl ? 'سياسة الخصوصية' : 'Privacy Policy'}</Text>
         </Pressable>
       </View>
+
+      {/* Temporary diagnostic (tiny) — confirms the RevenueCat key the build saw. */}
+      <Text style={[styles.diag, { color: color.dim, textAlign: 'center', marginTop: 12 }]}>
+        {`sdk:${purchasesReady() ? 'ready' : 'not-configured'} · key:${purchasesKeyPrefix()}`}
+      </Text>
     </Screen>
   )
 }
@@ -196,6 +218,9 @@ const styles = StyleSheet.create({
   featureText: { fontSize: 13.5, fontWeight: '600', flexShrink: 1 },
   plans: { gap: 12 },
   plan: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderRadius: 18, padding: 18 },
+  planTitleRow: { alignItems: 'center', gap: 8 },
+  periodPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  periodPillText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
   planTitle: { fontSize: 16, fontWeight: '900' },
   planDesc: { fontSize: 12.5, fontWeight: '500', marginTop: 3, lineHeight: 17 },
   planPrice: { fontSize: 17, fontWeight: '900' },
