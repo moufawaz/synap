@@ -86,6 +86,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, ignored: type })
   }
 
+  // Guard against an upgrade getting clobbered: during a Pro→Elite upgrade the
+  // old Pro subscription also fires a CANCELLATION/EXPIRATION. If that arrives
+  // after the Elite purchase, a naive upsert would downgrade the row back to Pro.
+  // So for downgrade events, only apply them if they concern the tier we already
+  // have recorded — never let a 'pro' expiration overwrite an active 'elite'.
+  if (status === 'expired' || status === 'cancelled' || status === 'past_due') {
+    const { data: current } = await admin
+      .from('subscriptions')
+      .select('plan_type, status')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (current && current.plan_type && current.plan_type !== tier && current.status === 'active') {
+      return NextResponse.json({ ok: true, ignored: 'downgrade_for_other_tier', kept: current.plan_type })
+    }
+  }
+
   const payload: Record<string, any> = {
     user_id: userId,
     plan_type: tier,
