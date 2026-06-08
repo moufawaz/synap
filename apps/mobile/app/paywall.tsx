@@ -6,10 +6,7 @@ import { IonAvatar } from '@/components/IonAvatar'
 import { Screen } from '@/components/Screen'
 import {
   isUserCancelled,
-  lastBuyableLoadSource,
   loadBuyables,
-  purchasesKeyPrefix,
-  purchasesReady,
   restore,
   tierFromCustomerInfo,
   type Buyable,
@@ -134,11 +131,6 @@ export default function PaywallScreen() {
               ? 'المتجر غير متاح حالياً. تأكد من اتصالك وحاول لاحقاً، أو أدِر اشتراكك من موقعنا.'
               : 'The store isn’t available right now. Check your connection and try again, or manage your plan on our website.'}
           </Text>
-          {/* Temporary diagnostic so we can pinpoint why the store is empty:
-              shows whether the SDK configured and what key prefix the build saw. */}
-          <Text style={[styles.diag, { color: color.dim, textAlign: align }]}>
-            {`debug · sdk:${purchasesReady() ? 'ready' : 'not-configured'} · key:${purchasesKeyPrefix()}`}
-          </Text>
         </View>
       ) : (
         <View style={styles.plans}>
@@ -205,10 +197,6 @@ export default function PaywallScreen() {
         </Pressable>
       </View>
 
-      {/* Temporary diagnostic (tiny) — confirms the RevenueCat key + load source. */}
-      <Text style={[styles.diag, { color: color.dim, textAlign: 'center', marginTop: 12 }]}>
-        {`sdk:${purchasesReady() ? 'ready' : 'not-configured'} · key:${purchasesKeyPrefix()} · src:${lastBuyableLoadSource()}`}
-      </Text>
     </Screen>
   )
 }
@@ -232,7 +220,6 @@ const styles = StyleSheet.create({
   planPrice: { fontSize: 17, fontWeight: '900' },
   card: { borderWidth: 1, borderRadius: 16, padding: 18, marginTop: 12, gap: 10 },
   unavailable: { fontSize: 13, fontWeight: '600', lineHeight: 20 },
-  diag: { fontSize: 11, fontWeight: '600', opacity: 0.8 },
   restore: { alignSelf: 'center', paddingVertical: 16 },
   restoreText: { fontSize: 14, fontWeight: '800' },
   legal: { fontSize: 11, lineHeight: 16, fontWeight: '500', marginTop: 4 },
