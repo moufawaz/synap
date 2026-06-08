@@ -25,7 +25,29 @@ export type EntitlementTier = 'pro' | 'elite' | null
 
 const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || ''
 
+// Product IDs configured in App Store Connect / RevenueCat — used as a fallback
+// to fetch products directly if the offering returns nothing.
+const PRODUCT_IDS = ['synap_pro_monthly', 'synap_pro_yearly', 'synap_elite_monthly', 'synap_elite_yearly']
+
 let configured = false
+
+/** Diagnostic: what the build sees for the RevenueCat key (prefix only, safe to
+ *  show). 'appl_…' = correct App Store key; 'test_…' = wrong (Test Store key);
+ *  '(none)' = the EXPO_PUBLIC_REVENUECAT_IOS_KEY secret wasn't set at build time. */
+export function purchasesKeyPrefix(): string {
+  if (!IOS_KEY) return '(none)'
+  return IOS_KEY.slice(0, 5) + '…'
+}
+
+/** A unified, ready-to-render purchasable item (works whether it came from an
+ *  offering package or a direct product lookup). */
+export type Buyable = {
+  id: string
+  title: string
+  description: string
+  priceString: string
+  purchase: () => Promise<CustomerInfo | null>
+}
 
 /** Configure the SDK once at app launch. Safe to call repeatedly. */
 export function configurePurchases() {
@@ -64,6 +86,41 @@ export async function getCurrentOffering(): Promise<PurchasesOffering | null> {
   } catch {
     return null
   }
+}
+
+/** Load the buyable plans. Prefers the configured "current" offering; if that
+ *  returns nothing (e.g. offering not marked current yet), falls back to fetching
+ *  the products directly by ID. Either way each item carries its own purchase().
+ *  Returns [] only when the SDK can't reach the store at all (bad/empty key, or
+ *  the products aren't "Ready to Submit" yet). */
+export async function loadBuyables(): Promise<Buyable[]> {
+  if (!configured) return []
+  // 1) Offering packages (preferred).
+  try {
+    const offerings = await Purchases.getOfferings()
+    const pkgs = offerings.current?.availablePackages ?? []
+    if (pkgs.length) {
+      return pkgs.map((pkg): Buyable => ({
+        id: pkg.identifier,
+        title: pkg.product.title,
+        description: pkg.product.description,
+        priceString: pkg.product.priceString,
+        purchase: async () => (await Purchases.purchasePackage(pkg)).customerInfo,
+      }))
+    }
+  } catch { /* fall through to direct product fetch */ }
+  // 2) Direct product fetch (covers an offering that isn't wired up yet).
+  try {
+    const products = await Purchases.getProducts(PRODUCT_IDS)
+    return products.map((p): Buyable => ({
+      id: p.identifier,
+      title: p.title,
+      description: p.description,
+      priceString: p.priceString,
+      purchase: async () => (await Purchases.purchaseStoreProduct(p)).customerInfo,
+    }))
+  } catch { /* nothing available */ }
+  return []
 }
 
 /** Buy a package. Returns the resulting customer info, or throws on real errors

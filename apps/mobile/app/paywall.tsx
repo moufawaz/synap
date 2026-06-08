@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
-import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases'
 import { IonAvatar } from '@/components/IonAvatar'
 import { Screen } from '@/components/Screen'
 import {
-  buyPackage,
-  getCurrentOffering,
   isUserCancelled,
+  loadBuyables,
+  purchasesKeyPrefix,
   purchasesReady,
   restore,
   tierFromCustomerInfo,
+  type Buyable,
 } from '@/features/purchases'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -39,7 +39,7 @@ export default function PaywallScreen() {
   const { isRtl } = useLanguage()
   const align = isRtl ? 'right' : 'left'
 
-  const [offering, setOffering] = useState<PurchasesOffering | null>(null)
+  const [items, setItems] = useState<Buyable[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const features = isRtl ? FEATURES_AR : FEATURES_EN
@@ -47,16 +47,16 @@ export default function PaywallScreen() {
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const o = await getCurrentOffering()
-      if (alive) { setOffering(o); setLoading(false) }
+      const list = await loadBuyables()
+      if (alive) { setItems(list); setLoading(false) }
     })()
     return () => { alive = false }
   }, [])
 
-  async function onBuy(pkg: PurchasesPackage) {
-    setBusyId(pkg.identifier)
+  async function onBuy(item: Buyable) {
+    setBusyId(item.id)
     try {
-      const info = await buyPackage(pkg)
+      const info = await item.purchase()
       const tier = tierFromCustomerInfo(info)
       Alert.alert(
         isRtl ? 'تم التفعيل ✓' : 'You’re in ✓',
@@ -95,8 +95,6 @@ export default function PaywallScreen() {
     }
   }
 
-  const packages = offering?.availablePackages ?? []
-
   return (
     <Screen>
       <Pressable onPress={() => router.back()} style={[styles.back, { flexDirection: isRtl ? 'row-reverse' : 'row' }]} hitSlop={12}>
@@ -123,34 +121,38 @@ export default function PaywallScreen() {
 
       {loading ? (
         <ActivityIndicator color={color.spark} style={{ marginTop: 28 }} />
-      ) : !purchasesReady() || packages.length === 0 ? (
+      ) : items.length === 0 ? (
         <View style={[styles.card, { backgroundColor: color.elevated, borderColor: color.border }]}>
           <Text style={[styles.unavailable, { color: color.muted, textAlign: align }]}>
             {isRtl
               ? 'المتجر غير متاح حالياً. تأكد من اتصالك وحاول لاحقاً، أو أدِر اشتراكك من موقعنا.'
               : 'The store isn’t available right now. Check your connection and try again, or manage your plan on our website.'}
           </Text>
+          {/* Temporary diagnostic so we can pinpoint why the store is empty:
+              shows whether the SDK configured and what key prefix the build saw. */}
+          <Text style={[styles.diag, { color: color.dim, textAlign: align }]}>
+            {`debug · sdk:${purchasesReady() ? 'ready' : 'not-configured'} · key:${purchasesKeyPrefix()}`}
+          </Text>
         </View>
       ) : (
         <View style={styles.plans}>
-          {packages.map(pkg => {
-            const p = pkg.product
-            const busy = busyId === pkg.identifier
+          {items.map(item => {
+            const busy = busyId === item.id
             return (
               <Pressable
-                key={pkg.identifier}
+                key={item.id}
                 disabled={!!busyId}
-                onPress={() => onBuy(pkg)}
+                onPress={() => onBuy(item)}
                 style={[styles.plan, { borderColor: color.spark, backgroundColor: color.sparkSoft }]}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.planTitle, { color: color.text, textAlign: align }]}>{p.title}</Text>
-                  {p.description ? (
-                    <Text style={[styles.planDesc, { color: color.muted, textAlign: align }]}>{p.description}</Text>
+                  <Text style={[styles.planTitle, { color: color.text, textAlign: align }]}>{item.title}</Text>
+                  {item.description ? (
+                    <Text style={[styles.planDesc, { color: color.muted, textAlign: align }]}>{item.description}</Text>
                   ) : null}
                 </View>
                 {busy ? <ActivityIndicator color={color.spark} /> : (
-                  <Text style={[styles.planPrice, { color: color.spark }]}>{p.priceString}</Text>
+                  <Text style={[styles.planPrice, { color: color.spark }]}>{item.priceString}</Text>
                 )}
               </Pressable>
             )
@@ -197,8 +199,9 @@ const styles = StyleSheet.create({
   planTitle: { fontSize: 16, fontWeight: '900' },
   planDesc: { fontSize: 12.5, fontWeight: '500', marginTop: 3, lineHeight: 17 },
   planPrice: { fontSize: 17, fontWeight: '900' },
-  card: { borderWidth: 1, borderRadius: 16, padding: 18, marginTop: 12 },
+  card: { borderWidth: 1, borderRadius: 16, padding: 18, marginTop: 12, gap: 10 },
   unavailable: { fontSize: 13, fontWeight: '600', lineHeight: 20 },
+  diag: { fontSize: 11, fontWeight: '600', opacity: 0.8 },
   restore: { alignSelf: 'center', paddingVertical: 16 },
   restoreText: { fontSize: 14, fontWeight: '800' },
   legal: { fontSize: 11, lineHeight: 16, fontWeight: '500', marginTop: 4 },
