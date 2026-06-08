@@ -6,6 +6,7 @@ import { IonAvatar } from '@/components/IonAvatar'
 import { Screen } from '@/components/Screen'
 import {
   isUserCancelled,
+  lastBuyableLoadSource,
   loadBuyables,
   purchasesKeyPrefix,
   purchasesReady,
@@ -199,9 +200,9 @@ export default function PaywallScreen() {
         </Pressable>
       </View>
 
-      {/* Temporary diagnostic (tiny) — confirms the RevenueCat key the build saw. */}
+      {/* Temporary diagnostic (tiny) — confirms the RevenueCat key + load source. */}
       <Text style={[styles.diag, { color: color.dim, textAlign: 'center', marginTop: 12 }]}>
-        {`sdk:${purchasesReady() ? 'ready' : 'not-configured'} · key:${purchasesKeyPrefix()}`}
+        {`sdk:${purchasesReady() ? 'ready' : 'not-configured'} · key:${purchasesKeyPrefix()} · src:${lastBuyableLoadSource()}`}
       </Text>
     </Screen>
   )

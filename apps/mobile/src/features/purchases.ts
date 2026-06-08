@@ -39,6 +39,16 @@ export function purchasesKeyPrefix(): string {
   return IOS_KEY.slice(0, 5) + '…'
 }
 
+// Where the last plan load came from. 'offering' = the RevenueCat backend served
+// the offering (the SDK key is valid AND correct). 'products' = we fell back to a
+// direct StoreKit product fetch (the offering call returned nothing — usually a
+// wrong/!current offering OR an appl_ key that's valid-format but wrong). 'none'
+// = nothing loaded.
+let lastBuyableSource: 'offering' | 'products' | 'none' = 'none'
+export function lastBuyableLoadSource() {
+  return lastBuyableSource
+}
+
 /** A unified, ready-to-render purchasable item (works whether it came from an
  *  offering package or a direct product lookup). */
 export type Buyable = {
@@ -109,12 +119,14 @@ export async function getCurrentOffering(): Promise<PurchasesOffering | null> {
  *  Returns [] only when the SDK can't reach the store at all (bad/empty key, or
  *  the products aren't "Ready to Submit" yet). */
 export async function loadBuyables(): Promise<Buyable[]> {
+  lastBuyableSource = 'none'
   if (!configured) return []
   // 1) Offering packages (preferred).
   try {
     const offerings = await Purchases.getOfferings()
     const pkgs = offerings.current?.availablePackages ?? []
     if (pkgs.length) {
+      lastBuyableSource = 'offering'
       return pkgs
         .map((pkg): Buyable => ({
           id: pkg.identifier,
@@ -130,6 +142,7 @@ export async function loadBuyables(): Promise<Buyable[]> {
   // 2) Direct product fetch (covers an offering that isn't wired up yet).
   try {
     const products = await Purchases.getProducts(PRODUCT_IDS)
+    if (products.length) lastBuyableSource = 'products'
     return products
       .map((p): Buyable => ({
         id: p.identifier,

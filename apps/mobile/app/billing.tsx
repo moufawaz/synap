@@ -1,4 +1,4 @@
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
@@ -84,12 +84,17 @@ export default function BillingScreen() {
         </Text>
       </Pressable>
 
-      {/* ══════════════════════════════════════════════════════════════════
+      {/* While the subscription status loads, show a spinner — NOT the
+          non-subscriber view — so we don't flash "No active plan" before the
+          trial/subscription state arrives. */}
+      {subscription.loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={color.spark} />
+        </View>
+      ) /* ════════════════════════════════════════════════════════════════
           NON-SUBSCRIBER VIEW — neutral plan status. No purchase CTA, no
           website, no external steering (App Store Guideline 3.1.1 / 3.1.3).
-          The app only reflects entitlement granted by the account.
-      ══════════════════════════════════════════════════════════════════ */}
-      {!hasAccess ? (
+      ════════════════════════════════════════════════════════════════ */ : !hasAccess ? (
         <>
           {/* Neutral status hero */}
           <LinearGradient
@@ -253,6 +258,7 @@ const styles = StyleSheet.create({
   // Back
   backBtn: { alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 8 },
   backText: { fontSize: 14, fontWeight: '700' },
+  loadingWrap: { paddingVertical: 80, alignItems: 'center', justifyContent: 'center' },
 
   // Neutral status hero
   heroCard: {
