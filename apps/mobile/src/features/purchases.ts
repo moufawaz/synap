@@ -23,7 +23,9 @@ import Purchases, {
 export const RC_ENTITLEMENTS = { pro: 'pro', elite: 'elite' } as const
 export type EntitlementTier = 'pro' | 'elite' | null
 
-const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || ''
+// .trim() guards against a trailing space/newline in the CI secret, which makes
+// RevenueCat reject an otherwise-correct key as "Invalid API Key".
+const IOS_KEY = (process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || '').trim()
 
 // Product IDs configured in App Store Connect / RevenueCat — used as a fallback
 // to fetch products directly if the offering returns nothing.

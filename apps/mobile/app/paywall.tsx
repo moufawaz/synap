@@ -67,8 +67,13 @@ export default function PaywallScreen() {
       )
       router.back()
     } catch (e: any) {
+      // Cancelling is not an error — stay silent. For anything else show a
+      // friendly message (never leak raw SDK text like "Invalid API Key").
       if (!isUserCancelled(e)) {
-        Alert.alert(isRtl ? 'تعذّر الشراء' : 'Purchase failed', e?.message || (isRtl ? 'حاول مرة أخرى.' : 'Please try again.'))
+        Alert.alert(
+          isRtl ? 'تعذّر إتمام الشراء' : 'Purchase didn’t go through',
+          isRtl ? 'لم نتمكن من إتمام العملية. حاول مرة أخرى لاحقاً.' : "We couldn't complete the purchase. Please try again later.",
+        )
       }
     } finally {
       setBusyId(null)

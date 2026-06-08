@@ -17,7 +17,7 @@ import { useTheme } from '@/theme/ThemeProvider'
 // Bump this every build so we can confirm the installed binary matches the
 // latest code (shown in the More tab footer). Current: web-aligned train day
 // count + legible chat chips.
-const BUILD_TAG = 'fixpack-32'
+const BUILD_TAG = 'fixpack-33'
 
 type NavRow = { label: string; labelAr?: string; href: Href; icon: string; color?: string }
 
@@ -32,7 +32,7 @@ const NAV_ROWS: NavRow[] = [
   { label: 'Form check',       labelAr: 'تحقق الشكل',   href: '/form-check',        icon: 'camera'        },
   { label: 'Supplements',      labelAr: 'المكملات',      href: '/supplements',       icon: 'package'       },
   { label: 'Macro adjustment', labelAr: 'تعديل الماكرو', href: '/macro-adjustment',  icon: 'sliders'       },
-  { label: 'Billing',          labelAr: 'الفوترة',       href: '/billing',           icon: 'credit-card'   },
+  { label: 'Subscription & Billing', labelAr: 'الاشتراك والفوترة', href: '/billing',     icon: 'credit-card'   },
   { label: 'Notifications',    labelAr: 'الإشعارات',     href: '/notifications',     icon: 'bell'          },
 ]
 
