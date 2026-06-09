@@ -185,6 +185,7 @@ export async function POST(req: Request) {
       dietPlanRow: dietRes.data,
       pendingProposals,
       recentHistory: history,
+      planTier,
     })
 
     if (planEdit.shouldStop) {
@@ -423,6 +424,7 @@ async function maybeApplyPlanEdit({
   dietPlanRow,
   pendingProposals,
   recentHistory,
+  planTier,
 }: {
   client: Anthropic
   supabase: Awaited<ReturnType<typeof createRouteClient>>
@@ -433,8 +435,21 @@ async function maybeApplyPlanEdit({
   dietPlanRow: any
   pendingProposals: any[]
   recentHistory: { role: string; content: string }[]
+  planTier: 'starter' | 'trial' | 'pro' | 'elite'
 }): Promise<PlanEditResult> {
   const recentContext = buildRecentPlanEditContext(recentHistory)
+
+  // Editing your plan through Ion is a trial / Pro / Elite feature. Free Starter
+  // users (whose 7-day trial has ended) can still chat, but plan edits are gated:
+  // if this message is a plan-edit attempt, stop with a subscribe prompt.
+  if (planTier === 'starter') {
+    const isConfirm = detectConfirmation(message) && pendingProposals.length > 0
+    const hasIntent = !!detectPlanEditIntent(message, recentContext) || !!detectTodayWorkoutTarget(message, recentContext)
+    if (isConfirm || hasIntent) {
+      return { applied: false, proposed: false, shouldStop: true, reason: 'requires_subscription' }
+    }
+    return { applied: false, proposed: false, shouldStop: false, reason: 'no_plan_edit_intent' }
+  }
 
   // ── STEP 1: Check if user is confirming a previous proposal ───
   if (detectConfirmation(message) && pendingProposals.length > 0) {
@@ -770,6 +785,11 @@ function buildDeterministicPlanProposal(profile: any, summary: string) {
 
 function buildPlanEditFailureReply(profile: any, reason: string) {
   const ar = profile?.language === 'ar'
+  if (reason === 'requires_subscription') {
+    return ar
+      ? 'تعديل خطتك عبر آيون متاح خلال تجربتك المجانية (7 أيام) ومع خطط Pro و Elite. انتهت تجربتك المجانية، لذا اشترك من الإعدادات ← الاشتراك والفوترة لأستمر في تعديل خطتك مباشرة.'
+      : 'Editing your plan with Ion is available during your 7-day free trial and on the Pro and Elite plans. Your free trial has ended — subscribe from Settings → Subscription & Billing and I’ll keep updating your plan directly.'
+  }
   if (reason === 'no_active_workout_plan') {
     return ar
       ? 'لا توجد خطة تمرين نشطة لتعديلها الآن. أكمل إنشاء الخطة أولاً ثم أستطيع تعديلها مباشرة.'
