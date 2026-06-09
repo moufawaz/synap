@@ -2087,3 +2087,57 @@ future hardening: adaptive ≤2-days-per-call split, or upgrade to Vercel Pro
 (1094) → `fix/plan-gen-chunked` → `fix/plan-gen-videos-phase` (1096) →
 `fix/workout-split` (1097), each merged cleanly to `main`. `main` is the single
 source of truth for web + app. **Submission build: 1.0 (1097).**
+
+## App Review round 2 + In-App Purchase (2026-06, builds 1097–1105)
+
+Second App Review pass raised three guideline issues; all fixed, plus a full
+StoreKit IAP implementation. Final submission build: **1.0 (1105)**.
+
+### Guideline 4 — Sign in with Apple
+`signInWithApple` discarded `credential.fullName`. Now it captures the Apple
+name on first authorization and persists it to the account (`auth.updateUser`),
+and onboarding pre-fills the name from auth metadata (Apple/Google) — the app
+never re-asks for info the auth framework already provided.
+
+### Guideline 1.4.1 — Health/medical citations
+New `MedicalDisclaimer` component (disclaimer + tappable citations: WHO, Dietary
+Guidelines for Americans, NIH ODS, ISSN, ACSM) shown at the bottom of the
+Nutrition and Train screens.
+
+### Guideline 3.1.1 — In-App Purchase (the big one)
+Apple rejected the multiplatform-reader argument and required IAP. Implemented
+with **RevenueCat** (`react-native-purchases@10.2.2`):
+- `src/features/purchases.ts`: configure (key `EXPO_PUBLIC_REVENUECAT_IOS_KEY`,
+  `.trim()`ed), `identifyPurchaser` (RevenueCat app_user_id = Supabase user id),
+  `loadBuyables()` (offering packages, falling back to direct `getProducts` by
+  ID), purchase/restore, entitlement→tier, Monthly/Yearly + Pro/Elite sort.
+- `app/paywall.tsx`: StoreKit paywall — live localized prices, Monthly/Yearly
+  pills, Restore, auto-renew disclosure + Terms/Privacy links (EN/AR), friendly
+  errors (never leaks raw SDK text), silent on user-cancel.
+- `_layout`: configure at launch, logIn on auth, logOut on sign-out.
+- Reachable for everyone: `UpgradeGate` + billing (subscriber AND non-subscriber)
+  open `/paywall` — so App Review can always find the IAP even on a trial/sub.
+- Server `/api/webhooks/revenuecat`: maps RevenueCat lifecycle events to the
+  shared `subscriptions` table by app_user_id (auth via `REVENUECAT_WEBHOOK_AUTH`),
+  with a guard so an old plan's expiration can't clobber a Pro→Elite upgrade.
+- CI passes `EXPO_PUBLIC_REVENUECAT_IOS_KEY` into the build.
+
+App Store Connect (founder side): Paid Apps Agreement activated, Small Business
+Program enrolled, 4 auto-renewable subs (Pro/Elite × Monthly/Annual, SAR base),
+subscription levels set (Elite > Pro for instant upgrade), In-App Purchase Key
+(.p8) + Shared Secret in RevenueCat.
+
+### Other fixes this round
+- Billing showed 7-day trial as "Subscribed — Elite"; now "Elite free trial —
+  N days left" with a subscribe prompt (`/api/me/subscription` returns
+  isTrial/trialDaysLeft).
+- Billing flashed the "No active plan" view while loading → now a spinner.
+- Renamed the More menu entry "Billing" → "Subscription & Billing".
+- Prices/tiers/access are never hardcoded — live from StoreKit + Supabase; only
+  product IDs / entitlement names / feature copy are constants.
+
+### Build trail
+fix/review-round2 (SIWA + citations + IAP) → multi_json Gemfile fix (1099) →
+paywall reachability (1100) → diagnostics/fallback (1101–1103) → key .trim() +
+friendly errors + menu rename (1104) → webhook upgrade-guard → debug-line removal
+(1105, clean submission build). All merged to main.
