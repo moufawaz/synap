@@ -5,6 +5,7 @@ import { requireFoodScanAccess } from '@/lib/feature-access'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { createAdminClient } from '@/lib/supabase-server'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
+import { regionalFoodIntelligence } from '@/lib/regional-foods'
 
 const client = new Anthropic()
 
@@ -42,13 +43,13 @@ export async function POST(req: Request) {
             },
             {
               type: 'text',
-              text: `You are a nutrition database. Look at this food product packaging photo.
+              text: `You are a nutrition database. Look at this photo — it may be a packaged food product OR a plate/dish of prepared food.
 
 ${aiLanguageInstruction(language, 'user-facing string values such as cleaned product name when translation is natural, brand-safe explanations, and errors')}
 
-Identify the product and return ONLY a valid JSON object with no markdown:
+Identify the food and return ONLY a valid JSON object with no markdown:
 {
-  "name": "exact product name as shown on packaging",
+  "name": "exact product name as shown on packaging, or the dish name (use the local dish name)",
   "brand": "brand name or null",
   "calories_per_100g": number,
   "protein_per_100g": number,
@@ -62,9 +63,10 @@ Rules:
 - If nutrition facts are visible on the packaging, use them exactly
 - If you recognise the product, use your knowledge of its nutrition
 - If the image is unclear or not food, return { "error": "Cannot identify product" }
-- serving_size_g: use what's shown on packaging, or a typical serving
+- serving_size_g: use what's shown on packaging, or a typical serving; for a plated dish, estimate the visible portion weight
 - All nutrient values must be per 100g (convert from per-serving if needed)
-- confidence: "high" if nutrition panel visible or product well-known, "medium" if recognised, "low" if estimated`,
+- confidence: "high" if nutrition panel visible or product well-known, "medium" if recognised, "low" if estimated
+${regionalFoodIntelligence()}`,
             },
           ],
         },

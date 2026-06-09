@@ -10,6 +10,7 @@ import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { withAnthropicRetry } from '@/lib/anthropic'
 import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
 import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntelligenceRule } from '@/lib/plan-builder'
+import { regionalFoodIntelligence } from '@/lib/regional-foods'
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 import { recordAppEvent } from '@/lib/app-events'
 
@@ -558,6 +559,7 @@ RENEWAL INSTRUCTIONS:
 - Post-workout: within 45 min, high protein + carbs
 - Every meal MUST include a food from "Foods LOVED" list
 - Meal totals must sum to ±40 kcal of daily_calories
+${regionalFoodIntelligence()}
 
 Return ONLY valid JSON:
 {

@@ -12,6 +12,7 @@ import { sendPlanErrorEmailIfNeeded, sendPlanResolvedEmailIfNeeded } from '@/lib
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
 import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntelligenceRule } from '@/lib/plan-builder'
+import { regionalFoodIntelligence } from '@/lib/regional-foods'
 
 // Plan generation is a large Opus completion + YouTube enrichment. 60 is the
 // Vercel Hobby maximum — give the function all the room the plan allows so it
@@ -587,6 +588,8 @@ METHODOLOGY:
 ????????????????????????????
 DIET PLAN BUILDING RULES
 ????????????????????????????
+${regionalFoodIntelligence()}
+
 1. PERSONALISATION — this is not a generic plan:
    - Every meal must contain at least one food from the "Foods LOVED" list
    - Zero exceptions: never include foods from "Foods HATED" or "Allergies"

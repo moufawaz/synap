@@ -4,6 +4,7 @@ import { requireFoodScanAccess } from '@/lib/feature-access'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { createAdminClient } from '@/lib/supabase-server'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
+import { regionalFoodIntelligence } from '@/lib/regional-foods'
 
 const client = new Anthropic()
 
@@ -50,7 +51,8 @@ Rules:
 - If it's a generic food category, give accurate average values
 - serving_size_g should be the typical serving (e.g. 30 for chips, 100 for yogurt, 45 for a chocolate bar)
 - All numbers must be realistic and non-zero for edible foods
-- confidence: "high" if you know this specific product, "medium" if similar category, "low" if guessing`
+- confidence: "high" if you know this specific product, "medium" if similar category, "low" if guessing
+${regionalFoodIntelligence()}`
 
     const message = await client.messages.create({
       model: 'claude-haiku-4-5',

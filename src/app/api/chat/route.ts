@@ -7,6 +7,7 @@ import { withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
 import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
+import { regionalFoodIntelligence } from '@/lib/regional-foods'
 import { canonicalDayName, normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
 // Plan-edit calls Claude with up to 10 000 output tokens; it can take 30-40 s.
@@ -1468,6 +1469,7 @@ PERSONALIZATION RULES (non-negotiable):
 - MUST NOT include ANY food from "Allergies" list
 - MUST respect dietary restrictions: ${dietary}
 - Meals must match their cooking ability (${cookingAbility}) and food budget (${budget})
+${regionalFoodIntelligence()}
 
 OUTPUT RULES:
 ${aiLanguageInstruction(language, 'the proposal_text and all user-facing strings inside updated_plan')}
@@ -1998,6 +2000,8 @@ ${workoutBlock}
 18. Workout compliance rule: Use WORKOUT COMPLIANCE ANALYSIS proactively. If avg completion < 70% → ask what is causing sessions to be cut short before making any program changes (the problem may be time, fatigue, or motivation, not the exercises). If frequency is consistently below planned days → acknowledge it, dig into why, and offer to reschedule or simplify the program to match their real availability. Never silently accept low compliance.
 19. Workout change quality rule: When the client requests a workout change, evaluate it against their goal and recovery capacity. Red flags to catch: removing all compound movements, reducing to < 2 days/week without a reason, adding volume when compliance is already poor, or training a muscle group that is injured. In these cases, explain the risk and propose a smarter alternative. If they want to swap an exercise, always suggest a movement that targets the same muscle with the same equipment they have.
 20. Strength progress rule: If RECENT WORKOUT LOGS show duration consistently dropping (e.g., logging 30 min when 60 min is planned), or if the same exercises appear repeatedly without progression notes, flag it. A coach tracks strength progress — proactively ask if the client has been increasing weight/reps on their main lifts. If strength is stalling, suggest a deload or form focus week before increasing load.
-21. InBody scan rule: If CLIENT PROFILE has no InBody scan data (body_fat_pct is absent or described as "estimated"), proactively mention once per conversation that uploading an InBody scan from Settings → Health will give Ion precise body fat %, muscle mass, and visceral fat — enabling exact protein targets (not population guesses). Do NOT repeat this every message. If InBody data IS present and shows visceral fat > 10 (high risk), proactively flag the cardiovascular risk and ensure the user understands why their plan prioritises fat loss. If InBody data was recently added (visible in profile block), acknowledge what changed: "Your InBody scan shows [X]% body fat and muscle mass of [Y] kg — your protein target has been updated to [Z]g based on your actual lean mass." Then offer to regenerate the plan for them if they want the full benefit: "Say 'regenerate my plan' and I'll rebuild it with your exact body composition."`
+21. InBody scan rule: If CLIENT PROFILE has no InBody scan data (body_fat_pct is absent or described as "estimated"), proactively mention once per conversation that uploading an InBody scan from Settings → Health will give Ion precise body fat %, muscle mass, and visceral fat — enabling exact protein targets (not population guesses). Do NOT repeat this every message. If InBody data IS present and shows visceral fat > 10 (high risk), proactively flag the cardiovascular risk and ensure the user understands why their plan prioritises fat loss. If InBody data was recently added (visible in profile block), acknowledge what changed: "Your InBody scan shows [X]% body fat and muscle mass of [Y] kg — your protein target has been updated to [Z]g based on your actual lean mass." Then offer to regenerate the plan for them if they want the full benefit: "Say 'regenerate my plan' and I'll rebuild it with your exact body composition."
+
+${regionalFoodIntelligence()}`
 }
 

@@ -3,6 +3,7 @@ import { getAnthropicClient, withAnthropicRetry } from '@/lib/anthropic'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { getUserSubscription, isProUser, isLaunchMode } from '@/lib/subscription'
+import { regionalFoodIntelligence } from '@/lib/regional-foods'
 import { NextResponse } from 'next/server'
 
 function todayKey() {
@@ -82,6 +83,7 @@ ${aiLanguageInstruction(language, 'all user-facing JSON string values including 
 Rules:
 - Be global-first. Do not assume Saudi Arabia or any one country.
 - The user may name a restaurant, cuisine, delivery app, buffet, airport, cafe, or vague situation.
+${regionalFoodIntelligence()}
 - If exact menu data is not known, explicitly say the guidance is an estimate based on cuisine/menu patterns.
 - Respect allergies, dietary preference, and goal.
 - Give a specific best order, a safer alternative, what to avoid, portion guidance, and a macro estimate.
