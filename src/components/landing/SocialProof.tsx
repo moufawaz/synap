@@ -1,102 +1,78 @@
 'use client'
 
 import { type Language } from '@/lib/i18n'
-import { Star } from 'lucide-react'
+import Reveal from '@/components/landing/Reveal'
 
 interface Props { lang: Language }
 
-const EN = {
-  headline: 'What happens when Ion knows everything about you',
-  testimonials: [
-    {
-      quote: "I've tried 6 fitness apps. Ion is the first one that felt like it was actually built for me. It knew I work until 8PM and built my meals around that.",
-      name: 'Ahmed',
-      location: 'Riyadh',
-      result: 'Lost 8kg in 10 weeks',
-    },
-    {
-      quote: "I told Ion I hate eggs and love kabsa. My meal plan actually has kabsa. I've never stuck to a diet this long in my life.",
-      name: 'Sara',
-      location: 'Jeddah',
-      result: '12 weeks consistent',
-    },
-    {
-      quote: "Ion caught that my left arm was 2cm smaller than my right. I didn't even know. It fixed my program the same day.",
-      name: 'Khalid',
-      location: 'Dubai',
-      result: 'Building muscle',
-    },
-  ],
-}
-
-const AR = {
-  headline: 'ماذا يحدث حين يعرف آيون كل شيء عنك',
-  testimonials: [
-    {
-      quote: 'جربت 6 تطبيقات لياقة. آيون هو الأول الذي أشعر أنه مبني لي شخصياً. علم أنني أعمل حتى 8 مساءً وبنى وجباتي حول ذلك.',
-      name: 'أحمد',
-      location: 'الرياض',
-      result: 'خسر 8 كجم في 10 أسابيع',
-    },
-    {
-      quote: 'أخبرت آيون أنني أكره البيض وأحب الكبسة. خطتي الغذائية فيها كبسة فعلاً. لم ألتزم بأي نظام غذائي بهذا الشكل في حياتي.',
-      name: 'سارة',
-      location: 'جدة',
-      result: '12 أسبوعاً متواصلة',
-    },
-    {
-      quote: 'آيون اكتشف أن ذراعي اليسرى أصغر بـ 2 سم من اليمنى. لم أكن أعلم. صحّح برنامجي في نفس اليوم.',
-      name: 'خالد',
-      location: 'دبي',
-      result: 'بناء عضلات',
-    },
-  ],
-}
-
+/**
+ * Honest proof section — product truths instead of fabricated testimonials.
+ * (Real user quotes can replace/extend this after launch.)
+ */
 export default function SocialProof({ lang }: Props) {
-  const isRTL = lang === 'ar'
-  const copy = isRTL ? AR : EN
+  const ar = lang === 'ar'
+
+  const copy = ar
+    ? {
+        label: 'لماذا سناب مختلف',
+        headline: 'مبني على الحقيقة، لا على القوالب',
+        stats: [
+          { value: '8 دقائق', caption: 'من التسجيل إلى خطة كاملة مخصصة — تمرين وتغذية' },
+          { value: '42 يوماً', caption: 'دورة تمرين متدرجة تُعاد صياغتها حول نتائجك الفعلية' },
+          { value: '34+', caption: 'طبقاً خليجياً ومصرياً وشامياً يعرفها آيون بمقادير حقيقية' },
+          { value: '2', caption: 'لغتان كاملتان — عربي وإنجليزي، حتى في الإشعارات' },
+        ],
+        foot: 'انطلقنا للتو — كن من الأعضاء المؤسسين وشارك في تشكيل المنتج.',
+      }
+    : {
+        label: 'WHY SYNAP IS DIFFERENT',
+        headline: 'Built on truth, not templates',
+        stats: [
+          { value: '8 min', caption: 'from signup to a complete personalized training + nutrition plan' },
+          { value: '42 days', caption: 'progressive training cycles rebuilt around your actual results' },
+          { value: '34+', caption: 'Gulf, Egyptian & Levantine dishes Ion knows with real portions' },
+          { value: '2', caption: 'full languages — Arabic and English, down to the notifications' },
+        ],
+        foot: 'We just launched — join as a founding member and help shape the product.',
+      }
 
   return (
-    <section className="relative py-24 overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
-      <div className="orb w-[500px] h-[400px] bottom-0 left-1/2 -translate-x-1/2" style={{ background: 'rgba(187,92,246,0.06)' }} />
-
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="text-center mb-16">
-          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl text-light">
+    <section className="relative py-24" dir={ar ? 'rtl' : 'ltr'}>
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Reveal className="text-center mb-14">
+          <div className="section-label mb-4 inline-flex">{copy.label}</div>
+          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl text-white" style={{ letterSpacing: '0.04em' }}>
             {copy.headline}
           </h2>
-        </div>
+        </Reveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {copy.testimonials.map((t, i) => (
-            <div key={i} className="glass-card p-8 flex flex-col gap-5">
-              {/* Stars */}
-              <div className="flex gap-1">
-                {[...Array(5)].map((_, s) => (
-                  <Star key={s} size={14} fill="#BB5CF6" className="text-violet" />
-                ))}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {copy.stats.map((s, i) => (
+            <Reveal key={s.value} delay={i * 0.07}>
+              <div
+                className="rounded-3xl p-6 text-center h-full transition-transform duration-300 hover:-translate-y-1"
+                style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <p
+                  className="font-heading font-black text-3xl sm:text-4xl mb-2"
+                  style={{
+                    background: 'linear-gradient(135deg, #D88BFF, #BB5CF6)',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  }}
+                >
+                  {s.value}
+                </p>
+                <p className="text-silver-muted text-[13px] leading-relaxed">{s.caption}</p>
               </div>
-
-              {/* Quote */}
-              <p className="text-light text-sm leading-relaxed flex-1">
-                "{t.quote}"
-              </p>
-
-              {/* Author */}
-              <div className="flex items-center justify-between pt-4 border-t border-white/8">
-                <div>
-                  <p className="font-heading font-bold text-sm text-light">{t.name}</p>
-                  <p className="font-heading text-xs text-light-muted">{t.location}</p>
-                </div>
-                <span className="font-heading text-xs font-bold tracking-wider px-3 py-1 rounded-full"
-                  style={{ background: 'rgba(187,92,246,0.15)', color: '#BB5CF6', border: '1px solid rgba(187,92,246,0.25)' }}>
-                  {t.result}
-                </span>
-              </div>
-            </div>
+            </Reveal>
           ))}
         </div>
+
+        <Reveal delay={0.2}>
+          <p className="text-center text-silver-muted/70 text-sm mt-10 font-heading tracking-wide">{copy.foot}</p>
+        </Reveal>
       </div>
     </section>
   )
