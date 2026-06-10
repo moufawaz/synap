@@ -95,13 +95,13 @@ export default function IonDemo({ lang }: { lang: Language }) {
         <div className="flex items-center gap-3">
           <IonAvatar gender="male" size="sm" animated />
           <div>
-            <p className="text-white text-sm font-heading font-bold tracking-wider">ION</p>
+            <p className="text-sm font-heading font-bold tracking-wider" style={{ color: '#FFFFFF' }}>ION</p>
             <p className="text-[10px] font-heading tracking-widest" style={{ color: '#22C55E' }}>
               ● {isRTL ? 'يدرّبك الآن' : 'COACHING LIVE'}
             </p>
           </div>
         </div>
-        <span className="text-[10px] font-heading tracking-widest text-silver-muted/50 uppercase">SYNAP</span>
+        <span className="text-[10px] font-heading tracking-widest uppercase" style={{ color: 'rgba(226,232,240,0.45)' }}>SYNAP</span>
       </div>
 
       {/* Conversation */}
@@ -114,7 +114,7 @@ export default function IonDemo({ lang }: { lang: Language }) {
           <div className={`flex ${isRTL ? 'justify-end' : 'justify-start'}`}>
             <div className="px-4 py-2.5 rounded-2xl flex gap-1.5 items-center" style={{ background: 'rgba(255,255,255,0.06)' }}>
               {[0, 1, 2].map(d => (
-                <span key={d} className="w-1.5 h-1.5 rounded-full bg-silver-muted/60 animate-bounce" style={{ animationDelay: `${d * 0.15}s` }} />
+                <span key={d} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'rgba(226,232,240,0.55)', animationDelay: `${d * 0.15}s` }} />
               ))}
             </div>
           </div>

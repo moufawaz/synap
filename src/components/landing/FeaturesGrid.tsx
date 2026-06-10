@@ -166,7 +166,7 @@ export default function FeaturesGrid({ lang }: Props) {
                     ? [['💧 ترطيب', 'اشرب ~350 مل الآن'], ['💪 وقت التمرين', 'دفع — صدر وأكتاف · 6:00م'], ['🌙 مراجعة المساء', 'سجّل ما فاتك اليوم']]
                     : [['💧 Hydration', 'Drink ~350 ml now'], ['💪 Training time', 'Push — Chest & Shoulders · 6:00 PM'], ['🌙 Evening check-in', 'Log anything you missed']]
                   ).map(([title, body], i) => (
-                    <div key={title} className="rounded-xl px-3.5 py-2.5" style={{ background: 'rgba(10,10,12,0.75)', border: '1px solid rgba(255,255,255,0.08)', opacity: 1 - i * 0.18 }}>
+                    <div key={title} className="rounded-xl px-3.5 py-2.5" style={{ background: '#15151B', border: '1px solid rgba(255,255,255,0.12)', opacity: 1 - i * 0.12 }}>
                       <p className="text-[12px] font-heading font-bold" style={{ color: '#F8FAFC' }}>{title}</p>
                       <p className="text-[11px]" style={{ color: '#94A3B8' }}>{body}</p>
                     </div>

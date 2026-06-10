@@ -31,7 +31,7 @@ export default function PhoneMockup({ lang, className = '' }: { lang: Language; 
             {/* Greeting */}
             <div>
               <p className="text-[9px] font-heading tracking-[0.2em] uppercase" style={{ color: '#BB5CF6' }}>SYNAP</p>
-              <p className="text-white font-heading font-black text-[17px] leading-tight">
+              <p className="font-heading font-black text-[17px] leading-tight" style={{ color: '#FFFFFF' }}>
                 {ar ? 'صباح الخير، أحمد' : 'Good morning, Ahmed'}
               </p>
             </div>
@@ -45,12 +45,12 @@ export default function PhoneMockup({ lang, className = '' }: { lang: Language; 
                     strokeDasharray={`${2 * Math.PI * 27}`} strokeDashoffset={`${2 * Math.PI * 27 * 0.36}`} />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-white font-heading font-black text-[13px]">64%</span>
+                  <span className="font-heading font-black text-[13px]" style={{ color: '#FFFFFF' }}>64%</span>
                 </div>
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] text-silver-muted">{ar ? 'سعرات اليوم' : "Today's calories"}</p>
-                <p className="text-white font-heading font-bold text-[15px]">1,408 <span className="text-silver-muted text-[10px] font-normal">/ 2,200</span></p>
+                <p className="text-[10px]" style={{ color: '#94A3B8' }}>{ar ? 'سعرات اليوم' : "Today's calories"}</p>
+                <p className="font-heading font-bold text-[15px]" style={{ color: '#FFFFFF' }}>1,408 <span className="text-[10px] font-normal" style={{ color: '#94A3B8' }}>/ 2,200</span></p>
                 <p className="text-[9.5px] mt-0.5" style={{ color: '#22C55E' }}>{ar ? 'بروتين 96غ ✓' : 'Protein 96g ✓'}</p>
               </div>
             </div>
@@ -63,8 +63,8 @@ export default function PhoneMockup({ lang, className = '' }: { lang: Language; 
                 </p>
                 <span className="text-[9px] px-1.5 py-0.5 rounded font-heading font-bold" style={{ background: '#BB5CF6', color: '#fff' }}>6:00 PM</span>
               </div>
-              <p className="text-white font-heading font-black text-[15px] mt-1">{ar ? 'دفع — صدر وأكتاف' : 'Push — Chest & Shoulders'}</p>
-              <p className="text-[10px] text-silver-muted mt-0.5">{ar ? '6 تمارين · 55 دقيقة' : '6 exercises · 55 min'}</p>
+              <p className="font-heading font-black text-[15px] mt-1" style={{ color: '#FFFFFF' }}>{ar ? 'دفع — صدر وأكتاف' : 'Push — Chest & Shoulders'}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: '#94A3B8' }}>{ar ? '6 تمارين · 55 دقيقة' : '6 exercises · 55 min'}</p>
               <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
                 <div className="h-full rounded-full" style={{ width: '33%', background: 'linear-gradient(90deg,#BB5CF6,#7B2FFF)' }} />
               </div>
@@ -74,9 +74,9 @@ export default function PhoneMockup({ lang, className = '' }: { lang: Language; 
             <div className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#BB5CF6,#7B2FFF)' }}>
-                  <span className="text-[8px] text-white font-black">AI</span>
+                  <span className="text-[8px] font-black" style={{ color: '#FFFFFF' }}>AI</span>
                 </div>
-                <p className="text-[10px] font-heading font-bold tracking-widest text-white">ION</p>
+                <p className="text-[10px] font-heading font-bold tracking-widest" style={{ color: '#FFFFFF' }}>ION</p>
               </div>
               <p className="text-[11px] leading-relaxed" style={{ color: '#C9CFD8' }}>
                 {ar
@@ -87,7 +87,7 @@ export default function PhoneMockup({ lang, className = '' }: { lang: Language; 
 
             {/* Water */}
             <div className="rounded-2xl p-3 flex items-center justify-between" style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <p className="text-[10px] text-silver-muted">{ar ? 'الماء' : 'Hydration'}</p>
+              <p className="text-[10px]" style={{ color: '#94A3B8' }}>{ar ? 'الماء' : 'Hydration'}</p>
               <div className="flex gap-1">
                 {[1, 1, 1, 1, 0, 0].map((f, i) => (
                   <div key={i} className="w-3 h-5 rounded-sm" style={{ background: f ? 'linear-gradient(180deg,#38BDF8,#0284C7)' : 'rgba(255,255,255,0.08)' }} />
