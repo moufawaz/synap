@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { getMonthlySummary, getWeeklyReports } from '@/features/tools'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -25,6 +26,7 @@ export default function ReportsScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <PageHeader eyebrow="REPORTS" title="Reports" subtitle="Weekly Elite reports and monthly Ion summaries." />
       <Card>
         <Text style={[styles.title, { color: color.text }]}>Monthly Summary</Text>

@@ -6,6 +6,7 @@ import { Card } from '@/components/Card'
 import { IonAvatar } from '@/components/IonAvatar'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { getProfile, saveProfile } from '@/features/profile'
 import {
   DEFAULT_NOTIF_PREFS,
@@ -149,6 +150,7 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <IonPageHeader eyebrow="SETTINGS" title={isRtl ? 'الإعدادات' : 'Settings'} subtitle={isRtl ? 'تحديث بيانات ملفك الشخصي وتفضيلات الإشعارات.' : 'Update your profile and notification preferences.'} />
 
       {/* Section tab bar */}

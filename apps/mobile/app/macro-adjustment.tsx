@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { runMacroAdjustment } from '@/features/profile'
 import { useTheme } from '@/theme/ThemeProvider'
 
@@ -29,6 +30,7 @@ export default function MacroAdjustmentScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <PageHeader eyebrow="ELITE" title="Macro Adjustment" subtitle="Ion reviews recent trend, workouts, and meals before adjusting targets." />
       <Card>
         <Text style={[styles.title, { color: color.text }]}>Weekly micro-adjustment</Text>

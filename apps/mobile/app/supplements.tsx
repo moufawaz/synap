@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { generateSupplementRecommendations, getSupplementRecommendations } from '@/features/profile'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -36,6 +37,7 @@ export default function SupplementsScreen() {
   if (recs.loading && !recs.data) {
     return (
       <Screen>
+      <BackButton />
         <PageHeader eyebrow="ELITE" title="Supplement Stack" subtitle="Personalized timing, dosage, rationale, and purchase guidance." />
         <View style={styles.centered}>
           <ActivityIndicator color={color.spark} size="large" />
@@ -47,6 +49,7 @@ export default function SupplementsScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <PageHeader eyebrow="ELITE" title="Supplement Stack" subtitle="Personalized timing, dosage, rationale, and purchase guidance." />
 
       {recs.error ? (

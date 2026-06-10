@@ -4,6 +4,7 @@ import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { VideoModal } from '@/components/VideoModal'
 import { getPlanHistory } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
@@ -21,6 +22,7 @@ export default function ProgrammeScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
 
       <IonPageHeader

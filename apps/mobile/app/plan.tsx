@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { generateMealRecipe } from '@/features/nutrition'
 import { applyRenewalPreview, getPlanHistory, renewPlan, rollbackPlan } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
@@ -113,6 +114,7 @@ export default function PlanScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <IonPageHeader eyebrow="PLAN" title="Current Plan" subtitle={activeTiming?.label || 'Diet and workout cycles with history and rollback.'} />
       {plan.loading ? <ActivityIndicator color={color.spark} /> : null}
       {plan.error ? <Text style={[styles.body, { color: color.danger }]}>{plan.error}</Text> : null}

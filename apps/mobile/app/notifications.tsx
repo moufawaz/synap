@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { registerDeviceToken } from '@/features/tools'
 import { cancelSynapReminders, getSynapScheduledReminders, syncSynapReminders } from '@/features/notifications'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -86,6 +87,7 @@ export default function NotificationsScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <PageHeader eyebrow="PUSH" title="Notifications" subtitle="Remote push, local reminders, and tap routing." />
       <Card>
         <Text style={[styles.title, { color: color.text }]}>Push status</Text>

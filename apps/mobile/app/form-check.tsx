@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { checkExerciseForm } from '@/features/tools'
 import { useTheme } from '@/theme/ThemeProvider'
 
@@ -31,6 +32,7 @@ export default function FormCheckScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <PageHeader eyebrow="AI FORM CHECK" title="Form Check" subtitle="Upload one clear frame or photo from a set." />
       <Card>
         <TextInput value={exercise} onChangeText={setExercise} placeholder="Exercise" placeholderTextColor={color.dim} style={[styles.input, { color: color.text, backgroundColor: color.elevated, borderColor: color.border }]} />

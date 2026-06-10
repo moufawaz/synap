@@ -5,6 +5,7 @@ import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { getGroceryList } from '@/features/tools'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
@@ -73,6 +74,7 @@ export default function GroceryScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <IonPageHeader
         eyebrow={isRtl ? 'التغذية' : 'FOOD PREP'}
         title={isRtl ? 'قائمة البقالة' : 'Grocery List'}

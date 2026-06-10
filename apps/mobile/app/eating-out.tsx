@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View 
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { createMealLog } from '@/features/nutrition'
 import { getEatingOutRecommendation } from '@/features/tools'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -54,6 +55,7 @@ export default function EatingOutScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <PageHeader eyebrow="EATING OUT" title="Restaurant Mode" subtitle="Global restaurant, delivery, cafe, airport, or cuisine guidance." />
       <Card>
         <TextInput value={situation} onChangeText={setSituation} placeholder="Example: ordering sushi, airport breakfast, Al Baik..." placeholderTextColor={color.dim} style={[styles.input, { color: color.text, backgroundColor: color.elevated, borderColor: color.border }]} />

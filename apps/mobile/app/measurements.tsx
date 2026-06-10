@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { Card } from '@/components/Card'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
+import { BackButton } from '@/components/BackButton'
 import { analyzeInBodyPhoto, createMeasurement, getMeasurements } from '@/features/measurements'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -72,6 +73,7 @@ export default function MeasurementsScreen() {
 
   return (
     <Screen>
+      <BackButton />
       <PageHeader eyebrow="BODY TRACKING" title="Measurements" subtitle="Full body fields, symmetry, history, and InBody upload." />
       <Card>
         <Text style={[styles.title, { color: color.text }]}>Log body measurements</Text>
