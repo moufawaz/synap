@@ -41,7 +41,7 @@ export default function SocialProof({ lang }: Props) {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal className="text-center mb-14">
           <div className="section-label mb-4 inline-flex">{copy.label}</div>
-          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl text-white" style={{ letterSpacing: '0.04em' }}>
+          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl" style={{ color: 'var(--silver)', letterSpacing: '0.04em' }}>
             {copy.headline}
           </h2>
         </Reveal>
@@ -51,7 +51,7 @@ export default function SocialProof({ lang }: Props) {
             <Reveal key={s.value} delay={i * 0.07}>
               <div
                 className="rounded-3xl p-6 text-center h-full transition-transform duration-300 hover:-translate-y-1"
-                style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}
+                style={{ background: 'var(--silver-faint)', border: '1px solid var(--silver-rim)' }}
               >
                 <p
                   className="font-heading font-black text-3xl sm:text-4xl mb-2"

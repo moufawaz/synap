@@ -60,7 +60,7 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
               {/* App Store pill — flips to a live badge at launch */}
               <span
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-heading font-bold tracking-widest uppercase"
-                style={{ border: '1px solid rgba(255,255,255,0.14)', color: '#D7DCE3', background: 'rgba(255,255,255,0.04)' }}
+                style={{ border: '1px solid var(--silver-rim)', color: 'var(--silver-muted)', background: 'var(--silver-faint)' }}
               >
                 <Apple size={11} />
                 {isRTL ? 'قريباً على App Store' : 'SOON ON THE APP STORE'}
@@ -72,10 +72,10 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
               className="font-heading font-black leading-[0.92]"
               style={{ fontSize: 'clamp(2.8rem, 6.5vw, 5.25rem)', letterSpacing: '0.08em' }}
             >
-              <span className="block text-white">{isRTL ? 'جسمك' : 'YOUR BODY'}</span>
-              <span className="block text-white mb-2">{isRTL ? 'منظومة' : 'IS A SYSTEM.'}</span>
+              <span className="block" style={{ color: 'var(--silver)' }}>{isRTL ? 'جسمك' : 'YOUR BODY'}</span>
+              <span className="block mb-2" style={{ color: 'var(--silver)' }}>{isRTL ? 'منظومة' : 'IS A SYSTEM.'}</span>
               <span className="block" style={{ fontSize: '0.62em', opacity: 0.95 }}>
-                <span className="text-white">SYNAP </span>
+                <span style={{ color: 'var(--silver)' }}>SYNAP </span>
                 <span
                   style={{
                     background: 'linear-gradient(90deg, #BB5CF6, #D88BFF, #7B2FFF, #BB5CF6)',
@@ -136,7 +136,7 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
                 <span
                   key={chip}
                   className="px-3 py-1.5 rounded-full text-[11px] font-heading font-semibold"
-                  style={{ background: 'rgba(187,92,246,0.10)', border: '1px solid rgba(187,92,246,0.22)', color: '#D8C7EE' }}
+                  style={{ background: 'rgba(187,92,246,0.10)', border: '1px solid rgba(187,92,246,0.22)', color: 'var(--spark-light)' }}
                 >
                   {chip}
                 </span>

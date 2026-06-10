@@ -136,7 +136,7 @@ export default function LandingPricing({ lang }: Props) {
           <span className="font-heading text-xs tracking-widest uppercase text-violet/80 mb-4 block">
             {copy.label}
           </span>
-          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl mb-3" style={{ color: '#F1F5F9' }}>
+          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl mb-3" style={{ color: 'var(--silver)' }}>
             {copy.headline}
           </h2>
           <p className="font-heading text-sm" style={{ color: '#94A3B8' }}>{copy.sub}</p>
@@ -233,7 +233,7 @@ export default function LandingPricing({ lang }: Props) {
                           {loading ? '—' : fmt(compareAt, 0)}
                         </span>
                       )}
-                      <span className="font-heading font-black text-3xl text-white">
+                      <span className="font-heading font-black text-3xl" style={{ color: 'var(--silver)' }}>
                         {loading ? '—' : fmt(price, 0)}
                       </span>
                       <span className="font-heading text-xs mb-1" style={{ color: '#64748B' }}>

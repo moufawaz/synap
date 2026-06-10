@@ -46,7 +46,7 @@ export default function FeaturesGrid({ lang }: Props) {
       }
 
   const cellBase = 'relative rounded-3xl p-6 overflow-hidden transition-transform duration-300 hover:-translate-y-1'
-  const cellStyle = { background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }
+  const cellStyle = { background: 'var(--silver-faint)', border: '1px solid var(--silver-rim)' }
   const cellStyleSpark = { background: 'linear-gradient(150deg, rgba(187,92,246,0.16), rgba(123,47,255,0.06))', border: '1px solid rgba(187,92,246,0.3)' }
 
   return (
@@ -56,7 +56,7 @@ export default function FeaturesGrid({ lang }: Props) {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal className={`mb-14 ${ar ? 'text-right' : 'text-left'}`}>
           <div className="section-label mb-4 inline-flex">{copy.label}</div>
-          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl text-white" style={{ letterSpacing: '0.04em' }}>
+          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl" style={{ color: 'var(--silver)', letterSpacing: '0.04em' }}>
             {copy.headline}
           </h2>
           <p className="text-silver-muted mt-4 max-w-xl text-base sm:text-lg">{copy.sub}</p>
@@ -69,15 +69,15 @@ export default function FeaturesGrid({ lang }: Props) {
             <div className={cellBase} style={cellStyleSpark}>
               <div className="flex items-center gap-2.5 mb-3">
                 <MessageCircle size={18} style={{ color: '#D88BFF' }} />
-                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.chat.title}</h3>
+                <h3 className="font-heading font-bold text-lg" style={{ color: 'var(--silver)' }}>{copy.cells.chat.title}</h3>
               </div>
               <p className="text-silver-muted text-sm leading-relaxed max-w-md">{copy.cells.chat.body}</p>
               {/* mini chat visual */}
               <div className="mt-5 flex flex-col gap-2 max-w-sm">
-                <div className="self-end px-3.5 py-2 rounded-2xl text-[12px]" style={{ background: 'rgba(255,255,255,0.08)', color: '#D7DCE3' }}>
+                <div className="self-end px-3.5 py-2 rounded-2xl text-[12px]" style={{ background: 'var(--silver-faint)', border: '1px solid var(--silver-rim)', color: 'var(--silver)' }}>
                   {ar ? 'خلّي الخميس راحة' : 'Make Thursday a rest day'}
                 </div>
-                <div className="self-start px-3.5 py-2 rounded-2xl text-[12px]" style={{ background: 'rgba(187,92,246,0.18)', border: '1px solid rgba(187,92,246,0.3)', color: '#EDE6F7' }}>
+                <div className="self-start px-3.5 py-2 rounded-2xl text-[12px]" style={{ background: 'rgba(187,92,246,0.18)', border: '1px solid rgba(187,92,246,0.3)', color: 'var(--silver)' }}>
                   {ar ? 'تم ✓ — حدّثت خطتك وتذكيراتك.' : 'Done ✓ — your plan and reminders are updated.'}
                 </div>
               </div>
@@ -89,12 +89,12 @@ export default function FeaturesGrid({ lang }: Props) {
             <div className={`${cellBase} h-full`} style={cellStyle}>
               <div className="flex items-center gap-2.5 mb-3">
                 <Utensils size={18} style={{ color: '#D88BFF' }} />
-                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.food.title}</h3>
+                <h3 className="font-heading font-bold text-lg" style={{ color: 'var(--silver)' }}>{copy.cells.food.title}</h3>
               </div>
               <p className="text-silver-muted text-sm leading-relaxed">{copy.cells.food.body}</p>
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {(ar ? ['كبسة', 'كشري', 'مندي', 'فول', 'ملوخية', 'شاورما'] : ['Kabsa', 'Koshary', 'Mandi', 'Ful', 'Molokhia', 'Shawarma']).map(d => (
-                  <span key={d} className="px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ background: 'rgba(187,92,246,0.12)', color: '#D8C7EE' }}>
+                  <span key={d} className="px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ background: 'rgba(187,92,246,0.12)', color: 'var(--spark-light)' }}>
                     {d}
                   </span>
                 ))}
@@ -107,7 +107,7 @@ export default function FeaturesGrid({ lang }: Props) {
             <div className={`${cellBase} h-full`} style={cellStyle}>
               <div className="flex items-center gap-2.5 mb-3">
                 <Dumbbell size={18} style={{ color: '#D88BFF' }} />
-                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.plans.title}</h3>
+                <h3 className="font-heading font-bold text-lg" style={{ color: 'var(--silver)' }}>{copy.cells.plans.title}</h3>
               </div>
               <p className="text-silver-muted text-sm leading-relaxed">{copy.cells.plans.body}</p>
               {/* mini progression bars */}
@@ -124,14 +124,14 @@ export default function FeaturesGrid({ lang }: Props) {
             <div className={`${cellBase} h-full`} style={cellStyle}>
               <div className="flex items-center gap-2.5 mb-3">
                 <ScanLine size={18} style={{ color: '#D88BFF' }} />
-                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.scan.title}</h3>
+                <h3 className="font-heading font-bold text-lg" style={{ color: 'var(--silver)' }}>{copy.cells.scan.title}</h3>
               </div>
               <p className="text-silver-muted text-sm leading-relaxed">{copy.cells.scan.body}</p>
               <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                 {(ar ? [['دهون', '18.2%'], ['عضلات', '36.4kg'], ['BMR', '1,742']] : [['Body fat', '18.2%'], ['Muscle', '36.4kg'], ['BMR', '1,742']]).map(([k, v]) => (
-                  <div key={k} className="rounded-xl py-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                  <div key={k} className="rounded-xl py-2" style={{ background: 'var(--silver-faint)', border: '1px solid var(--silver-rim)' }}>
                     <p className="text-[10px] text-silver-muted">{k}</p>
-                    <p className="text-white font-heading font-bold text-[13px]">{v}</p>
+                    <p className="font-heading font-bold text-[13px]" style={{ color: 'var(--silver)' }}>{v}</p>
                   </div>
                 ))}
               </div>
@@ -143,7 +143,7 @@ export default function FeaturesGrid({ lang }: Props) {
             <div className={`${cellBase} h-full`} style={cellStyle}>
               <div className="flex items-center gap-2.5 mb-3">
                 <Camera size={18} style={{ color: '#D88BFF' }} />
-                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.camera.title}</h3>
+                <h3 className="font-heading font-bold text-lg" style={{ color: 'var(--silver)' }}>{copy.cells.camera.title}</h3>
               </div>
               <p className="text-silver-muted text-sm leading-relaxed">{copy.cells.camera.body}</p>
             </div>
@@ -156,7 +156,7 @@ export default function FeaturesGrid({ lang }: Props) {
                 <div className="flex-1">
                   <div className="flex items-center gap-2.5 mb-2">
                     <Bell size={18} style={{ color: '#D88BFF' }} />
-                    <h3 className="font-heading font-bold text-white text-lg">{copy.cells.proactive.title}</h3>
+                    <h3 className="font-heading font-bold text-lg" style={{ color: 'var(--silver)' }}>{copy.cells.proactive.title}</h3>
                   </div>
                   <p className="text-silver-muted text-sm leading-relaxed max-w-lg">{copy.cells.proactive.body}</p>
                 </div>
@@ -167,8 +167,8 @@ export default function FeaturesGrid({ lang }: Props) {
                     : [['💧 Hydration', 'Drink ~350 ml now'], ['💪 Training time', 'Push — Chest & Shoulders · 6:00 PM'], ['🌙 Evening check-in', 'Log anything you missed']]
                   ).map(([title, body], i) => (
                     <div key={title} className="rounded-xl px-3.5 py-2.5" style={{ background: 'rgba(10,10,12,0.75)', border: '1px solid rgba(255,255,255,0.08)', opacity: 1 - i * 0.18 }}>
-                      <p className="text-white text-[12px] font-heading font-bold">{title}</p>
-                      <p className="text-silver-muted text-[11px]">{body}</p>
+                      <p className="text-[12px] font-heading font-bold" style={{ color: '#F8FAFC' }}>{title}</p>
+                      <p className="text-[11px]" style={{ color: '#94A3B8' }}>{body}</p>
                     </div>
                   ))}
                 </div>
@@ -182,7 +182,7 @@ export default function FeaturesGrid({ lang }: Props) {
           <p className="text-center text-[11px] font-heading tracking-[0.25em] uppercase text-silver-muted/60 mb-4">{copy.moreLabel}</p>
           <div className="flex flex-wrap justify-center gap-2">
             {copy.more.map(item => (
-              <span key={item} className="px-3.5 py-1.5 rounded-full text-[12px] font-semibold" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#B9C0CB' }}>
+              <span key={item} className="px-3.5 py-1.5 rounded-full text-[12px] font-semibold" style={{ background: 'var(--silver-faint)', border: '1px solid var(--silver-rim)', color: 'var(--silver-muted)' }}>
                 {item}
               </span>
             ))}

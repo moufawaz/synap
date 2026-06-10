@@ -63,14 +63,14 @@ export default function CTA({ lang, isLoggedIn = false }: CTAProps) {
                 {/* App Store slot — swap for the real badge + link at launch */}
                 <div
                   className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl"
-                  style={{ border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.04)' }}
+                  style={{ border: '1px solid var(--silver-rim)', background: 'var(--silver-faint)' }}
                 >
-                  <Apple size={22} className="text-white" />
+                  <Apple size={22} style={{ color: 'var(--silver)' }} />
                   <div className={isRTL ? 'text-right' : 'text-left'}>
                     <p className="text-[10px] uppercase tracking-widest text-light-muted/70 font-heading">
                       {isRTL ? 'قريباً على' : 'COMING SOON ON THE'}
                     </p>
-                    <p className="text-white font-heading font-bold text-sm leading-tight">App Store</p>
+                    <p className="font-heading font-bold text-sm leading-tight" style={{ color: 'var(--silver)' }}>App Store</p>
                   </div>
                 </div>
               </div>
