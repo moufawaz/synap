@@ -12,6 +12,7 @@ import SocialProof from '@/components/landing/SocialProof'
 import LandingPricing from '@/components/landing/LandingPricing'
 import CTA from '@/components/landing/CTA'
 import Footer from '@/components/landing/Footer'
+import Reveal from '@/components/landing/Reveal'
 
 export default function LandingPage() {
   const { lang, setLang } = useLanguage()
@@ -59,12 +60,12 @@ export default function LandingPage() {
         {/* ── Hero — headline untouched ────────────────────────── */}
         <Hero lang={lang} isLoggedIn={isLoggedIn} userName={userName} />
 
-        <TheProblem lang={lang} />
-        <AIComparison lang={lang} />
-        <HowIonWorks lang={lang} />
+        <Reveal><TheProblem lang={lang} /></Reveal>
+        <Reveal><AIComparison lang={lang} /></Reveal>
+        <Reveal><HowIonWorks lang={lang} /></Reveal>
         <FeaturesGrid lang={lang} />
         <SocialProof lang={lang} />
-        <LandingPricing lang={lang} />
+        <Reveal><LandingPricing lang={lang} /></Reveal>
 
         {/* ── Updated CTA (spec 1F) ────────────────────────────── */}
         <CTA lang={lang} isLoggedIn={isLoggedIn} />

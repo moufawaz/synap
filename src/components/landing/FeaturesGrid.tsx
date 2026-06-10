@@ -1,131 +1,194 @@
 'use client'
 
 import { type Language } from '@/lib/i18n'
-import { Utensils, Dumbbell, BarChart2, Camera, Bell, RefreshCw, Target, FileText, Pill, Globe, Watch, Users, ShoppingBasket } from 'lucide-react'
+import Reveal from '@/components/landing/Reveal'
+import { Bell, Camera, Dumbbell, MessageCircle, ScanLine, Utensils } from 'lucide-react'
 
 interface Props { lang: Language }
 
-const EN = {
-  label: 'Everything Ion Does',
-  headline: 'Everything Ion does for you',
-  features: [
-    { icon: Utensils, title: 'Adaptive Diet Plans', body: "Ion builds meal plans from food you love — timed to your exact schedule. Log in plain text: 'I had kabsa for lunch.' Ion handles the math.", badge: null },
-    { icon: Dumbbell, title: 'Smart Workout Programs', body: 'Gym or home. 6-week progressive programs with video for every exercise. Ion shows you exactly how — and increases difficulty as you get stronger.', badge: null },
-    { icon: BarChart2, title: 'Full Body Tracking', body: '13 body measurements tracked from day one. Symmetry gaps detected. Charts showing every change. Progress photos stored privately.', badge: null },
-    { icon: Camera, title: 'Food Calories Scanner', body: 'Point your camera at any product. Ion reads the label and logs the macros instantly. No manual entry. No guessing.', badge: null },
-    { icon: Bell, title: 'Proactive Check-ins', body: "Ion reaches out — you don't have to remember. Morning messages, pre-workout reminders, meal log nudges, plateau alerts.", badge: null },
-    { icon: RefreshCw, title: 'Plan Renewal That Learns', body: 'Every cycle Ion reviews your results, asks what worked, and rebuilds your plan around your new reality.', badge: null },
-    { icon: BarChart2, title: 'Coach Memory Timeline', body: 'Ion remembers first scans, weight shifts, workouts, meal patterns, and coaching notes so your plan gets smarter over time.', badge: null },
-    { icon: Bell, title: 'Smart Plateau Intervention', body: 'When progress stalls, Ion detects the pattern and can apply a controlled adjustment to calories, cardio, or training intensity.', badge: null },
-    { icon: Utensils, title: 'What Should I Eat Now?', body: 'Ion recommends the next best meal from your remaining daily calories, protein, carbs, and fats.', badge: null },
-    { icon: Utensils, title: 'Eating Out Mode', body: 'Tell Ion any restaurant, cuisine, delivery app, buffet, or travel food situation and get the best macro-fit order.', badge: null },
-    { icon: ShoppingBasket, title: 'Weekly Grocery Builder', body: 'Turn your active meal plan into a grouped grocery list with weekly quantities, check-offs, and easy sharing.', badge: null },
-    { icon: Camera, title: 'AI Form Check', body: 'Upload a clear lift frame and Ion gives a form score, safety note, technical fixes, and one cue for the next set.', badge: null },
-    { icon: Target, title: 'Weekly Mission', body: 'Every week Ion chooses the highest-impact mission for you: close training gaps, log meals, or protect your streak.', badge: null },
-    { icon: BarChart2, title: 'Progress Share Card', body: 'Generate a clean weekly progress image with your key stats and Ion note, ready to save or share.', badge: null },
-    { icon: Dumbbell, title: 'Body Symmetry Coach', body: 'Ion checks left/right limb gaps and gives correction work before small imbalances become training problems.', badge: null },
-    { icon: Target, title: 'Goal Timeline Prediction', body: "Ion calculates your current pace and tells you exactly when you'll hit your goal — and what needs to change to get there faster.", badge: 'Elite ⭐' },
-    { icon: FileText, title: 'Weekly Body Composition Report', body: 'Every Friday Ion generates a full report — what changed, what\'s working, what needs attention. Delivered to your inbox.', badge: 'Elite ⭐' },
-    { icon: RefreshCw, title: 'Weekly Macro Auto-Adjustments', body: 'Every Monday Ion reviews your last 7 days — weight trend, workout completion, calorie adherence — and fine-tunes your macros by ±50–150 kcal automatically.', badge: 'Elite ⭐' },
-    { icon: Pill, title: 'Supplement Recommendations', body: 'Based on your diet gaps and training — Ion recommends exactly what supplements help, right dose, right timing, and where to buy near you.', badge: 'Elite ⭐' },
-    { icon: Globe, title: 'Bilingual Arabic + English', body: 'Full Arabic and English support. Ion speaks your language. RTL interface. Saudi food database. Local context built in.', badge: null },
-    { icon: Watch, title: 'Apple Health Integration', body: 'On iOS, connect Apple Health so Ion can use your steps, active calories, heart rate, and body weight as coaching context.', badge: null },
-    { icon: Users, title: 'Community Feed', body: 'See real SYNAP users hitting real goals. The accountability that keeps you consistent.', badge: 'Coming Soon' },
-  ],
-}
-
-const AR = {
-  label: 'كل ما يفعله آيون',
-  headline: 'كل ما يفعله آيون من أجلك',
-  features: [
-    { icon: Utensils, title: 'خطط غذائية تكيفية', body: "آيون يبني خطط وجبات من طعام تحبه — موقّتة بدقة لجدولك. سجّل بنص عادي: 'تناولت كبسة للغداء.' آيون يتولى الحسابات.", badge: null },
-    { icon: Dumbbell, title: 'برامج تمرين ذكية', body: 'صالة أو منزل. برامج تدريجية لـ 6 أسابيع مع فيديو لكل تمرين. آيون يريك الطريقة الصحيحة تماماً — ويزيد الصعوبة مع تقوّيك.', badge: null },
-    { icon: BarChart2, title: 'تتبع الجسم الكامل', body: '13 قياساً للجسم مُتتبَّعة من اليوم الأول. اكتشاف فجوات التناسق. مخططات تُظهر كل تغيير. صور التقدم محفوظة بشكل خاص.', badge: null },
-    { icon: Camera, title: 'ماسح سعرات الطعام', body: 'وجّه كاميرتك نحو أي منتج. آيون يقرأ الملصق ويسجل المغذيات فوراً. لا إدخال يدوي. لا تخمين.', badge: null },
-    { icon: Bell, title: 'متابعة استباقية', body: 'آيون يتواصل معك — لا تحتاج أن تتذكر. رسائل صباحية، تذكيرات قبل التمرين، تنبيهات تسجيل الوجبات، تنبيهات التوقف.', badge: null },
-    { icon: RefreshCw, title: 'تجديد الخطة الذكي', body: 'كل دورة يراجع آيون نتائجك، ويسأل ما الذي نجح، ويعيد بناء خطتك حول واقعك الجديد.', badge: null },
-    { icon: BarChart2, title: 'ذاكرة تدريبية كاملة', body: 'آيون يتذكر المحطات المهمة: أول فحص، تغير الوزن، التمارين، الوجبات، والملاحظات التي شكلت خطتك.', badge: null },
-    { icon: Bell, title: 'تدخل ذكي عند الثبات', body: 'إذا توقف التقدم، يكتشف آيون النمط ويطبق تعديلا محسوبا على السعرات أو الكارديو أو شدة التدريب.', badge: null },
-    { icon: Utensils, title: 'ماذا آكل الآن؟', body: 'افتح التغذية وسيقترح آيون أفضل وجبة تالية حسب السعرات والبروتين والكارب والدهون المتبقية اليوم.', badge: null },
-    { icon: Utensils, title: 'وضع الأكل خارجاً', body: 'اكتب أي مطعم أو مطبخ أو تطبيق توصيل أو بوفيه وسيقترح آيون أفضل طلب يناسب ماكروزك.', badge: null },
-    { icon: ShoppingBasket, title: 'قائمة تسوق أسبوعية', body: 'حوّل خطة الوجبات إلى قائمة تسوق مرتبة بالكميات الأسبوعية مع تحديد العناصر ومشاركتها بسهولة.', badge: null },
-    { icon: Camera, title: 'فحص الأداء بالذكاء الاصطناعي', body: 'ارفع لقطة واضحة من التمرين وسيعطيك آيون تقييما، ملاحظة أمان، وتصحيحات فنية للست القادم.', badge: null },
-    { icon: Target, title: 'مهمة أسبوعية', body: 'كل أسبوع يختار آيون المهمة الأعلى تأثيرا: إغلاق فجوة التدريب، تسجيل الوجبات، أو حماية الاستمرارية.', badge: null },
-    { icon: BarChart2, title: 'بطاقة مشاركة التقدم', body: 'أنشئ صورة أسبوعية نظيفة تعرض أهم أرقامك وملاحظة آيون، جاهزة للحفظ أو المشاركة.', badge: null },
-    { icon: Dumbbell, title: 'مدرب تناسق الجسم', body: 'آيون يراقب الفروقات بين اليمين واليسار ويقترح تمارين تصحيحية قبل أن تتحول لفجوة تدريبية.', badge: null },
-    { icon: Target, title: 'التنبؤ بالجدول الزمني للهدف', body: 'آيون يحسب وتيرتك الحالية ويخبرك بالضبط متى ستحقق هدفك — وما الذي يجب تغييره للوصول بشكل أسرع.', badge: 'Elite ⭐' },
-    { icon: FileText, title: 'تقرير تركيبة الجسم الأسبوعي', body: 'كل جمعة آيون يولّد تقريراً كاملاً — ماذا تغيّر، ما الذي ينجح، ما الذي يحتاج اهتماماً. يُرسل إلى بريدك.', badge: 'Elite ⭐' },
-    { icon: RefreshCw, title: 'تعديل الماكرو الأسبوعي التلقائي', body: 'كل اثنين آيون يراجع الـ 7 أيام الماضية — اتجاه الوزن، إتمام التمارين، الالتزام بالسعرات — ويضبط ماكروزك تلقائياً بـ ±50–150 سعرة.', badge: 'Elite ⭐' },
-    { icon: Pill, title: 'توصيات المكملات الغذائية', body: 'بناءً على نقص نظامك الغذائي وتدريبك — آيون يوصي بالمكملات المناسبة، الجرعة الصحيحة، التوقيت، وأين تشتريها في السعودية.', badge: 'Elite ⭐' },
-    { icon: Globe, title: 'ثنائي اللغة عربي + إنجليزي', body: 'دعم كامل للعربية والإنجليزية. آيون يتحدث لغتك. واجهة RTL. قاعدة بيانات طعام سعودي. سياق محلي مدمج.', badge: null },
-    { icon: Watch, title: 'تكامل Apple Health', body: 'على iOS، اربط Apple Health ليستخدم آيون خطواتك، السعرات النشطة، معدل القلب، ووزن الجسم كسياق تدريبي.', badge: null },
-    { icon: Users, title: 'مجتمع المستخدمين', body: 'اطّلع على نتائج حقيقية لمستخدمي SYNAP الحقيقيين. المساءلة التي تبقيك ثابتاً.', badge: 'قريباً' },
-  ],
-}
-
+/**
+ * Premium bento features grid: six hero cells with mini-visuals + a chip cloud
+ * for the long tail (replaces the old 20-card wall).
+ */
 export default function FeaturesGrid({ lang }: Props) {
-  const isRTL = lang === 'ar'
-  const copy = isRTL ? AR : EN
+  const ar = lang === 'ar'
+
+  const copy = ar
+    ? {
+        label: 'كل ما يفعله آيون',
+        headline: 'مدرّب كامل. ليس مجرد تطبيق.',
+        sub: 'كل ميزة تغذّي الأخرى — تمرينك يعرف نومك، وغذاؤك يعرف تمرينك.',
+        cells: {
+          chat: { title: 'مدرّب يردّ عليك فعلاً', body: 'اسأل، عدّل خطتك، سجّل وجباتك بالكلام العادي — "أكلت كشري" — وآيون يتولى الحسابات ويحدّث الخطة فوراً.' },
+          food: { title: 'يعرف أكلك المحلي', body: 'كبسة، مندي، كشري، فول، ملوخية — بمقادير حقيقية وليس تقديرات غربية. خططك مبنية حول أكلك الفعلي.' },
+          plans: { title: 'برامج تمرين متطورة', body: 'برنامج 6 أسابيع متدرج، جيم أو منزل، فيديو لكل تمرين، ويزداد صعوبة كلما قويت.' },
+          scan: { title: 'يقرأ تحليل InBody', body: 'صوّر تحليلك وآيون يستخرج دهونك وعضلاتك وBMR الفعلي — أهداف دقيقة وليست تخمينات.' },
+          camera: { title: 'مسح الطعام بالكاميرا', body: 'وجّه الكاميرا لأي منتج أو طبق — حتى الأطباق المحلية — وتُسجَّل السعرات فوراً.' },
+          proactive: { title: 'يتابعك قبل أن تطلب', body: 'رسائل الصباح، تذكير الماء والوجبات والتمرين، وتنبيه عند ثبات الوزن — مدرّب يبدأ الحديث.' },
+        },
+        moreLabel: 'وأكثر من ذلك',
+        more: ['دليل الأكل بالخارج', 'قائمة تسوق أسبوعية', 'فحص الأداء بالذكاء الاصطناعي', 'تتبع 13 قياساً للجسم', 'ضبط ماكروز تلقائي ⭐', 'توصيات مكملات ⭐', 'تقرير أسبوعي ⭐', 'توقع موعد هدفك ⭐', 'مهمة أسبوعية', 'بطاقة تقدم للمشاركة', 'مدرب التماثل العضلي', 'تكامل Apple Health'],
+      }
+    : {
+        label: 'EVERYTHING ION DOES',
+        headline: 'A full coach. Not just an app.',
+        sub: 'Every feature feeds the next — your training knows your sleep, your food knows your training.',
+        cells: {
+          chat: { title: 'A coach that answers back', body: 'Ask anything, edit your plan, log meals in plain words — "I had koshary" — and Ion does the math and updates your plan instantly.' },
+          food: { title: 'Knows your local food', body: 'Kabsa, mandi, koshary, ful, molokhia — with real local portions, not Western guesses. Plans built around what you actually eat.' },
+          plans: { title: 'Progressive training programs', body: '6-week periodized programs, gym or home, video for every exercise — and it gets harder as you get stronger.' },
+          scan: { title: 'Reads your InBody scan', body: 'Photograph your scan and Ion extracts your real body fat, muscle mass, and BMR — exact targets, not population guesses.' },
+          camera: { title: 'Point-and-scan food logging', body: 'Aim your camera at any product or plate — local dishes included — and the macros are logged instantly.' },
+          proactive: { title: 'Reaches out before you ask', body: 'Morning briefs, water, meal and training reminders, plateau alerts — a coach that starts the conversation.' },
+        },
+        moreLabel: 'AND MORE',
+        more: ['Eating-out guide', 'Weekly grocery builder', 'AI form check', '13 body measurements', 'Auto macro-tuning ⭐', 'Supplement protocols ⭐', 'Weekly report ⭐', 'Goal timeline prediction ⭐', 'Weekly mission', 'Progress share card', 'Symmetry coach', 'Apple Health sync'],
+      }
+
+  const cellBase = 'relative rounded-3xl p-6 overflow-hidden transition-transform duration-300 hover:-translate-y-1'
+  const cellStyle = { background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }
+  const cellStyleSpark = { background: 'linear-gradient(150deg, rgba(187,92,246,0.16), rgba(123,47,255,0.06))', border: '1px solid rgba(187,92,246,0.3)' }
 
   return (
-    <section className="relative py-24 overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
-      <div className="orb w-[600px] h-[600px] top-1/2 right-[-200px] -translate-y-1/2" style={{ background: 'rgba(187,92,246,0.06)' }} />
+    <section className="relative py-24 sm:py-32" dir={ar ? 'rtl' : 'ltr'}>
+      <div className="orb w-[500px] h-[500px] top-[10%] right-[-150px]" style={{ background: 'rgba(187,92,246,0.06)' }} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="text-center mb-16">
-          <span className="font-heading text-xs tracking-widest uppercase text-violet/80 mb-4 block">
-            {copy.label}
-          </span>
-          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl text-light mb-4">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Reveal className={`mb-14 ${ar ? 'text-right' : 'text-left'}`}>
+          <div className="section-label mb-4 inline-flex">{copy.label}</div>
+          <h2 className="font-heading font-black text-3xl sm:text-4xl lg:text-5xl text-white" style={{ letterSpacing: '0.04em' }}>
             {copy.headline}
           </h2>
-          <div className="inline-block px-5 py-2 rounded-full mb-4"
-            style={{ background: 'rgba(187,92,246,0.08)', border: '1px solid rgba(187,92,246,0.2)' }}>
-            <p className="font-heading font-bold text-sm" style={{ color: '#BB5CF6', letterSpacing: '0.06em' }}>
-              {isRTL ? 'مبني كنظام تدريب حقيقي' : 'Built like a real coaching system'}
-            </p>
-          </div>
-          <p className="text-light-muted text-base max-w-xl mx-auto">
-            {isRTL
-              ? 'كل ما يفعله مدرب عالمي المستوى — تلقائي، مخصص، دائم.'
-              : 'Everything a world-class trainer would do — automated, personalized, always on.'}
-          </p>
-        </div>
+          <p className="text-silver-muted mt-4 max-w-xl text-base sm:text-lg">{copy.sub}</p>
+        </Reveal>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {copy.features.map((feature, i) => {
-            const Icon = feature.icon
-            const isElite = feature.badge?.includes('Elite') || feature.badge?.includes('⭐')
-            const isComingSoon = feature.badge?.includes('Soon') || feature.badge?.includes('قريباً')
-
-            return (
-              <div key={i} className="glass-card p-6 flex flex-col gap-4 relative"
-                style={isElite ? { border: '1px solid rgba(187,92,246,0.25)', background: 'rgba(187,92,246,0.04)' } : undefined}>
-
-                {feature.badge && (
-                  <span className="absolute top-4 right-4 font-heading text-[10px] font-bold tracking-widest uppercase px-2 py-1 rounded-full"
-                    style={{
-                      background: isElite ? 'rgba(187,92,246,0.2)' : 'rgba(100,116,139,0.2)',
-                      color: isElite ? '#BB5CF6' : '#64748B',
-                      border: `1px solid ${isElite ? 'rgba(187,92,246,0.3)' : 'rgba(100,116,139,0.2)'}`,
-                    }}>
-                    {feature.badge}
-                  </span>
-                )}
-
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'rgba(187,92,246,0.12)', border: '1px solid rgba(187,92,246,0.25)' }}>
-                  <Icon size={18} className="text-violet" />
+        {/* Bento */}
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+          {/* Ion chat — large */}
+          <Reveal className="md:col-span-4">
+            <div className={cellBase} style={cellStyleSpark}>
+              <div className="flex items-center gap-2.5 mb-3">
+                <MessageCircle size={18} style={{ color: '#D88BFF' }} />
+                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.chat.title}</h3>
+              </div>
+              <p className="text-silver-muted text-sm leading-relaxed max-w-md">{copy.cells.chat.body}</p>
+              {/* mini chat visual */}
+              <div className="mt-5 flex flex-col gap-2 max-w-sm">
+                <div className="self-end px-3.5 py-2 rounded-2xl text-[12px]" style={{ background: 'rgba(255,255,255,0.08)', color: '#D7DCE3' }}>
+                  {ar ? 'خلّي الخميس راحة' : 'Make Thursday a rest day'}
                 </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <h3 className="font-heading font-bold text-base text-light">{feature.title}</h3>
-                  <p className="text-light-muted text-xs leading-relaxed">{feature.body}</p>
+                <div className="self-start px-3.5 py-2 rounded-2xl text-[12px]" style={{ background: 'rgba(187,92,246,0.18)', border: '1px solid rgba(187,92,246,0.3)', color: '#EDE6F7' }}>
+                  {ar ? 'تم ✓ — حدّثت خطتك وتذكيراتك.' : 'Done ✓ — your plan and reminders are updated.'}
                 </div>
               </div>
-            )
-          })}
+            </div>
+          </Reveal>
+
+          {/* Local food — tall accent */}
+          <Reveal delay={0.08} className="md:col-span-2">
+            <div className={`${cellBase} h-full`} style={cellStyle}>
+              <div className="flex items-center gap-2.5 mb-3">
+                <Utensils size={18} style={{ color: '#D88BFF' }} />
+                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.food.title}</h3>
+              </div>
+              <p className="text-silver-muted text-sm leading-relaxed">{copy.cells.food.body}</p>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {(ar ? ['كبسة', 'كشري', 'مندي', 'فول', 'ملوخية', 'شاورما'] : ['Kabsa', 'Koshary', 'Mandi', 'Ful', 'Molokhia', 'Shawarma']).map(d => (
+                  <span key={d} className="px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ background: 'rgba(187,92,246,0.12)', color: '#D8C7EE' }}>
+                    {d}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+
+          {/* Training */}
+          <Reveal className="md:col-span-2">
+            <div className={`${cellBase} h-full`} style={cellStyle}>
+              <div className="flex items-center gap-2.5 mb-3">
+                <Dumbbell size={18} style={{ color: '#D88BFF' }} />
+                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.plans.title}</h3>
+              </div>
+              <p className="text-silver-muted text-sm leading-relaxed">{copy.cells.plans.body}</p>
+              {/* mini progression bars */}
+              <div className="mt-4 flex items-end gap-1.5 h-12">
+                {[35, 48, 42, 60, 70, 64, 85].map((h, i) => (
+                  <div key={i} className="flex-1 rounded-t" style={{ height: `${h}%`, background: i === 6 ? 'linear-gradient(180deg,#D88BFF,#7B2FFF)' : 'rgba(187,92,246,0.25)' }} />
+                ))}
+              </div>
+            </div>
+          </Reveal>
+
+          {/* InBody */}
+          <Reveal delay={0.06} className="md:col-span-2">
+            <div className={`${cellBase} h-full`} style={cellStyle}>
+              <div className="flex items-center gap-2.5 mb-3">
+                <ScanLine size={18} style={{ color: '#D88BFF' }} />
+                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.scan.title}</h3>
+              </div>
+              <p className="text-silver-muted text-sm leading-relaxed">{copy.cells.scan.body}</p>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                {(ar ? [['دهون', '18.2%'], ['عضلات', '36.4kg'], ['BMR', '1,742']] : [['Body fat', '18.2%'], ['Muscle', '36.4kg'], ['BMR', '1,742']]).map(([k, v]) => (
+                  <div key={k} className="rounded-xl py-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <p className="text-[10px] text-silver-muted">{k}</p>
+                    <p className="text-white font-heading font-bold text-[13px]">{v}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+
+          {/* Camera */}
+          <Reveal delay={0.12} className="md:col-span-2">
+            <div className={`${cellBase} h-full`} style={cellStyle}>
+              <div className="flex items-center gap-2.5 mb-3">
+                <Camera size={18} style={{ color: '#D88BFF' }} />
+                <h3 className="font-heading font-bold text-white text-lg">{copy.cells.camera.title}</h3>
+              </div>
+              <p className="text-silver-muted text-sm leading-relaxed">{copy.cells.camera.body}</p>
+            </div>
+          </Reveal>
+
+          {/* Proactive — wide */}
+          <Reveal className="md:col-span-6">
+            <div className={cellBase} style={cellStyleSpark}>
+              <div className={`flex flex-col md:flex-row md:items-center gap-5 ${ar ? 'md:flex-row-reverse' : ''}`}>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <Bell size={18} style={{ color: '#D88BFF' }} />
+                    <h3 className="font-heading font-bold text-white text-lg">{copy.cells.proactive.title}</h3>
+                  </div>
+                  <p className="text-silver-muted text-sm leading-relaxed max-w-lg">{copy.cells.proactive.body}</p>
+                </div>
+                {/* mini notification stack */}
+                <div className="flex flex-col gap-2 w-full md:w-80">
+                  {(ar
+                    ? [['💧 ترطيب', 'اشرب ~350 مل الآن'], ['💪 وقت التمرين', 'دفع — صدر وأكتاف · 6:00م'], ['🌙 مراجعة المساء', 'سجّل ما فاتك اليوم']]
+                    : [['💧 Hydration', 'Drink ~350 ml now'], ['💪 Training time', 'Push — Chest & Shoulders · 6:00 PM'], ['🌙 Evening check-in', 'Log anything you missed']]
+                  ).map(([title, body], i) => (
+                    <div key={title} className="rounded-xl px-3.5 py-2.5" style={{ background: 'rgba(10,10,12,0.75)', border: '1px solid rgba(255,255,255,0.08)', opacity: 1 - i * 0.18 }}>
+                      <p className="text-white text-[12px] font-heading font-bold">{title}</p>
+                      <p className="text-silver-muted text-[11px]">{body}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Reveal>
         </div>
+
+        {/* Long tail */}
+        <Reveal delay={0.1} className="mt-10">
+          <p className="text-center text-[11px] font-heading tracking-[0.25em] uppercase text-silver-muted/60 mb-4">{copy.moreLabel}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {copy.more.map(item => (
+              <span key={item} className="px-3.5 py-1.5 rounded-full text-[12px] font-semibold" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#B9C0CB' }}>
+                {item}
+              </span>
+            ))}
+          </div>
+          <p className="text-center text-silver-muted/50 text-[11px] mt-4">⭐ {ar ? 'ميزات خطة Elite' : 'Elite plan features'}</p>
+        </Reveal>
       </div>
     </section>
   )

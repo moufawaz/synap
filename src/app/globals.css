@@ -697,3 +697,9 @@ select option {
 :root[data-theme="light"] .border-white\/10 {
   border-color: var(--silver-rim) !important;
 }
+
+/* Hero headline animated gradient (landing redesign) */
+@keyframes heroGradientShift {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
