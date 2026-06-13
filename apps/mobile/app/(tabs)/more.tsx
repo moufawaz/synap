@@ -17,7 +17,7 @@ import { useTheme } from '@/theme/ThemeProvider'
 // Bump this every build so we can confirm the installed binary matches the
 // latest code (shown in the More tab footer). Current: web-aligned train day
 // count + legible chat chips.
-const BUILD_TAG = 'fixpack-35'
+const BUILD_TAG = 'fixpack-36'
 
 type NavRow = { label: string; labelAr?: string; href: Href; icon: string; color?: string }
 

@@ -47,9 +47,13 @@ export async function getPlanHistory() {
 }
 
 export async function renewPlan(planType: 'diet' | 'workout') {
+  // Renewal runs a full Opus regeneration; the server's hard limit is 60s, so
+  // give the client a matching window — otherwise the default 45s fetch timeout
+  // would surface "took too long" before the server even finishes.
   return apiFetch<{ ok: boolean; action: 'preview'; previewId: string; preview: any; plan: any }>('/api/renew-plan', {
     method: 'POST',
     body: JSON.stringify({ action: 'preview', planType }),
+    timeoutMs: 90_000,
   })
 }
 
@@ -57,6 +61,7 @@ export async function applyRenewalPreview(previewId: string) {
   return apiFetch<{ ok: boolean; action: 'apply'; planType: 'diet' | 'workout'; plan: any }>('/api/renew-plan', {
     method: 'POST',
     body: JSON.stringify({ action: 'apply', previewId }),
+    timeoutMs: 30_000,
   })
 }
 

@@ -100,9 +100,13 @@ export async function POST(req: Request) {
       : buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan })
 
     // ── Call Claude ────────────────────────────────────────────────────
+    // Renewal is for ONE side (diet OR workout), not both. Capping max_tokens
+    // tighter (was 16k) keeps the call well under the 60s Vercel Hobby ceiling
+    // and prevents the "took too long" timeout. Diet (2-week, ~4 meals/day) and
+    // workout (6-week, 4-day split) both comfortably finish in this budget.
     const message = await withAnthropicRetry(() => client.messages.create({
       model: process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5',
-      max_tokens: 16000,
+      max_tokens: planType === 'diet' ? 8000 : 9000,
       system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
     }))
