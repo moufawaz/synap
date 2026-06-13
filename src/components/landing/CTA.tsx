@@ -60,19 +60,22 @@ export default function CTA({ lang, isLoggedIn = false }: CTAProps) {
                   </p>
                 )}
 
-                {/* App Store slot — swap for the real badge + link at launch */}
-                <div
-                  className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl"
+                {/* Live App Store badge */}
+                <a
+                  href="https://apps.apple.com/sa/app/synap-ai-fitness-coach/id6771498466"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl transition-transform duration-200 hover:-translate-y-0.5"
                   style={{ border: '1px solid var(--silver-rim)', background: 'var(--silver-faint)' }}
                 >
                   <Apple size={22} style={{ color: 'var(--silver)' }} />
                   <div className={isRTL ? 'text-right' : 'text-left'}>
                     <p className="text-[10px] uppercase tracking-widest text-light-muted/70 font-heading">
-                      {isRTL ? 'قريباً على' : 'COMING SOON ON THE'}
+                      {isRTL ? 'حمّل من' : 'DOWNLOAD ON THE'}
                     </p>
                     <p className="font-heading font-bold text-sm leading-tight" style={{ color: 'var(--silver)' }}>App Store</p>
                   </div>
-                </div>
+                </a>
               </div>
 
               {/* Phone */}

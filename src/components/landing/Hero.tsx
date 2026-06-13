@@ -57,14 +57,17 @@ export default function Hero({ lang, isLoggedIn = false, userName = '' }: HeroPr
                 <span>ION AI — {isRTL ? 'متصل' : 'CONNECTED'}</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-signal animate-pulse" />
               </div>
-              {/* App Store pill — flips to a live badge at launch */}
-              <span
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-heading font-bold tracking-widest uppercase"
-                style={{ border: '1px solid var(--silver-rim)', color: 'var(--silver-muted)', background: 'var(--silver-faint)' }}
+              {/* Live App Store badge */}
+              <a
+                href="https://apps.apple.com/sa/app/synap-ai-fitness-coach/id6771498466"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-heading font-bold tracking-widest uppercase transition-transform duration-200 hover:-translate-y-0.5"
+                style={{ border: '1px solid var(--spark)', color: 'var(--spark-light)', background: 'rgba(187,92,246,0.12)' }}
               >
                 <Apple size={11} />
-                {isRTL ? 'قريباً على App Store' : 'SOON ON THE APP STORE'}
-              </span>
+                {isRTL ? 'حمّل من App Store' : 'GET IT ON THE APP STORE'}
+              </a>
             </motion.div>
 
             <motion.h1
