@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import LoadingSplash from '@/components/LoadingSplash'
+import { NotificationsRationale } from '@/components/NotificationsRationale'
 import { registerDeviceToken } from '@/features/tools'
 import { syncSynapReminders } from '@/features/notifications'
 import { configurePurchases, identifyPurchaser, resetPurchaser } from '@/features/purchases'
@@ -159,6 +160,9 @@ function RootNavigator() {
         }}
       />
       <LoadingSplash visible={showSplash} />
+      {/* Soft rationale for notification permission. Only when signed in, and
+          self-snoozes for a week if dismissed. */}
+      <NotificationsRationale enabled={!!session && !loading} />
     </>
   )
 }

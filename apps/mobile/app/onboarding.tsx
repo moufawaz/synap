@@ -10,7 +10,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { PlanGenerating } from '@/components/PlanGenerating'
 import { generateMobilePlan, MobileProfileInput, saveMobileProfile } from '@/features/onboarding'
 import { syncSynapReminders } from '@/features/notifications'
-import { analyzeInBodyPhoto } from '@/features/measurements'
+import { analyzeInBodyPhoto, createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
@@ -33,7 +33,25 @@ const STRENGTH_LIFTS: Array<[string, string]> = [
   ['ohp', 'Overhead press'], ['row', 'Barbell row'],
 ]
 
-const STEPS = ['You', 'Goal', 'Lifestyle', 'Training', 'Nutrition', 'Health'] as const
+const STEPS = ['You', 'Goal', 'Lifestyle', 'Training', 'Nutrition', 'Body', 'Health'] as const
+
+// Body measurements collected at onboarding. Weight + key circumferences match
+// the web flow so a baseline exists from day one. All optional except weight
+// (already captured on step 0). Persisted via /api/measurements after the user
+// taps "Generate my plan".
+const MEASUREMENT_FIELDS: Array<[string, string, string]> = [
+  ['neck_cm', 'Neck (cm)', 'الرقبة (سم)'],
+  ['shoulders_cm', 'Shoulders (cm)', 'الكتفان (سم)'],
+  ['chest_cm', 'Chest (cm)', 'الصدر (سم)'],
+  ['waist_cm', 'Waist (cm)', 'الخصر (سم)'],
+  ['hips_cm', 'Hips (cm)', 'الأرداف (سم)'],
+  ['bicep_left_cm', 'Bicep L (cm)', 'العضد يسار (سم)'],
+  ['bicep_right_cm', 'Bicep R (cm)', 'العضد يمين (سم)'],
+  ['thigh_left_cm', 'Thigh L (cm)', 'الفخذ يسار (سم)'],
+  ['thigh_right_cm', 'Thigh R (cm)', 'الفخذ يمين (سم)'],
+  ['calf_left_cm', 'Calf L (cm)', 'الساق يسار (سم)'],
+  ['calf_right_cm', 'Calf R (cm)', 'الساق يمين (سم)'],
+]
 
 // ── Module-level inputs ───────────────────────────────────────────────────────
 // IMPORTANT: these MUST live outside the screen component. If they're defined
@@ -130,6 +148,7 @@ export default function OnboardingScreen() {
   const [scanningInbody, setScanningInbody] = useState(false)
   const [inbodyDone, setInbodyDone] = useState(false)
   const [strength, setStrength] = useState<Record<string, string>>({})
+  const [measurements, setMeasurements] = useState<Record<string, string>>({})
 
   function update<K extends keyof MobileProfileInput>(key: K, value: MobileProfileInput[K]) {
     setProfile(current => ({ ...current, [key]: value }))
@@ -215,6 +234,22 @@ export default function OnboardingScreen() {
         name={(profile.name || '').trim() || (language === 'ar' ? 'بطل' : 'Athlete')}
         task={async () => {
           await saveMobileProfile(genPayload)
+          // Body measurements baseline (optional fields, skipped if empty).
+          const cleaned: Record<string, number> = {}
+          for (const [k, raw] of Object.entries(measurements)) {
+            const n = parseFloat(String(raw).trim())
+            if (Number.isFinite(n) && n > 0) cleaned[k] = n
+          }
+          if (Object.keys(cleaned).length) {
+            try {
+              await createMeasurement({
+                date: new Date().toISOString().slice(0, 10),
+                weight_kg: parseFloat(genPayload.weight_kg) || null,
+                ...cleaned,
+                notes: 'Onboarding baseline',
+              } as any)
+            } catch { /* non-fatal */ }
+          }
           // Workout is written in two halves so each request stays under the 60s
           // serverless limit; skip already-completed halves on Try Again.
           if (!workoutPhaseDone.current) {
@@ -364,6 +399,32 @@ export default function OnboardingScreen() {
         ) : null}
 
         {step === 5 ? (
+          <>
+            <Text style={[styles.label, { color: color.muted, textAlign: align, marginBottom: 10 }]}>
+              {isRtl
+                ? 'قياسات الجسم (اختيارية). كل قياس تضيفه اليوم يصبح قاعدة لعرض التقدم لاحقاً.'
+                : 'Body measurements (all optional). Every value you add today becomes a baseline so Ion can show progress over time.'}
+            </Text>
+            {MEASUREMENT_FIELDS.map(([key, en, ar]) => (
+              <Field
+                key={key}
+                label={isRtl ? ar : en}
+                value={measurements[key] || ''}
+                onChangeText={v => setMeasurements(m => ({ ...m, [key]: v }))}
+                keyboardType="decimal-pad"
+                color={color}
+                isRtl={isRtl}
+              />
+            ))}
+            <Text style={[styles.hint, { color: color.dim, textAlign: align }]}>
+              {isRtl
+                ? 'لست متأكداً من قياس؟ اتركه فارغاً — يمكنك إضافته لاحقاً من القياسات.'
+                : 'Unsure about one? Leave it blank — you can fill it in later from Measurements.'}
+            </Text>
+          </>
+        ) : null}
+
+        {step === 6 ? (
           <>
             <Field label="Injuries / limitations (optional)" value={profile.injuries} onChangeText={v => update('injuries', v)} color={color} isRtl={isRtl} />
             <Field label="Medical conditions (optional)" value={profile.medical_conditions} onChangeText={v => update('medical_conditions', v)} placeholder="diabetes, blood pressure, etc." color={color} isRtl={isRtl} />

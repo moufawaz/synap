@@ -8,6 +8,7 @@ import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
 import { regionalFoodIntelligence } from '@/lib/regional-foods'
+import { ramadanChatContext } from '@/lib/ramadan'
 import { canonicalDayName, normalizeWorkoutPlanDays } from '@/lib/workout-days'
 
 // Plan-edit calls Claude with up to 10 000 output tokens; it can take 30-40 s.
@@ -2025,6 +2026,7 @@ ${workoutBlock}
 20. Strength progress rule: If RECENT WORKOUT LOGS show duration consistently dropping (e.g., logging 30 min when 60 min is planned), or if the same exercises appear repeatedly without progression notes, flag it. A coach tracks strength progress — proactively ask if the client has been increasing weight/reps on their main lifts. If strength is stalling, suggest a deload or form focus week before increasing load.
 21. InBody scan rule: If CLIENT PROFILE has no InBody scan data (body_fat_pct is absent or described as "estimated"), proactively mention once per conversation that uploading an InBody scan from Settings → Health will give Ion precise body fat %, muscle mass, and visceral fat — enabling exact protein targets (not population guesses). Do NOT repeat this every message. If InBody data IS present and shows visceral fat > 10 (high risk), proactively flag the cardiovascular risk and ensure the user understands why their plan prioritises fat loss. If InBody data was recently added (visible in profile block), acknowledge what changed: "Your InBody scan shows [X]% body fat and muscle mass of [Y] kg — your protein target has been updated to [Z]g based on your actual lean mass." Then point them to the rebuild flow: "Open Plan → Renew with Ion to rebuild your plan with your exact body composition."
 
-${regionalFoodIntelligence()}`
+${regionalFoodIntelligence()}
+${ramadanChatContext(profile)}`
 }
 

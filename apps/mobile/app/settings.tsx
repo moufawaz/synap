@@ -85,6 +85,10 @@ export default function SettingsScreen() {
       next[key] = value == null ? '' : Array.isArray(value) ? value.join(', ') : String(value)
     })
     next.ion_gender = profile.data.profile.ion_gender || 'male'
+    // Ramadan mode (mini scope) — load existing toggle + times from the profile.
+    next.ramadan_mode = profile.data.profile.ramadan_mode ? 'on' : 'off'
+    next.iftar_time = profile.data.profile.iftar_time || '18:30'
+    next.suhoor_time = profile.data.profile.suhoor_time || '03:30'
     setValues(next)
   }, [profile.data])
 
@@ -101,6 +105,11 @@ export default function SettingsScreen() {
         gym_access: profile.data?.profile?.gym_access ? 'gym' : 'home',
         currently_training: profile.data?.profile?.training_experience === 'beginner' ? 'new' : 'already',
         ion_gender: values.ion_gender || profile.data?.profile?.ion_gender || 'male',
+        // Ramadan mode + times — only included when the user has interacted (see
+        // the save-profile route: undefined values are left untouched).
+        ramadan_mode: values.ramadan_mode === 'on',
+        iftar_time: values.iftar_time || null,
+        suhoor_time: values.suhoor_time || null,
       })
       await profile.reload()
       Alert.alert('Settings', isRtl ? 'تم حفظ الملف الشخصي.' : 'Profile saved.')
@@ -220,6 +229,69 @@ export default function SettingsScreen() {
             <Pressable disabled={saving} onPress={save} style={[styles.primary, { backgroundColor: color.spark }]}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{isRtl ? 'حفظ الملف الشخصي' : 'Save profile'}</Text>}
             </Pressable>
+          </Card>
+
+          {/* ─── Ramadan mode (mini scope) ───────────────────────────────── */}
+          <Card style={styles.cardGap}>
+            <View style={[styles.ramadanHeader, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
+              <Text style={[styles.title, { color: color.text }]}>
+                🌙 {isRtl ? 'وضع رمضان' : 'Ramadan mode'}
+              </Text>
+              <Switch
+                value={values.ramadan_mode === 'on'}
+                onValueChange={v => update('ramadan_mode', v ? 'on' : 'off')}
+                trackColor={{ false: color.border, true: color.spark }}
+                thumbColor="#fff"
+              />
+            </View>
+            <Text style={[styles.body, { color: color.muted, textAlign: align }]}>
+              {isRtl
+                ? 'يُعيد آيون تنظيم وجباتك حول الإفطار والسحور بدلاً من جدولك المعتاد. فعّل الوضع، اضبط الأوقات، ثم أعِد بناء خطتك التغذوية.'
+                : 'Ion replans your meals around iftar and suhoor instead of your usual schedule. Toggle on, set your times, then rebuild your nutrition plan.'}
+            </Text>
+            {values.ramadan_mode === 'on' ? (
+              <>
+                <Text style={[styles.label, { color: color.muted, textAlign: align, marginTop: 6 }]}>
+                  {isRtl ? 'وقت الإفطار (24س)' : 'Iftar time (24h)'}
+                </Text>
+                <TextInput
+                  value={values.iftar_time || ''}
+                  onChangeText={v => update('iftar_time', v)}
+                  placeholder="18:30"
+                  placeholderTextColor={color.dim}
+                  style={[styles.input, { color: color.text, borderColor: color.border, backgroundColor: color.elevated, textAlign: 'center' }]}
+                />
+                <Text style={[styles.label, { color: color.muted, textAlign: align }]}>
+                  {isRtl ? 'وقت السحور (24س)' : 'Suhoor time (24h)'}
+                </Text>
+                <TextInput
+                  value={values.suhoor_time || ''}
+                  onChangeText={v => update('suhoor_time', v)}
+                  placeholder="03:30"
+                  placeholderTextColor={color.dim}
+                  style={[styles.input, { color: color.text, borderColor: color.border, backgroundColor: color.elevated, textAlign: 'center' }]}
+                />
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(
+                      isRtl ? 'إعادة بناء الخطة' : 'Rebuild plan',
+                      isRtl
+                        ? 'سيتم نقلك إلى صفحة الخطة لإعادة بناء التغذية حول وقتي الإفطار والسحور. تأكد من حفظ الإعدادات أولاً.'
+                        : "We'll take you to the Plan page to rebuild nutrition around your iftar/suhoor times. Save your settings first.",
+                      [
+                        { text: isRtl ? 'إلغاء' : 'Cancel', style: 'cancel' },
+                        { text: isRtl ? 'تابع' : 'Continue', onPress: () => router.push('/plan') },
+                      ],
+                    )
+                  }}
+                  style={[styles.secondary, { borderColor: color.spark, marginTop: 4 }]}
+                >
+                  <Text style={[styles.secondaryText, { color: color.spark }]}>
+                    {isRtl ? 'افتح الخطة لإعادة البناء' : 'Open Plan to rebuild'}
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
           </Card>
         </>
       ) : null}
@@ -373,6 +445,10 @@ const styles = StyleSheet.create({
   input: { minHeight: 50, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, marginBottom: 10, fontWeight: '800' },
   primary: { minHeight: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   primaryText: { color: '#fff', fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  secondary: { minHeight: 50, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  secondaryText: { fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase', fontSize: 13 },
+  label: { fontSize: 12, fontWeight: '800', marginBottom: 6, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
+  ramadanHeader: { alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   // Billing
   planBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 12 },
   planBadgeText: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },

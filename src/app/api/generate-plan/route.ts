@@ -13,6 +13,7 @@ import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
 import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntelligenceRule } from '@/lib/plan-builder'
 import { regionalFoodIntelligence } from '@/lib/regional-foods'
+import { ramadanBlock } from '@/lib/ramadan'
 
 // Plan generation is a large Opus completion + YouTube enrichment. 60 is the
 // Vercel Hobby maximum — give the function all the room the plan allows so it
@@ -588,6 +589,7 @@ METHODOLOGY:
 ????????????????????????????
 DIET PLAN BUILDING RULES
 ????????????????????????????
+${ramadanBlock(p)}
 ${regionalFoodIntelligence()}
 
 1. PERSONALISATION — this is not a generic plan:

@@ -4,6 +4,8 @@ import { Card } from '@/components/Card'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { BackButton } from '@/components/BackButton'
+import { PlanGenerating } from '@/components/PlanGenerating'
+import { useLanguage } from '@/i18n/LanguageProvider'
 import { generateMealRecipe } from '@/features/nutrition'
 import { applyRenewalPreview, getPlanHistory, renewPlan, rollbackPlan } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
@@ -31,7 +33,9 @@ export default function PlanScreen() {
   const plan = useAsyncData(getPlanHistory, [])
   const [tab, setTab] = useState<Tab>('diet')
   const [busy, setBusy] = useState<string | null>(null)
+  const [renewType, setRenewType] = useState<Tab | null>(null)
   const [recipeLoading, setRecipeLoading] = useState<number | null>(null)
+  const { language } = useLanguage()
   const diet = plan.data?.activeDietPlan?.plan_json
   const workout = plan.data?.activeWorkoutPlan?.plan_json
   const meals = Array.isArray(diet?.meals) ? diet.meals : []
@@ -59,34 +63,35 @@ export default function PlanScreen() {
     }
   }
 
-  async function previewRenewal(planType: Tab) {
-    setBusy(`renew-${planType}`)
-    try {
-      const res = await renewPlan(planType)
-      const message = res.preview?.message || 'Ion prepared a renewed plan preview.'
-      Alert.alert('Renewal preview', message, [
-        { text: 'Not now', style: 'cancel' },
-        {
-          text: 'Apply new plan',
-          onPress: async () => {
-            setBusy(`apply-${planType}`)
-            try {
-              await applyRenewalPreview(res.previewId)
-              await plan.reload()
-              Alert.alert('Plan renewed', 'Your new cycle is now active.')
-            } catch (error) {
-              Alert.alert('Renewal', error instanceof Error ? error.message : 'Could not apply renewal.')
-            } finally {
-              setBusy(null)
-            }
-          },
+  function previewRenewal(planType: Tab) {
+    // Show the full-screen PlanGenerating animation while Ion builds the new
+    // cycle (renewal takes 30-55s). Replaces the silent "Preparing..." that
+    // looked frozen.
+    setRenewType(planType)
+  }
+
+  async function runRenewal(planType: Tab) {
+    const res = await renewPlan(planType)
+    const message = res.preview?.message || 'Ion prepared a renewed plan preview.'
+    setRenewType(null)
+    Alert.alert('Renewal preview', message, [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Apply new plan',
+        onPress: async () => {
+          setBusy(`apply-${planType}`)
+          try {
+            await applyRenewalPreview(res.previewId)
+            await plan.reload()
+            Alert.alert('Plan renewed', 'Your new cycle is now active.')
+          } catch (error) {
+            Alert.alert('Renewal', error instanceof Error ? error.message : 'Could not apply renewal.')
+          } finally {
+            setBusy(null)
+          }
         },
-      ])
-    } catch (error) {
-      Alert.alert('Renewal', error instanceof Error ? error.message : 'Could not create preview.')
-    } finally {
-      setBusy(null)
-    }
+      },
+    ])
   }
 
   async function restorePrevious(planType: Tab) {
@@ -110,6 +115,19 @@ export default function PlanScreen() {
         },
       },
     ])
+  }
+
+  // Full-screen renewal progress overlay (Opus rebuild takes 30-55s; this
+  // replaces the silent "Preparing..." that looked frozen).
+  if (renewType) {
+    return (
+      <PlanGenerating
+        lang={language}
+        name={renewType === 'diet' ? (language === 'ar' ? 'خطة التغذية' : 'Nutrition plan') : (language === 'ar' ? 'خطة التمرين' : 'Training plan')}
+        task={() => runRenewal(renewType)}
+        onComplete={() => setRenewType(null)}
+      />
+    )
   }
 
   return (

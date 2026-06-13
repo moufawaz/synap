@@ -317,7 +317,7 @@ export async function gatherReminderData(prefs?: NotifPrefs): Promise<ReminderDa
  * One-call sync: ensure permission, gather the user's plan/profile, and (re)schedule
  * everything. Pass requestPermission=true to prompt if not yet granted.
  */
-export async function syncSynapReminders(requestPermission = false): Promise<{ granted: boolean; scheduled: number }> {
+export async function syncSynapReminders(requestPermission = false): Promise<{ granted: boolean; scheduled: number; canAskAgain: boolean }> {
   try {
     let perm = await Notifications.getPermissionsAsync()
     let granted = perm.granted || perm.status === 'granted'
@@ -325,13 +325,24 @@ export async function syncSynapReminders(requestPermission = false): Promise<{ g
       perm = await Notifications.requestPermissionsAsync()
       granted = perm.granted || perm.status === 'granted'
     }
-    if (!granted) return { granted: false, scheduled: 0 }
+    if (!granted) return { granted: false, scheduled: 0, canAskAgain: perm.canAskAgain !== false }
 
     const data = await gatherReminderData()
     const ids = await scheduleSynapReminders(data)
-    return { granted: true, scheduled: ids.length }
+    return { granted: true, scheduled: ids.length, canAskAgain: true }
   } catch {
-    return { granted: false, scheduled: 0 }
+    return { granted: false, scheduled: 0, canAskAgain: false }
+  }
+}
+
+/** Returns the current iOS notification permission state without prompting.
+ *  Used by the launch flow to decide whether to show the rationale + prompt. */
+export async function getNotificationPermissionState(): Promise<{ granted: boolean; canAskAgain: boolean }> {
+  try {
+    const perm = await Notifications.getPermissionsAsync()
+    return { granted: perm.granted || perm.status === 'granted', canAskAgain: perm.canAskAgain !== false }
+  } catch {
+    return { granted: false, canAskAgain: false }
   }
 }
 

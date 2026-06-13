@@ -74,6 +74,11 @@ export async function POST(req: Request) {
       exercises_hated: profileData.exercises_hated || null,
       strength_levels: profileData.strength_levels || null,
       ...(profileData.inbody_url ? { inbody_url: profileData.inbody_url } : {}),
+      // Ramadan mode (mini scope): only updated when the user touches the
+      // Ramadan card in Settings — otherwise left as-is.
+      ...(profileData.ramadan_mode !== undefined ? { ramadan_mode: !!profileData.ramadan_mode } : {}),
+      ...(profileData.iftar_time !== undefined ? { iftar_time: profileData.iftar_time || null } : {}),
+      ...(profileData.suhoor_time !== undefined ? { suhoor_time: profileData.suhoor_time || null } : {}),
     }
 
     const { error: profileError } = await supabase

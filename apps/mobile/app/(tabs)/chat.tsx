@@ -184,14 +184,24 @@ function MessageBubble({
 
         {/* Context-aware action buttons */}
         {type === 'alert' ? (
-          <View style={styles.actionRow}>
-            <Pressable onPress={() => onPrompt('Help me fix this')} style={[styles.actionBtn, { backgroundColor: `${color.danger}1A`, borderColor: `${color.danger}33` }]}>
-              <Text style={[styles.actionBtnText, { color: '#FCA5A5' }]}>{isRtl ? 'ساعدني في الإصلاح' : 'Help me fix this'}</Text>
-            </Pressable>
-            <Pressable onPress={() => onPrompt("What should I change?")} style={[styles.actionBtn, { backgroundColor: color.elevated, borderColor: color.border }]}>
-              <Text style={[styles.actionBtnText, { color: color.muted }]}>{isRtl ? 'ماذا أغير؟' : 'What to change?'}</Text>
-            </Pressable>
-          </View>
+          /Renew with Ion|تجديد بآيون/i.test(content) ? (
+            // Ion told the user to use Plan → Renew with Ion. Give them a direct
+            // one-tap button instead of asking them to navigate manually.
+            <View style={styles.actionRow}>
+              <Pressable onPress={() => router.push('/plan')} style={[styles.actionBtn, { backgroundColor: `${color.spark}26`, borderColor: `${color.spark}33` }]}>
+                <Text style={[styles.actionBtnText, { color: color.sparkLight }]}>{isRtl ? 'افتح الخطة لتجديدها' : 'Open Plan to renew'}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.actionRow}>
+              <Pressable onPress={() => onPrompt('Help me fix this')} style={[styles.actionBtn, { backgroundColor: `${color.danger}1A`, borderColor: `${color.danger}33` }]}>
+                <Text style={[styles.actionBtnText, { color: '#FCA5A5' }]}>{isRtl ? 'ساعدني في الإصلاح' : 'Help me fix this'}</Text>
+              </Pressable>
+              <Pressable onPress={() => onPrompt("What should I change?")} style={[styles.actionBtn, { backgroundColor: color.elevated, borderColor: color.border }]}>
+                <Text style={[styles.actionBtnText, { color: color.muted }]}>{isRtl ? 'ماذا أغير؟' : 'What to change?'}</Text>
+              </Pressable>
+            </View>
+          )
         ) : null}
 
         {type === 'milestone' ? (
