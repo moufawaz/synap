@@ -454,6 +454,23 @@ async function maybeApplyPlanEdit({
 
   // ── STEP 1: Check if user is confirming a previous proposal ───
   if (detectConfirmation(message) && pendingProposals.length > 0) {
+    // Catch the "regenerate my whole plan" path: Ion sometimes proposes a full
+    // plan rebuild (e.g. after big diet drift). The chat edit handler can only
+    // do small edits, not full regenerations — so a confirm here was failing.
+    // Route those confirmations through the same kind-of "fall through to
+    // normal chat reply" path so Ion can tell the user to use the Renew button
+    // on their Plan page (which calls /api/renew-plan with the 4-phase Opus
+    // generator) instead of returning the misleading "could not apply" alert.
+    const recentRegenProposal = pendingProposals.find(p => {
+      const age = Date.now() - new Date(p.created_at).getTime()
+      const txt = String(p.content || '').toLowerCase()
+      const isRegen = /regenerate (your |the )?(entire |whole |full )?(plan|nutrition|diet|workout)|rebuild (your |the )?(entire |whole |full )?(plan|nutrition|diet|workout)|أعيد بناء|أعد بناء|إعادة بناء|سأعيد بناء/.test(txt)
+      return age < 10 * 60 * 1000 && isRegen && !p.metadata?.pending_plan_json
+    })
+    if (recentRegenProposal) {
+      return { applied: false, proposed: false, shouldStop: true, reason: 'requires_renew_button' }
+    }
+
     // Find the most recent proposal that is < 10 min old (avoid stale confirmations)
     const recent = pendingProposals.find(p => {
       const age = Date.now() - new Date(p.created_at).getTime()
@@ -786,6 +803,11 @@ function buildDeterministicPlanProposal(profile: any, summary: string) {
 
 function buildPlanEditFailureReply(profile: any, reason: string) {
   const ar = profile?.language === 'ar'
+  if (reason === 'requires_renew_button') {
+    return ar
+      ? 'إعادة بناء الخطة بالكامل تحتاج إلى الإنشاء الكامل في خلفية النظام (وليس تعديلاً سريعاً). افتح: الخطة ← تجديد بآيون، وسأعيد بناء خطتك التغذوية كاملة بناءً على آخر بياناتك. التعديلات الصغيرة (تبديل وجبة، تغيير سعرات يوم) تتم هنا بشكل فوري.'
+      : "Rebuilding your full plan needs the background plan generator (not a quick chat edit). Open Plan → Renew with Ion, and I'll rebuild your nutrition plan from scratch using your latest data. Small tweaks (swap a meal, change a day's calories) still happen right here, instantly."
+  }
   if (reason === 'requires_subscription') {
     return ar
       ? 'تعديل خطتك عبر آيون متاح خلال تجربتك المجانية (7 أيام) ومع خطط Pro و Elite. انتهت تجربتك المجانية، لذا اشترك من الإعدادات ← الاشتراك والفوترة لأستمر في تعديل خطتك مباشرة.'
@@ -1987,6 +2009,7 @@ ${workoutBlock}
 6. When the client asks to modify their plan, FIRST propose the specific personalised change you intend to make (2–3 sentences: what, why it fits them, invite confirmation). NEVER apply a plan edit without the client confirming first. After they say yes/okay/go ahead, apply immediately. For simple rest-day swaps you may apply directly without a proposal.
 7. For medical or injury questions, recommend a doctor first, then still give practical guidance within safe limits.
 7a. Critical plan-save rule: In normal chat, NEVER claim a nutrition or workout plan has been saved, applied, or updated. Only the plan-edit handler can say that after a database update. If unsure, ask the user to confirm the exact meal/exercise change.
+7b. Plan-regeneration rule: NEVER offer to "regenerate", "rebuild", or "remake" the entire workout or nutrition plan from chat. The chat handler can only do targeted edits (swap a meal, change calories on a day, move a session). For a full regeneration, tell the user: "Open Plan → Renew with Ion and I'll rebuild your full plan from scratch using your latest data" — do not stage a chat proposal for a full regeneration.
 8. If the client is struggling or feeling demotivated, be honest and encouraging — no hollow praise. Name what's actually going well.
 9. Language rule: If the saved client language is Arabic, ALWAYS reply in Arabic even if the user types English or Arabizi. If English, reply in English unless the user explicitly asks to switch.
 10. Format rule: Return plain natural-language text only. Never wrap replies in JSON, markdown code fences, or code blocks.
@@ -2000,7 +2023,7 @@ ${workoutBlock}
 18. Workout compliance rule: Use WORKOUT COMPLIANCE ANALYSIS proactively. If avg completion < 70% → ask what is causing sessions to be cut short before making any program changes (the problem may be time, fatigue, or motivation, not the exercises). If frequency is consistently below planned days → acknowledge it, dig into why, and offer to reschedule or simplify the program to match their real availability. Never silently accept low compliance.
 19. Workout change quality rule: When the client requests a workout change, evaluate it against their goal and recovery capacity. Red flags to catch: removing all compound movements, reducing to < 2 days/week without a reason, adding volume when compliance is already poor, or training a muscle group that is injured. In these cases, explain the risk and propose a smarter alternative. If they want to swap an exercise, always suggest a movement that targets the same muscle with the same equipment they have.
 20. Strength progress rule: If RECENT WORKOUT LOGS show duration consistently dropping (e.g., logging 30 min when 60 min is planned), or if the same exercises appear repeatedly without progression notes, flag it. A coach tracks strength progress — proactively ask if the client has been increasing weight/reps on their main lifts. If strength is stalling, suggest a deload or form focus week before increasing load.
-21. InBody scan rule: If CLIENT PROFILE has no InBody scan data (body_fat_pct is absent or described as "estimated"), proactively mention once per conversation that uploading an InBody scan from Settings → Health will give Ion precise body fat %, muscle mass, and visceral fat — enabling exact protein targets (not population guesses). Do NOT repeat this every message. If InBody data IS present and shows visceral fat > 10 (high risk), proactively flag the cardiovascular risk and ensure the user understands why their plan prioritises fat loss. If InBody data was recently added (visible in profile block), acknowledge what changed: "Your InBody scan shows [X]% body fat and muscle mass of [Y] kg — your protein target has been updated to [Z]g based on your actual lean mass." Then offer to regenerate the plan for them if they want the full benefit: "Say 'regenerate my plan' and I'll rebuild it with your exact body composition."
+21. InBody scan rule: If CLIENT PROFILE has no InBody scan data (body_fat_pct is absent or described as "estimated"), proactively mention once per conversation that uploading an InBody scan from Settings → Health will give Ion precise body fat %, muscle mass, and visceral fat — enabling exact protein targets (not population guesses). Do NOT repeat this every message. If InBody data IS present and shows visceral fat > 10 (high risk), proactively flag the cardiovascular risk and ensure the user understands why their plan prioritises fat loss. If InBody data was recently added (visible in profile block), acknowledge what changed: "Your InBody scan shows [X]% body fat and muscle mass of [Y] kg — your protein target has been updated to [Z]g based on your actual lean mass." Then point them to the rebuild flow: "Open Plan → Renew with Ion to rebuild your plan with your exact body composition."
 
 ${regionalFoodIntelligence()}`
 }
