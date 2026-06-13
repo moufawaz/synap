@@ -14,10 +14,6 @@ import { createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
-// Bump this every build so we can confirm the installed binary matches the
-// latest code (shown in the More tab footer). Current: web-aligned train day
-// count + legible chat chips.
-const BUILD_TAG = 'fixpack-37'
 
 type NavRow = { label: string; labelAr?: string; href: Href; icon: string; color?: string }
 
@@ -210,9 +206,9 @@ export default function MoreScreen() {
         <NavRowItem icon="life-buoy" label={text.support} color={color} onPress={() => Linking.openURL(`${webBaseUrl}/contact`)} rowDir={rowDir} />
       </Card>
 
-      {/* Build marker — lets us confirm exactly which binary is installed */}
+      {/* App version — user-facing only (build number + dev tag removed). */}
       <Text style={{ color: color.dim, fontSize: 11, fontWeight: '700', textAlign: 'center', marginTop: 8, marginBottom: 4 }}>
-        SYNAP v{Constants.expoConfig?.version ?? '1.0.0'} · build {Constants.nativeBuildVersion ?? '?'} · {BUILD_TAG}
+        SYNAP v{Constants.expoConfig?.version ?? '1.0.1'}
       </Text>
     </Screen>
   )
