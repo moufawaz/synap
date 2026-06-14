@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/macro-adjustment",
       "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/renewal-prep",
+      "schedule": "0 9 * * *"
     }
   ],
   "headers": [

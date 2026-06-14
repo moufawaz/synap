@@ -5,6 +5,7 @@ import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { BackButton } from '@/components/BackButton'
 import { PlanGenerating } from '@/components/PlanGenerating'
+import { RenewalFreshness } from '@/components/RenewalFreshness'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { generateMealRecipe } from '@/features/nutrition'
 import { applyRenewalPreview, getPlanHistory, renewPlan, rollbackPlan } from '@/features/workout'
@@ -34,6 +35,9 @@ export default function PlanScreen() {
   const [tab, setTab] = useState<Tab>('diet')
   const [busy, setBusy] = useState<string | null>(null)
   const [renewType, setRenewType] = useState<Tab | null>(null)
+  // Freshness gate sits BETWEEN "Renew with Ion" tap and the actual renewal —
+  // when set, the gate is open; user can either update data or skip through.
+  const [pendingRenew, setPendingRenew] = useState<Tab | null>(null)
   const [recipeLoading, setRecipeLoading] = useState<number | null>(null)
   const { language } = useLanguage()
   const diet = plan.data?.activeDietPlan?.plan_json
@@ -64,10 +68,10 @@ export default function PlanScreen() {
   }
 
   function previewRenewal(planType: Tab) {
-    // Show the full-screen PlanGenerating animation while Ion builds the new
-    // cycle (renewal takes 30-55s). Replaces the silent "Preparing..." that
-    // looked frozen.
-    setRenewType(planType)
+    // Open the freshness gate first — Ion's renewal is only as good as the data
+    // it reads, so we nudge the user to update weight + InBody if either has
+    // gone stale. Soft design: the gate has a "Renew with current data" escape.
+    setPendingRenew(planType)
   }
 
   async function runRenewal(planType: Tab) {
@@ -134,6 +138,17 @@ export default function PlanScreen() {
     <Screen>
       <BackButton />
       <IonPageHeader eyebrow="PLAN" title="Current Plan" subtitle={activeTiming?.label || 'Diet and workout cycles with history and rollback.'} />
+
+      {/* Freshness gate (opens before any renewal so Ion uses up-to-date data). */}
+      <RenewalFreshness
+        visible={!!pendingRenew}
+        onClose={() => setPendingRenew(null)}
+        onProceed={() => {
+          const t = pendingRenew
+          setPendingRenew(null)
+          if (t) setRenewType(t)
+        }}
+      />
       {plan.loading ? <ActivityIndicator color={color.spark} /> : null}
       {plan.error ? <Text style={[styles.body, { color: color.danger }]}>{plan.error}</Text> : null}
 
