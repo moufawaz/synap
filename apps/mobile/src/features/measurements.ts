@@ -35,10 +35,24 @@ export async function createMeasurement(payload: Partial<Measurement>) {
   })
 }
 
+export type PlanReadinessLift = {
+  name: string
+  weight_kg: number | null
+  reps: number | null
+  daysAgo: number | null
+  fresh: boolean
+}
+
 export type PlanReadiness = {
   weight: { value: number | null; daysAgo: number | null; fresh: boolean }
   measurements: { waist_cm: number | null; chest_cm: number | null; hips_cm: number | null; daysAgo: number | null; fresh: boolean }
   inbody: { present: boolean; body_fat_pct: number | null; muscle_mass_kg: number | null; bmr_kcal: number | null; daysAgo: number | null; fresh: boolean }
+  workout: {
+    lastSession: { date: string | null; daysAgo: number | null; fresh: boolean }
+    compliance: { actual: number; expected: number; pct: number; fresh: boolean }
+    lifts: PlanReadinessLift[]
+    goal: string | null
+  }
 }
 
 export async function getPlanReadiness() {

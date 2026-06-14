@@ -48,6 +48,25 @@ export async function POST(req: Request) {
     const { planType }: { planType: 'diet' | 'workout' } = body
     if (!planType) return NextResponse.json({ error: 'Missing planType' }, { status: 400 })
 
+    // Optional pre-renewal feedback the user supplied via the freshness gate.
+    // For workout renewals: { lifts: [{name, weight_kg, reps}], flags: [...] }.
+    // Saved into profile.strength_levels so future renewals also benefit, and
+    // injected into the prompt so this rebuild starts at the right loads.
+    const renewalContext: { lifts?: Array<{ name: string; weight_kg: number; reps: number }>; flags?: string[] } = body.context || {}
+    if (planType === 'workout' && renewalContext.lifts?.length) {
+      try {
+        const updated: Record<string, string> = {}
+        for (const l of renewalContext.lifts) {
+          if (l?.name && Number.isFinite(l.weight_kg) && l.weight_kg > 0) {
+            updated[l.name] = `${l.weight_kg}kg x ${Number.isFinite(l.reps) ? l.reps : 0}`
+          }
+        }
+        if (Object.keys(updated).length) {
+          await admin.from('profiles').update({ strength_levels: JSON.stringify(updated) }).eq('user_id', user.id)
+        }
+      } catch { /* non-fatal */ }
+    }
+
     // ── Load everything in parallel ───────────────────────────────────
     const [profileRes, userLangRes, latestMeasRes, measureHistRes, oldPlanRes, subRes] = await Promise.all([
       admin.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
@@ -98,7 +117,7 @@ export async function POST(req: Request) {
     // ── Build prompt ───────────────────────────────────────────────────
     const prompt = planType === 'diet'
       ? buildDietRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, dietPrefs, supplements, latestMeasurement })
-      : buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan })
+      : buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext })
 
     // ── Call Claude ────────────────────────────────────────────────────
     // Renewal is for ONE side (diet OR workout), not both. Capping max_tokens
@@ -605,10 +624,26 @@ Return ONLY valid JSON:
 
 // ── Workout renewal prompt ────────────────────────────────────────────────────
 
-function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan }: any) {
+function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext }: any) {
   const ar = language === 'ar'
   const prevSplit = oldPlan?.split_type || 'unknown'
   const prevDays  = Array.isArray(oldPlan?.days) ? oldPlan.days.length : '?'
+
+  // Pre-renewal feedback the user supplied via the freshness gate. Use these
+  // EXACT numbers as the starting loads for the new cycle; treat the flags as
+  // hard constraints (Ion's job is to program around them, not ignore them).
+  const liftsBlock = Array.isArray(renewalContext?.lifts) && renewalContext.lifts.length
+    ? renewalContext.lifts
+        .filter((l: any) => l?.name && Number.isFinite(l.weight_kg) && l.weight_kg > 0)
+        .map((l: any) => `  ${l.name}: ${l.weight_kg}kg × ${Number.isFinite(l.reps) ? l.reps : '?'} reps (last working set)`)
+        .join('\n')
+    : ''
+  const flagsBlock = Array.isArray(renewalContext?.flags) && renewalContext.flags.length
+    ? renewalContext.flags.map((f: string) => `  - ${f}`).join('\n')
+    : ''
+  const renewalFeedbackBlock = (liftsBlock || flagsBlock)
+    ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nPRE-RENEWAL FEEDBACK (from the client, just now)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━${liftsBlock ? `\nLast working sets:\n${liftsBlock}\n→ Start the new cycle at these weights. Week 1 = these loads or +2.5kg (compounds) / +1kg (isolation). Do NOT reset to lighter starting weights "to be safe".` : ''}${flagsBlock ? `\nClient flags Ion must respect this cycle:\n${flagsBlock}\n→ Each flag is a HARD CONSTRAINT. Program around it (e.g. "shoulder pain" → swap overhead pressing for landmine press; "less time available" → cut session length by 20% and prioritise compounds; "want more cardio" → add 1 HIIT finisher per session).` : ''}\n`
+    : ''
 
   return `You are Ion, a world-class AI personal trainer. Generate a RENEWED 6-week progressive workout programme for this client. This is their next training cycle — build on where they left off.
 
@@ -631,6 +666,7 @@ Body composition: LBM ${m.leanMass} kg | BF% ${m.bodyFatPct}% (${m.usingRealBf ?
 PROGRESS HISTORY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${progressBlock}
+${renewalFeedbackBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CALCULATED WORKOUT PARAMETERS

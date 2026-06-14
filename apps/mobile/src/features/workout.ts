@@ -46,13 +46,18 @@ export async function getPlanHistory() {
   return apiFetch<PlanHistoryResponse>('/api/plan-history')
 }
 
-export async function renewPlan(planType: 'diet' | 'workout') {
+export type RenewalContext = {
+  lifts?: Array<{ name: string; weight_kg: number; reps: number }>
+  flags?: string[]
+}
+
+export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalContext) {
   // Renewal runs a full Opus regeneration; the server's hard limit is 60s, so
   // give the client a matching window — otherwise the default 45s fetch timeout
   // would surface "took too long" before the server even finishes.
   return apiFetch<{ ok: boolean; action: 'preview'; previewId: string; preview: any; plan: any }>('/api/renew-plan', {
     method: 'POST',
-    body: JSON.stringify({ action: 'preview', planType }),
+    body: JSON.stringify({ action: 'preview', planType, context }),
     timeoutMs: 90_000,
   })
 }

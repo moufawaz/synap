@@ -6,8 +6,10 @@ import { Screen } from '@/components/Screen'
 import { BackButton } from '@/components/BackButton'
 import { PlanGenerating } from '@/components/PlanGenerating'
 import { RenewalFreshness } from '@/components/RenewalFreshness'
+import { WorkoutRenewalFreshness } from '@/components/WorkoutRenewalFreshness'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { generateMealRecipe } from '@/features/nutrition'
+import type { RenewalContext } from '@/features/workout'
 import { applyRenewalPreview, getPlanHistory, renewPlan, rollbackPlan } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -38,6 +40,9 @@ export default function PlanScreen() {
   // Freshness gate sits BETWEEN "Renew with Ion" tap and the actual renewal —
   // when set, the gate is open; user can either update data or skip through.
   const [pendingRenew, setPendingRenew] = useState<Tab | null>(null)
+  // Optional context (lifts + flags) supplied by the workout gate's quick update,
+  // forwarded into the renewal call so Ion uses fresh numbers + constraints.
+  const [renewContext, setRenewContext] = useState<RenewalContext | null>(null)
   const [recipeLoading, setRecipeLoading] = useState<number | null>(null)
   const { language } = useLanguage()
   const diet = plan.data?.activeDietPlan?.plan_json
@@ -75,7 +80,8 @@ export default function PlanScreen() {
   }
 
   async function runRenewal(planType: Tab) {
-    const res = await renewPlan(planType)
+    const res = await renewPlan(planType, renewContext || undefined)
+    setRenewContext(null)
     const message = res.preview?.message || 'Ion prepared a renewed plan preview.'
     setRenewType(null)
     Alert.alert('Renewal preview', message, [
@@ -139,14 +145,24 @@ export default function PlanScreen() {
       <BackButton />
       <IonPageHeader eyebrow="PLAN" title="Current Plan" subtitle={activeTiming?.label || 'Diet and workout cycles with history and rollback.'} />
 
-      {/* Freshness gate (opens before any renewal so Ion uses up-to-date data). */}
+      {/* Freshness gates (different content per planType so Ion uses up-to-date
+          data when rebuilding). Diet gate asks for body data; workout gate asks
+          for strength numbers + constraints. */}
       <RenewalFreshness
-        visible={!!pendingRenew}
+        visible={pendingRenew === 'diet'}
         onClose={() => setPendingRenew(null)}
         onProceed={() => {
-          const t = pendingRenew
           setPendingRenew(null)
-          if (t) setRenewType(t)
+          setRenewType('diet')
+        }}
+      />
+      <WorkoutRenewalFreshness
+        visible={pendingRenew === 'workout'}
+        onClose={() => setPendingRenew(null)}
+        onProceed={(ctx) => {
+          setRenewContext(ctx)
+          setPendingRenew(null)
+          setRenewType('workout')
         }}
       />
       {plan.loading ? <ActivityIndicator color={color.spark} /> : null}

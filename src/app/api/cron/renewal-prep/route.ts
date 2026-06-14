@@ -63,9 +63,13 @@ export async function GET(req: Request) {
       const ar = profile?.language === 'ar'
       const name = (profile?.name || '').split(' ')[0]
 
-      const content = ar
-        ? `${name ? `${name}، ` : ''}دورة ${planLabel === 'nutrition' ? 'التغذية' : 'التمرين'} الخاصة بك تنتهي بعد يومين. سجّل وزن اليوم سريعاً من *القياسات* حتى أعيد ضبط الخطة بدقة عند التجديد.`
-        : `${name ? `${name}, ` : ''}your ${planLabel} cycle ends in 2 days. Drop today's weight into *Measurements* and I'll recalibrate the renewal around your current body.`
+      const content = planLabel === 'nutrition'
+        ? (ar
+            ? `${name ? `${name}، ` : ''}دورة التغذية الخاصة بك تنتهي بعد يومين. سجّل وزن اليوم سريعاً من *القياسات* حتى أعيد ضبط الخطة بدقة عند التجديد.`
+            : `${name ? `${name}, ` : ''}your nutrition cycle ends in 2 days. Drop today's weight into *Measurements* and I'll recalibrate the renewal around your current body.`)
+        : (ar
+            ? `${name ? `${name}، ` : ''}دورة تمرينك تنتهي بعد يومين. اضغط *تجديد بآيون* في صفحة الخطة وأدخل أحدث أوزانك لتمارينك الأساسية حتى أبدأ الدورة الجديدة من المكان الصحيح.`
+            : `${name ? `${name}, ` : ''}your training cycle ends in 2 days. Tap *Renew with Ion* on the Plan page and drop in your latest main-lift numbers so I start the new cycle at the right loads.`)
 
       const { error: insertErr } = await supabase.from('chat_messages').insert({
         user_id: p.user_id,
