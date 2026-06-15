@@ -44,16 +44,7 @@ export async function GET(req: Request) {
       fetch(`${base}?statsPeriod=7d&query=is:unresolved&limit=100`, { headers }),
     ])
     if (!r24.ok || !r7d.ok) {
-      // TEMP debug — masked token fingerprint so we can confirm Vercel is
-      // sending the token we think it is. Safe (no full secret), remove
-      // once /admin shows live counts.
-      const fp = token.length >= 11 ? `${token.slice(0, 7)}…${token.slice(-4)} (len ${token.length})` : `len ${token.length}`
-      let body24 = ''
-      try { body24 = (await r24.text()).slice(0, 200) } catch {}
-      return NextResponse.json(
-        { configured: true, error: `Sentry API ${r24.status}/${r7d.status}`, tokenFp: fp, org, project, sample: body24 },
-        { status: 502 },
-      )
+      return NextResponse.json({ configured: true, error: `Sentry API ${r24.status}/${r7d.status}` }, { status: 502 })
     }
     const j24 = (await r24.json()) as any[]
     const j7d = (await r7d.json()) as any[]
