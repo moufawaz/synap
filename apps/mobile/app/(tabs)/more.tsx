@@ -12,7 +12,11 @@ import { deleteAccount } from '@/features/account'
 import { HealthSummary, requestHealthAccessAndRead, setHealthConnected } from '@/features/health'
 import { createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
+import { reportError } from '@/lib/sentry'
 import { useTheme } from '@/theme/ThemeProvider'
+
+/** Admin allowlist — UI gated to these accounts only. */
+const ADMIN_EMAILS = new Set(['mohamedhossam03@gmail.com'])
 
 
 type NavRow = { label: string; labelAr?: string; href: Href; icon: string; color?: string }
@@ -33,7 +37,7 @@ const NAV_ROWS: NavRow[] = [
 ]
 
 export default function MoreScreen() {
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
   const { color, mode, toggleMode } = useTheme()
   const { text, language, setLanguage, isRtl } = useLanguage()
   const [health, setHealth] = useState<HealthSummary | null>(null)
@@ -210,6 +214,31 @@ export default function MoreScreen() {
       <Text style={{ color: color.dim, fontSize: 11, fontWeight: '700', textAlign: 'center', marginTop: 8, marginBottom: 4 }}>
         SYNAP v{Constants.expoConfig?.version ?? '1.0.1'}
       </Text>
+
+      {/* TEMP — admin-only Sentry smoke test. Removed in next build once the
+          /admin Sentry card confirms events arrive. Hidden from all other users. */}
+      {user?.email && ADMIN_EMAILS.has(user.email) ? (
+        <Pressable
+          onPress={() => {
+            try {
+              reportError(new Error(`SYNAP Sentry smoke test (${new Date().toISOString()})`), {
+                source: 'more_tab_admin_button',
+                build: `1.0.1 (${Constants.nativeBuildVersion ?? '?'})`,
+                user_email: user.email,
+              })
+              Alert.alert(
+                'Sentry test sent',
+                'Check /admin → iOS APP CRASHES (SENTRY) in ~30 seconds. If the count goes from 0 to 1, the pipeline is working.',
+              )
+            } catch (e) {
+              Alert.alert('Sentry test failed', e instanceof Error ? e.message : 'unknown')
+            }
+          }}
+          style={{ alignSelf: 'center', marginTop: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: color.border, opacity: 0.55 }}
+        >
+          <Text style={{ color: color.muted, fontSize: 11, fontWeight: '700' }}>Send Sentry test (admin)</Text>
+        </Pressable>
+      ) : null}
     </Screen>
   )
 }
