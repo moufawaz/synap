@@ -177,6 +177,56 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
   const dietPlanRows = dietPlansRes.data || []
   const workoutPlanRows = allWorkoutPlansRes.data || []
   const appEvents = appEventsRes.data || []
+
+  // ─── Sentry crash stats (iOS app) ─────────────────────────────────────
+  // Pulls last 24h / 7d crash counts from Sentry's REST API. Renders a
+  // graceful "Set up Sentry" hint when not configured yet.
+  type SentryStats = {
+    configured: boolean
+    crashes24h?: number
+    crashes7d?: number
+    top?: Array<{ id: string; title: string; culprit: string; count: number; lastSeen: string | null; permalink: string }>
+    projectUrl?: string
+    error?: string
+  }
+  let sentryStats: SentryStats = { configured: false }
+  const sentryToken = process.env.SENTRY_API_TOKEN
+  const sentryOrg = process.env.SENTRY_ORG_SLUG
+  const sentryProject = process.env.SENTRY_PROJECT_SLUG
+  if (sentryToken && sentryOrg && sentryProject) {
+    try {
+      const base = `https://sentry.io/api/0/organizations/${encodeURIComponent(sentryOrg)}/issues/`
+      const headers = { Authorization: `Bearer ${sentryToken}` }
+      const [r24, r7d] = await Promise.all([
+        fetch(`${base}?project=${encodeURIComponent(sentryProject)}&statsPeriod=24h&query=is:unresolved&limit=100`, { headers, cache: 'no-store' }),
+        fetch(`${base}?project=${encodeURIComponent(sentryProject)}&statsPeriod=7d&query=is:unresolved&limit=100`, { headers, cache: 'no-store' }),
+      ])
+      if (r24.ok && r7d.ok) {
+        const j24 = (await r24.json()) as any[]
+        const j7d = (await r7d.json()) as any[]
+        const sum = (rows: any[]) => rows.reduce((s, i) => s + (Number(i.count) || 0), 0)
+        sentryStats = {
+          configured: true,
+          crashes24h: sum(j24),
+          crashes7d: sum(j7d),
+          top: j7d.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0)).slice(0, 3)
+            .map(i => ({
+              id: i.id,
+              title: i.title || i.metadata?.value || 'Unknown error',
+              culprit: i.culprit || '',
+              count: Number(i.count) || 0,
+              lastSeen: i.lastSeen || null,
+              permalink: i.permalink || `https://sentry.io/organizations/${sentryOrg}/issues/${i.id}/`,
+            })),
+          projectUrl: `https://sentry.io/organizations/${sentryOrg}/issues/?project=${sentryProject}`,
+        }
+      } else {
+        sentryStats = { configured: true, error: `Sentry API ${r24.status}/${r7d.status}` }
+      }
+    } catch (e) {
+      sentryStats = { configured: true, error: e instanceof Error ? e.message : 'unknown' }
+    }
+  }
   const appEventsError = appEventsRes.error?.message || null
   const planUserIds   = new Set((workoutPlansRes.data || []).map((r: any) => r.user_id))
 
@@ -960,6 +1010,67 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
               ))}
             </div>
           </div>
+        </div>
+
+        {/* ─── iOS app crashes (Sentry) ─── */}
+        <div className="glass-card p-5 mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <SectionTitle>iOS APP CRASHES (SENTRY)</SectionTitle>
+            {sentryStats.configured && sentryStats.projectUrl ? (
+              <a href={sentryStats.projectUrl} target="_blank" rel="noopener noreferrer"
+                 className="font-heading text-[10px] flex items-center gap-1 hover:opacity-100"
+                 style={{ color: '#BB5CF6', opacity: 0.85 }}>
+                View in Sentry <ExternalLinkIcon size={10} />
+              </a>
+            ) : null}
+          </div>
+          {!sentryStats.configured ? (
+            <div className="rounded-xl px-3 py-3" style={{ background: 'rgba(187,92,246,0.06)', border: '1px solid rgba(187,92,246,0.18)' }}>
+              <p className="font-heading text-xs text-white">Sentry isn’t set up yet.</p>
+              <p className="font-heading text-[10px] mt-1" style={{ color: '#94A3B8' }}>
+                Create a free Sentry project, then set <span style={{ color: '#BB5CF6' }}>SENTRY_API_TOKEN</span>, <span style={{ color: '#BB5CF6' }}>SENTRY_ORG_SLUG</span>, <span style={{ color: '#BB5CF6' }}>SENTRY_PROJECT_SLUG</span> in Vercel to see crash counts here.
+              </p>
+            </div>
+          ) : sentryStats.error ? (
+            <p className="font-heading text-xs" style={{ color: '#EF4444' }}>Sentry: {sentryStats.error}</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                  <p className="font-heading text-[10px]" style={{ color: '#64748B' }}>LAST 24h</p>
+                  <p className="font-heading text-3xl font-bold" style={{ color: (sentryStats.crashes24h || 0) > 0 ? '#EF4444' : '#10B981' }}>
+                    {sentryStats.crashes24h ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                  <p className="font-heading text-[10px]" style={{ color: '#64748B' }}>LAST 7d</p>
+                  <p className="font-heading text-3xl font-bold" style={{ color: (sentryStats.crashes7d || 0) > 0 ? '#F59E0B' : '#10B981' }}>
+                    {sentryStats.crashes7d ?? 0}
+                  </p>
+                </div>
+              </div>
+              {(sentryStats.top || []).length === 0 ? (
+                <p className="font-heading text-xs" style={{ color: '#475569' }}>No unresolved issues in the last 7 days. 🎉</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="font-heading text-[10px]" style={{ color: '#64748B' }}>TOP ISSUES</p>
+                  {(sentryStats.top || []).map(issue => (
+                    <a key={issue.id} href={issue.permalink} target="_blank" rel="noopener noreferrer"
+                       className="rounded-xl px-3 py-2 block hover:opacity-100"
+                       style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)', opacity: 0.9 }}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-heading text-xs text-white truncate">{issue.title}</p>
+                        <p className="font-heading text-xs font-bold" style={{ color: '#EF4444' }}>{issue.count}</p>
+                      </div>
+                      {issue.culprit ? (
+                        <p className="font-heading text-[10px] truncate mt-1" style={{ color: '#94A3B8' }}>{issue.culprit}</p>
+                      ) : null}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 

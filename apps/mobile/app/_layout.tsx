@@ -14,6 +14,7 @@ import { NotificationsRationale } from '@/components/NotificationsRationale'
 import { registerDeviceToken } from '@/features/tools'
 import { syncSynapReminders } from '@/features/notifications'
 import { configurePurchases, identifyPurchaser, resetPurchaser } from '@/features/purchases'
+import { identifySentryUser, initSentry } from '@/lib/sentry'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 
@@ -41,6 +42,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
 // Configure the In-App Purchase SDK once at startup (no-op without an iOS key).
+// Sentry first — so it can catch errors during the rest of startup too.
+initSentry()
 configurePurchases()
 
 Notifications.setNotificationHandler({
@@ -126,6 +129,7 @@ function RootNavigator() {
     if (!loading && session === null) {
       pushRegistered.current = false
       resetPurchaser()
+      identifySentryUser(null)
       router.replace('/(auth)/login')
     }
     // Auto-register push token once per session when user is authenticated
@@ -133,6 +137,7 @@ function RootNavigator() {
       pushRegistered.current = true
       // Tie StoreKit purchases to this account so the webhook maps them correctly.
       identifyPurchaser(session.user?.id)
+      identifySentryUser(session.user?.id ?? null)
       tryAutoRegisterPush()
     }
   }, [session, loading])
