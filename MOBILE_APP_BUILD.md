@@ -2141,3 +2141,135 @@ fix/review-round2 (SIWA + citations + IAP) → multi_json Gemfile fix (1099) →
 paywall reachability (1100) → diagnostics/fallback (1101–1103) → key .trim() +
 friendly errors + menu rename (1104) → webhook upgrade-guard → debug-line removal
 (1105, clean submission build). All merged to main.
+
+## 1.0.1 — first post-launch update (2026-06, builds 1108–1117)
+
+1.0 was approved as build 1097 and went live. 1.0.1 is the first iterative
+update — submitted for App Review on 2026-06-15 as build **1117**. Theme of
+the release: stop renewing plans on stale data, ship Ramadan support, and
+turn on crash/error visibility.
+
+### Version-train rule learned the hard way
+altool rejected build 1108 with errors 90062 and 90186: `CFBundleShortVersion
+String [1.0.0] must contain higher version than previously approved [1.0.0]`
+and `Pre-Release Train '1.0' is closed`. Apple closes the version train when
+a build is **approved on the store**, not when it's uploaded — so the next
+iteration has to bump the marketing version. Bumped app.json `1.0.0 → 1.0.1`
+and the train re-opened. Also bumped 1.0.1 → 1.0.2 once and rolled back when
+the user pointed out 1.0.1 hadn't actually been submitted to Apple yet
+(train stays open across uploads until Apple approves the next one).
+
+### Renewal freshness gates — nutrition + workout
+Renewing a plan against six-week-old inputs produces a six-week-old plan.
+Two pre-renewal gates now sit between the "Renew" button and the Opus call:
+
+- `src/components/RenewalFreshness.tsx` (nutrition): checks weight (7d
+  fresh), measurements (7d), InBody scan (42d). Stale fields get an inline
+  quick-update form with an InBody-scan camera shortcut.
+- `src/components/WorkoutRenewalFreshness.tsx` (workout): compliance %
+  (≥70% = fresh), last session (7d), per-lift heaviest set (14d). Quick
+  update collects weight × reps for each detected main lift plus a flag
+  multiselect (shoulder pain, lower back tight, knee niggle, less time,
+  want more cardio, want less volume) — EN/AR labels.
+
+`app/plan.tsx` routes `pendingRenew === 'diet'` to the nutrition gate and
+`'workout'` to the workout gate; the collected `renewContext` is forwarded
+to `renewPlan(planType, ctx)`.
+
+Server side, `/api/me/plan-readiness` returns the freshness blocks. The
+workout block auto-detects main lifts from the active plan, walking
+`workout_log` for the heaviest set per lift (`findLastForExercise` prefers
+compound exercises, falls back to most-frequent). `/api/renew-plan` accepts
+`body.context: {lifts, flags}`, saves lift updates to
+`profile.strength_levels`, and injects a `PRE-RENEWAL FEEDBACK` block as
+HARD CONSTRAINTS in `buildWorkoutRenewalPrompt`. Token caps tightened from
+16k generous to 8k diet / 9k workout; client `timeoutMs` raised to 90s.
+
+### Renewal-prep cron
+`src/app/api/cron/renewal-prep/route.ts` runs daily at `0 9 * * *` and drops
+a 2-day-before nudge into `chat_messages` with `metadata.renewal_prep`.
+Idempotent over a 5-day window so a missed day doesn't double-post. Diet
+copy and workout-specific copy diverge.
+
+### Ramadan mode
+New columns on `profiles`: `ramadan_mode`, `iftar_time`, `suhoor_time`
+(migration `20260613_profiles_ramadan_mode.sql`, applied via Supabase
+Studio). `src/lib/ramadan.ts` exposes `isRamadanModeOn`, `ramadanBlock`,
+`ramadanChatContext` — injects iftar/suhoor times and rules into plan
+prompts and Ion's chat context.
+
+### Sentry crash + error reporting
+Biggest infrastructure add of the release — we'd been flying blind on iOS
+crashes.
+
+- `apps/mobile/src/lib/sentry.ts`: `initSentry()` no-ops when
+  `EXPO_PUBLIC_SENTRY_DSN` is unset; `identifySentryUser(userId)` attaches
+  only the user id (no PII); `reportError(error, context)` for manual
+  reports. `tracesSampleRate: 0` (errors only). URL query strings stripped
+  from breadcrumbs. Release tagged `synap@${version}+${nativeBuildVersion}`.
+- `apps/mobile/app/_layout.tsx`: `initSentry()` called BEFORE
+  `configurePurchases` at startup so it catches startup errors too;
+  `identifySentryUser` on auth, `null` on sign-out.
+- `.github/workflows/ios-expo-direct.yml`: `EXPO_PUBLIC_SENTRY_DSN` and
+  `SENTRY_AUTH_TOKEN` env vars passed through.
+- `src/app/api/admin/sentry-stats/route.ts`: admin-gated endpoint reads
+  Sentry REST API for 24h/7d unresolved counts + top 3 issues + project URL.
+  Returns `{configured: false}` gracefully when env vars unset.
+- `src/app/(app)/admin/page.tsx`: new "iOS APP CRASHES (SENTRY)" card.
+
+Versioning gotcha: `@sentry/react-native@8.x` is for SDK 55+; SDK 54
+expects `~7.2.0`. expo-doctor caught it on build 1115 (which failed).
+Pinned to `~7.2.0` and re-locked.
+
+Sentry org slug: `synap-x9`, project slug: `react-native`. Two distinct
+tokens, two distinct purposes:
+- **Vercel `SENTRY_API_TOKEN`** (User Auth Token, scopes: `event:read`,
+  `org:read`, `project:read`) — used by `/admin` to read crash counts.
+- **GitHub `SENTRY_AUTH_TOKEN`** (Internal Integration, scopes:
+  `project:releases`, `project:write`) — for source map upload during
+  build. Not actively used in 1.0.1 because the
+  `@sentry/react-native/expo` config plugin isn't wired in yet
+  (intentionally skipped to keep build 1116 green). Means stacks land as
+  `main.jsbundle:1:23456` instead of `more.tsx:241`. Source maps are a
+  post-1.0.1 todo.
+
+Endpoint shape gotcha: `/organizations/{org}/issues/?project=<slug>`
+returns 403 because that endpoint expects a numeric project ID for the
+`?project` filter. Switched to the project-scoped
+`/projects/{org}/{project}/issues/` endpoint which accepts the slug
+directly. Tokens with correct scopes were still 403ing until that fix
+landed.
+
+Verification: temp admin-only "Send Sentry test" button in the More-tab
+footer (gated to `mohamedhossam03@gmail.com`) fired `reportError(...)` →
+event landed in Sentry → `/admin` card showed `24h: 1`. Pipeline verified
+end-to-end on 2026-06-15. Button + temp `tokenFp` diagnostic both stripped
+in d03c9c6 before the 1117 submission build.
+
+### Chat regen-trap fix
+Typing "confirm" on a regenerate-entire-plan proposal returned "I could not
+apply that change safely" because the chat handler only does small edits,
+not full regens. New `requires_renew_button` reason returns a friendly
+redirect to Plan → Renew with Ion's voice. Rule 7b added to the system
+prompt: Ion never offers full-plan regenerations from chat.
+
+### Footer + small polish
+- "SYNAP v1.0.1" footer only — build number + fixpack tag removed per user
+  request.
+- Light mode landing page: device mockup surfaces (PhoneMockup, IonDemo,
+  FeaturesGrid notification stack) now use literal inline colors
+  (`#FFFFFF`, `#94A3B8`) immune to the `.text-white` → dark remap.
+
+### Arabic App Store listing
+1.0.1 ships the first Arabic localization of the App Store listing: name,
+subtitle, promotional text, keywords, description, and "what's new" all
+translated. Screenshots reused from English for this submission; localized
+screenshots are a later task. In-app Arabic was already supported via
+`LanguageProvider`.
+
+### Build trail
+1108 (first 1.0.1 attempt, hit closed-train) → 1.0.1 train opened → 1114
+(Sentry baked in) → 1115 (failed expo-doctor on `@sentry/react-native` major
+mismatch) → 1116 (Sentry pinned + admin test button) → 1117 (test button +
+diagnostic stripped, **submission build**). All merged to main. Each
+successful build comes off `1000 + run_number`.
