@@ -33,12 +33,15 @@ export async function GET(req: Request) {
   }
 
   try {
-    const base = `https://sentry.io/api/0/organizations/${encodeURIComponent(org)}/issues/`
+    // Use the project-scoped issues endpoint. It accepts the project SLUG
+    // directly in the URL path. The org-scoped /organizations/{org}/issues/
+    // endpoint's `?project=` filter expects a numeric project ID — passing a
+    // slug there returns 403, which is what bit us first time around.
+    const base = `https://sentry.io/api/0/projects/${encodeURIComponent(org)}/${encodeURIComponent(project)}/issues/`
     const headers = { Authorization: `Bearer ${token}` }
-    // Use issue stats endpoint with statsPeriod filter to count unresolved issues
     const [r24, r7d] = await Promise.all([
-      fetch(`${base}?project=${encodeURIComponent(project)}&statsPeriod=24h&query=is:unresolved&limit=100`, { headers }),
-      fetch(`${base}?project=${encodeURIComponent(project)}&statsPeriod=7d&query=is:unresolved&limit=100`, { headers }),
+      fetch(`${base}?statsPeriod=24h&query=is:unresolved&limit=100`, { headers }),
+      fetch(`${base}?statsPeriod=7d&query=is:unresolved&limit=100`, { headers }),
     ])
     if (!r24.ok || !r7d.ok) {
       return NextResponse.json({ configured: true, error: `Sentry API ${r24.status}/${r7d.status}` }, { status: 502 })
