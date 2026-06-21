@@ -13,6 +13,24 @@ export const dynamic = 'force-dynamic'
 
 const PLAN_MODIFY_WINDOW_DAYS = 30
 
+/**
+ * Parse a fetch Response that is *supposed* to be JSON but might not be — e.g.
+ * a Vercel function timeout returns a plain-text/HTML page, and res.json()
+ * would throw a cryptic "Unexpected token 'A'..." that masks the real cause.
+ * Returns the parsed object, or a synthesized { error } with a useful message.
+ */
+async function readJsonSafe(res: Response): Promise<any> {
+  const text = await res.text()
+  try {
+    return JSON.parse(text)
+  } catch {
+    if (res.status === 504 || res.status === 408 || /timeout|timed out|too long/i.test(text)) {
+      return { error: 'This took too long and timed out. Please try again in a moment.' }
+    }
+    return { error: `Server error (${res.status || 'network'}). Please try again.` }
+  }
+}
+
 type Tab = 'diet' | 'workout'
 
 export default function PlanPage() {
@@ -89,7 +107,7 @@ export default function PlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'preview', planType }),
       })
-      const data = await res.json()
+      const data = await readJsonSafe(res)
       if (!res.ok) throw new Error(data.error || 'Renewal preview failed')
       setRenewalPreview(data)
     } catch (err: any) {
@@ -108,7 +126,7 @@ export default function PlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'apply', previewId: renewalPreview.previewId }),
       })
-      const data = await res.json()
+      const data = await readJsonSafe(res)
       if (!res.ok) throw new Error(data.error || 'Could not apply renewal')
       setRenewalPreview(null)
       await loadPlans()
@@ -127,7 +145,7 @@ export default function PlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'rollback', planType, targetPlanId }),
       })
-      const data = await res.json()
+      const data = await readJsonSafe(res)
       if (!res.ok) throw new Error(data.error || 'Could not restore previous plan')
       await loadPlans()
     } finally {

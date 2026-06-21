@@ -141,18 +141,18 @@ export async function POST(req: Request) {
     // ── Post-process ───────────────────────────────────────────────────
     if (planType === 'workout') {
       planJson = normalizeWorkoutPlanDays(planJson)
-      // Enrich exercises with YouTube video IDs
-      const allExercises: any[] = (planJson.days || []).flatMap((day: any) => day.exercises || [])
-      await Promise.all(
-        allExercises.map(async (ex: any) => {
-          try {
-            ex.video_id = await Promise.race([
-              resolveExerciseVideo(ex.name),
-              new Promise<null>(res => setTimeout(() => res(null), 10_000)),
-            ])
-          } catch { ex.video_id = null }
-        })
-      )
+      // Video IDs are resolved at APPLY time, not here. Enriching ~37 exercises
+      // (each a network lookup) on top of the Opus(9000) workout generation
+      // pushed this preview past the 60s Vercel ceiling — Vercel then returned
+      // a plain-text timeout page, which the client's res.json() choked on
+      // ("Unexpected token 'A', \"An error o\"..."). Diet has no video step and
+      // stayed under budget, which is why only workout previews failed. Mark
+      // exercises unresolved now; applyRenewalPreview() enriches before saving.
+      for (const day of (planJson.days || [])) {
+        for (const ex of (day.exercises || [])) {
+          if (ex && typeof ex === 'object' && ex.video_id == null) ex.video_id = null
+        }
+      }
     }
 
     // ── Save ───────────────────────────────────────────────────────────
@@ -254,6 +254,24 @@ async function applyRenewalPreview({
       applied_at: new Date().toISOString(),
       summary: previewRow.metadata.preview ?? null,
     },
+  }
+
+  // Resolve exercise videos here (deferred from preview to keep the preview
+  // call under the 60s ceiling). Apply is otherwise quick DB work, so the
+  // ~37 parallel lookups fit comfortably. Only fills unresolved entries.
+  if (planType === 'workout') {
+    const allExercises: any[] = (planJson.days || []).flatMap((day: any) => day.exercises || [])
+    await Promise.all(
+      allExercises.map(async (ex: any) => {
+        if (!ex || ex.video_id) return
+        try {
+          ex.video_id = await Promise.race([
+            resolveExerciseVideo(ex.name),
+            new Promise<null>(res => setTimeout(() => res(null), 10_000)),
+          ])
+        } catch { ex.video_id = null }
+      })
+    )
   }
 
   // Atomic swap: insert inactive first, then deactivate old, then activate new
