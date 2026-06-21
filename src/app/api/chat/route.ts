@@ -678,6 +678,15 @@ async function maybeApplyPlanEdit({
       }
       pendingPlanJson = prepareWorkoutPlanForSave(plan, 'generated operations')
     } else {
+      // Diet plans are full-replacement from the LLM. Validate structure before
+      // it can be stored as a proposal or saved — otherwise a truncated or
+      // malformed response (e.g. dropped "meals") would overwrite the user's
+      // real nutrition plan with garbage. Mirrors prepareWorkoutPlanForSave.
+      const dietCheck = validateDietPlanStructure(edit.updated_plan)
+      if (!dietCheck.valid) {
+        console.error('[plan-edit] invalid diet plan structure:', dietCheck.reason)
+        return { applied: false, proposed: false, shouldStop: true, reason: 'invalid_plan_edit_response' }
+      }
       pendingPlanJson = edit.updated_plan
     }
 
@@ -1099,10 +1108,14 @@ function applyWorkoutDayMove(currentPlan: any, move: WorkoutDayMove, request: st
     const targetIdx = withoutSource.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === targetDay)
     if (targetIdx >= 0) {
       const displacedWorkout = cloneJson(withoutSource[targetIdx])
+      // targetDay stays occupied — the moved workout takes it. Do NOT free it
+      // for the displaced workout, or chooseSmartMoveDay could pick targetDay
+      // and produce two days with the same name, which the structure validator
+      // rejects ("duplicate <day> in the same workout cycle"). sourceDay is
+      // also excluded: it just became a rest day, so we don't reoccupy it.
       const occupied = new Set(withoutSource.map((day: any) => String(canonicalDayName(dayNameOf(day))).toLowerCase()).filter(Boolean))
-      occupied.delete(targetDay.toLowerCase())
       const candidates = DAY_NAMES.filter(candidate =>
-        candidate !== sourceDay && !occupied.has(candidate.toLowerCase())
+        candidate !== sourceDay && candidate !== targetDay && !occupied.has(candidate.toLowerCase())
       )
       const shiftedTo = chooseSmartMoveDay(candidates, targetIndex, profile, request)
       if (!shiftedTo) throw new Error(`No free day to preserve displaced ${targetDay} workout`)
@@ -1299,6 +1312,26 @@ function validateWorkoutPlanStructure(plan: any): { valid: true } | { valid: fal
   }
 
   if (totalTrainingDays < 1) return { valid: false, reason: 'plan has no training days' }
+  return { valid: true }
+}
+
+function validateDietPlanStructure(plan: any): { valid: true } | { valid: false; reason: string } {
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) {
+    return { valid: false, reason: 'diet plan must be an object' }
+  }
+  // The meals array is the spine of a diet plan; the nutrition UI renders from
+  // it. A response that drops or empties it is unusable.
+  if (!Array.isArray(plan.meals) || plan.meals.length < 1) {
+    return { valid: false, reason: 'diet plan must have a non-empty meals array' }
+  }
+  for (const [i, meal] of plan.meals.entries()) {
+    if (!meal || typeof meal !== 'object' || Array.isArray(meal)) {
+      return { valid: false, reason: `meal ${i + 1} must be an object` }
+    }
+    if (!String(meal.name || meal.title || '').trim()) {
+      return { valid: false, reason: `meal ${i + 1} has no name` }
+    }
+  }
   return { valid: true }
 }
 
