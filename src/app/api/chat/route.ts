@@ -540,7 +540,14 @@ async function maybeApplyPlanEdit({
           usage: { model: 'cached', input_tokens: 0, output_tokens: 0, estimated_cost_usd: 0 },
         }
       } catch (err) {
-        console.error('Apply pending proposal failed:', err)
+        // Loud log so Vercel captures the actual cause (validator reason,
+        // RLS/PG error, video-enrich timeout, etc.) instead of just "failed".
+        console.error('[chat.applyPending] failed', {
+          userId,
+          planType,
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        })
         return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
       }
     }
@@ -877,9 +884,14 @@ function applyWorkoutDayToday(currentPlan: any, target: TodayWorkoutTarget, requ
 
     const todayIdx = nextDays.findIndex((day: any) => canonicalDayName(dayNameOf(day)) === today)
     if (todayIdx >= 0 && todayIdx !== sourceIdx) {
-      const sourceName = dayNameOf(nextDays[sourceIdx])
-      setDayName(nextDays[sourceIdx], dayNameOf(nextDays[todayIdx]) || sourceName)
-      setDayName(nextDays[todayIdx], today)
+      // Proper swap: push-day takes today's slot, the day that was on today
+      // moves into the push day's old slot. Previously both lines wrote
+      // `today`, which produced two days with the same name and tripped the
+      // "duplicate <day> in the same workout cycle" validator on apply.
+      const sourceName = dayNameOf(nextDays[sourceIdx]) || today
+      const todayName = dayNameOf(nextDays[todayIdx]) || today
+      setDayName(nextDays[sourceIdx], todayName)
+      setDayName(nextDays[todayIdx], sourceName)
     } else {
       setDayName(nextDays[sourceIdx], today)
     }
