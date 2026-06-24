@@ -102,14 +102,36 @@ export default function PlanPage() {
     setRenewingType(planType)
     setRenewalPreview(null)
     try {
-      const res = await fetch('/api/renew-plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'preview', planType }),
-      })
-      const data = await readJsonSafe(res)
-      if (!res.ok) throw new Error(data.error || 'Renewal preview failed')
-      setRenewalPreview(data)
+      // Diet: single call. Workout: two-phase chain (see renewPlan() in
+      // apps/mobile/src/features/workout.ts for the rationale — same here).
+      if (planType === 'diet') {
+        const res = await fetch('/api/renew-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'preview', planType }),
+        })
+        const data = await readJsonSafe(res)
+        if (!res.ok) throw new Error(data.error || 'Renewal preview failed')
+        setRenewalPreview(data)
+      } else {
+        const part1Res = await fetch('/api/renew-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part1' }),
+        })
+        const part1 = await readJsonSafe(part1Res)
+        if (!part1Res.ok) throw new Error(part1.error || 'Renewal part 1 failed')
+        if (!part1?.previewId) throw new Error('Workout renewal part 1 did not return a previewId')
+
+        const part2Res = await fetch('/api/renew-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part2', previewId: part1.previewId }),
+        })
+        const part2 = await readJsonSafe(part2Res)
+        if (!part2Res.ok) throw new Error(part2.error || 'Renewal part 2 failed')
+        setRenewalPreview(part2)
+      }
     } catch (err: any) {
       setRenewalPreview({ error: err?.message || 'Renewal preview failed' })
     } finally {

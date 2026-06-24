@@ -51,14 +51,43 @@ export type RenewalContext = {
   flags?: string[]
 }
 
+type RenewPreviewResponse = { ok: boolean; action: 'preview'; previewId: string; preview: any; plan: any }
+
+/**
+ * Renewal flow:
+ *   - Diet: one call. Output fits in the 60s Vercel function window.
+ *   - Workout: two calls, chained. The full 6-week plan runs ~5–7k output
+ *     tokens which Sonnet 4.6 can't finish in a single 60s invocation. We
+ *     split it: Part 1 generates plan metadata + the first half of training
+ *     days and creates the preview row (server flags it `awaiting_part2` so
+ *     apply is blocked until the merge lands). Part 2 generates the remaining
+ *     training days and the server merges them into the same preview row,
+ *     flipping it to `complete`. The PlanGenerating overlay animates the
+ *     0–100% so the user sees one continuous load.
+ */
 export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalContext) {
-  // Renewal runs a full Opus regeneration; the server's hard limit is 60s, so
-  // give the client a matching window — otherwise the default 45s fetch timeout
-  // would surface "took too long" before the server even finishes.
-  return apiFetch<{ ok: boolean; action: 'preview'; previewId: string; preview: any; plan: any }>('/api/renew-plan', {
+  if (planType === 'diet') {
+    return apiFetch<RenewPreviewResponse>('/api/renew-plan', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'preview', planType, context }),
+      timeoutMs: 90_000,
+    })
+  }
+
+  // ── Workout: two-phase chain ─────────────────────────────────────────
+  const part1 = await apiFetch<RenewPreviewResponse>('/api/renew-plan', {
     method: 'POST',
-    body: JSON.stringify({ action: 'preview', planType, context }),
-    timeoutMs: 90_000,
+    body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part1', context }),
+    timeoutMs: 60_000,
+  })
+  if (!part1?.previewId) {
+    throw new Error('Workout renewal part 1 did not return a previewId')
+  }
+  // Part 2 merges into the same preview row and returns the final preview.
+  return apiFetch<RenewPreviewResponse>('/api/renew-plan', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part2', previewId: part1.previewId, context }),
+    timeoutMs: 60_000,
   })
 }
 

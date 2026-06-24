@@ -48,6 +48,25 @@ export async function POST(req: Request) {
     const { planType }: { planType: 'diet' | 'workout' } = body
     if (!planType) return NextResponse.json({ error: 'Missing planType' }, { status: 400 })
 
+    // Workout renewal is generated in two phases to stay under Vercel's 60s
+    // function cap. Diet ignores phase (single call already fits). For old
+    // clients (1.0.1 and earlier) that don't send `phase`, we fall through to
+    // the legacy single-call path — kept for backwards compat, though it may
+    // time out for workout.
+    const phase: 'workout-part1' | 'workout-part2' | undefined =
+      planType === 'workout' && (body.phase === 'workout-part1' || body.phase === 'workout-part2')
+        ? body.phase
+        : undefined
+    const partPreviewId: string | undefined = body.previewId
+
+    // ── Phase 2: merge new days into the existing preview ─────────────────
+    if (phase === 'workout-part2') {
+      if (!partPreviewId) {
+        return NextResponse.json({ error: 'workout-part2 requires previewId from part1' }, { status: 400 })
+      }
+      return generateWorkoutPart2({ admin, client, userId: user.id, previewId: partPreviewId, body })
+    }
+
     // Optional pre-renewal feedback the user supplied via the freshness gate.
     // For workout renewals: { lifts: [{name, weight_kg, reps}], flags: [...] }.
     // Saved into profile.strength_levels so future renewals also benefit, and
@@ -99,13 +118,7 @@ export async function POST(req: Request) {
     const planTier           = effectivePlan(subRes)
 
     // ── Build progress summary ─────────────────────────────────────────
-    const progressBlock = measurementHistory.length >= 2
-      ? measurementHistory
-          .map(m => `${m.date}: ${m.weight_kg}kg${m.body_fat_pct ? ` / ${m.body_fat_pct}%BF` : ''}${m.waist_cm ? ` / waist ${m.waist_cm}cm` : ''}`)
-          .join('\n')
-      : measurementHistory.length === 1
-        ? `${measurementHistory[0].date}: ${measurementHistory[0].weight_kg}kg (only 1 measurement — use as baseline)`
-        : 'No measurements recorded — keep macros at baseline targets'
+    const progressBlock = buildProgressBlock(measurementHistory)
 
     // ── Macro targets (same formula as initial generation) ────────────
     const m = calculateMacros(profile, latestMeasurement)
@@ -115,9 +128,11 @@ export async function POST(req: Request) {
     const supplements = Array.isArray(profile.supplements) ? profile.supplements : (profile.supplements || '').split(',').filter(Boolean)
 
     // ── Build prompt ───────────────────────────────────────────────────
+    // workoutPart: 0 = single-call (legacy, for old clients), 1 = phased part 1
+    const workoutPart: 0 | 1 = planType === 'workout' && phase === 'workout-part1' ? 1 : 0
     const prompt = planType === 'diet'
       ? buildDietRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, dietPrefs, supplements, latestMeasurement })
-      : buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext })
+      : buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart })
 
     // ── Call Claude ────────────────────────────────────────────────────
     // Renewal generates ONE side (diet OR workout) in a single call. Model
@@ -135,9 +150,15 @@ export async function POST(req: Request) {
     const planModel = planType === 'workout'
       ? (process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-sonnet-4-6')
       : (process.env.ANTHROPIC_RENEW_DIET_MODEL || process.env.ANTHROPIC_RENEW_MODEL || process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5')
+    // Each phased call only generates ~half the output, so max_tokens can be
+    // tighter. Legacy single-call workout stays at 9000 (will likely time out
+    // for 1.0.1 clients — phased path is the durable fix).
+    const partMaxTokens = planType === 'diet'
+      ? 8000
+      : workoutPart === 1 ? 6000 : 9000
     const message = await withAnthropicRetry(() => client.messages.create({
       model: planModel,
-      max_tokens: planType === 'diet' ? 8000 : 9000,
+      max_tokens: partMaxTokens,
       system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
     }))
@@ -188,6 +209,10 @@ export async function POST(req: Request) {
         preview,
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         total_estimated_cost_usd: estimateRenewalCost(message),
+        // Phased workout previews are only safe to apply after part 2 merges in.
+        // 'complete' = ready to apply; 'awaiting_part2' = part1 stored, part2 next.
+        phase_status: workoutPart === 1 ? 'awaiting_part2' : 'complete',
+        expected_training_days: planType === 'workout' ? Math.max(1, parseInt(profile.training_days || '4') || 4) : undefined,
       },
     }).select('id').single()
 
@@ -214,7 +239,159 @@ export async function POST(req: Request) {
   }
 }
 
-// ── Diet renewal prompt ───────────────────────────────────────────────────────
+// Shared progress-summary builder used by both the main POST handler and the
+// phase-2 worker. Pulled out of inline so both call sites stay consistent.
+function buildProgressBlock(measurementHistory: any[]): string {
+  if (measurementHistory.length >= 2) {
+    return measurementHistory
+      .map(m => `${m.date}: ${m.weight_kg}kg${m.body_fat_pct ? ` / ${m.body_fat_pct}%BF` : ''}${m.waist_cm ? ` / waist ${m.waist_cm}cm` : ''}`)
+      .join('\n')
+  }
+  if (measurementHistory.length === 1) {
+    return `${measurementHistory[0].date}: ${measurementHistory[0].weight_kg}kg (only 1 measurement — use as baseline)`
+  }
+  return 'No measurements recorded — keep macros at baseline targets'
+}
+
+// ── Phase 2 of workout renewal: generate remaining training days and merge ──
+// Looks up the part1 preview row, regenerates the prompt with workoutPart=2,
+// merges the new days into pending_plan_json.days (dedup by canonical weekday),
+// and flips phase_status='complete' so applyRenewalPreview() will accept it.
+
+async function generateWorkoutPart2({
+  admin,
+  client,
+  userId,
+  previewId,
+  body,
+}: {
+  admin: ReturnType<typeof createAdminClient>
+  client: Anthropic
+  userId: string
+  previewId: string
+  body: any
+}) {
+  const { data: previewRow, error: lookupErr } = await admin.from('chat_messages')
+    .select('id, metadata')
+    .eq('id', previewId)
+    .eq('user_id', userId)
+    .eq('message_type', 'text')
+    .contains('metadata', { renewal_preview: true })
+    .maybeSingle()
+  if (lookupErr) throw lookupErr
+  if (!previewRow?.metadata?.pending_plan_json) {
+    return NextResponse.json({ error: 'Part 1 preview not found' }, { status: 404 })
+  }
+  if (previewRow.metadata.pending_plan_type !== 'workout') {
+    return NextResponse.json({ error: 'Preview is not a workout renewal' }, { status: 400 })
+  }
+  if (previewRow.metadata.phase_status === 'complete') {
+    // Idempotent: if part2 already merged, return as-is.
+    return NextResponse.json({
+      ok: true,
+      action: 'preview',
+      previewId,
+      preview: previewRow.metadata.preview,
+      plan: previewRow.metadata.pending_plan_json,
+    })
+  }
+
+  // Rebuild the context the part1 call had: same profile, same measurements,
+  // same workout params, same renewalContext. The flags/lifts are stable across
+  // both halves so part2 stays consistent with part1's load anchors.
+  const renewalContext: { lifts?: Array<{ name: string; weight_kg: number; reps: number }>; flags?: string[] } = body.context || {}
+  const [profileRes, userLangRes, latestMeasRes, measureHistRes, oldPlanRes] = await Promise.all([
+    admin.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
+    admin.from('users').select('language').eq('id', userId).maybeSingle(),
+    admin.from('measurements').select('weight_kg, body_fat_pct, date').eq('user_id', userId).order('date', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('measurements').select('date, weight_kg, body_fat_pct, waist_cm').eq('user_id', userId).order('date', { ascending: false }).limit(5),
+    admin.from('workout_plans').select('*').eq('user_id', userId).eq('active', true).maybeSingle(),
+  ])
+  const profile = profileRes.data
+  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+  const language = normalizeAiLanguage(userLangRes.data?.language ?? profile?.language)
+  const latestMeasurement = latestMeasRes.data
+  const measurementHistory = measureHistRes.data || []
+  const oldPlan = oldPlanRes.data?.plan_json
+  const m = calculateMacros(profile, latestMeasurement)
+  const w = calculateWorkoutParams(profile)
+  const progressBlock = buildProgressBlock(measurementHistory)
+
+  const prompt = buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart: 2 })
+  const planModel = process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-sonnet-4-6'
+  const message = await withAnthropicRetry(() => client.messages.create({
+    model: planModel,
+    max_tokens: 6000,
+    system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
+    messages: [{ role: 'user', content: prompt }],
+  }))
+  await recordAiUsage({ userId, feature: 'renew_plan_workout_part2', model: message.model, usage: message.usage })
+
+  const raw = message.content[0].type === 'text' ? message.content[0].text : ''
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) return NextResponse.json({ error: 'Failed to parse part 2 days' }, { status: 500 })
+  let part2: any
+  try { part2 = JSON.parse(match[0]) } catch {
+    return NextResponse.json({ error: 'Part 2 returned invalid JSON' }, { status: 500 })
+  }
+  const newDays: any[] = Array.isArray(part2?.days) ? part2.days : []
+  if (!newDays.length) {
+    return NextResponse.json({ error: 'Part 2 returned no training days' }, { status: 500 })
+  }
+
+  // Merge: append any day whose canonical weekday isn't already in the plan.
+  const partial = previewRow.metadata.pending_plan_json
+  const existing: any[] = Array.isArray(partial?.days) ? partial.days : []
+  const dayKey = (d: any) => String(d?.day_name ?? d?.day ?? '').toLowerCase().trim()
+  const seen = new Set(existing.map(dayKey).filter(Boolean))
+  for (const d of newDays) {
+    if (!d) continue
+    if (d.video_id == null && Array.isArray(d.exercises)) {
+      for (const ex of d.exercises) {
+        if (ex && typeof ex === 'object' && ex.video_id == null) ex.video_id = null
+      }
+    }
+    const k = dayKey(d)
+    if (!k || seen.has(k)) continue
+    existing.push(d)
+    seen.add(k)
+  }
+  const merged = normalizeWorkoutPlanDays({ ...partial, days: existing })
+
+  // Rebuild the preview summary against the now-full plan, then mark complete.
+  const refreshedPreview = buildRenewalPreview({
+    planType: 'workout',
+    oldPlan,
+    newPlan: merged,
+    progressBlock,
+    language,
+  })
+  const newMetadata = {
+    ...previewRow.metadata,
+    pending_plan_json: merged,
+    preview: refreshedPreview,
+    phase_status: 'complete' as const,
+    total_estimated_cost_usd: (previewRow.metadata.total_estimated_cost_usd || 0) + estimateRenewalCost(message),
+  }
+  const { error: updateErr } = await admin.from('chat_messages')
+    .update({ content: refreshedPreview.message, metadata: newMetadata })
+    .eq('id', previewId)
+  if (updateErr) throw updateErr
+
+  await recordAppEvent({
+    userId, eventType: 'plan_renewal_preview_part2_merged', severity: 'info',
+    source: 'renew-plan', message: 'Workout renewal part 2 merged',
+    metadata: { previewId, totalDays: merged.days?.length, expected: previewRow.metadata.expected_training_days },
+  })
+
+  return NextResponse.json({
+    ok: true,
+    action: 'preview',
+    previewId,
+    preview: refreshedPreview,
+    plan: merged,
+  })
+}
 
 async function applyRenewalPreview({
   supabase,
@@ -245,6 +422,9 @@ async function applyRenewalPreview({
   }
   if (previewRow.metadata?.applied_at) {
     return NextResponse.json({ error: 'Renewal preview already applied' }, { status: 409 })
+  }
+  if (previewRow.metadata?.phase_status === 'awaiting_part2') {
+    return NextResponse.json({ error: 'Renewal preview is incomplete — Part 2 has not been generated yet.' }, { status: 409 })
   }
 
   const planType = previewRow.metadata.pending_plan_type as 'diet' | 'workout'
@@ -653,10 +833,26 @@ Return ONLY valid JSON:
 
 // ── Workout renewal prompt ────────────────────────────────────────────────────
 
-function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext }: any) {
+function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart = 0 }: any) {
   const ar = language === 'ar'
   const prevSplit = oldPlan?.split_type || 'unknown'
   const prevDays  = Array.isArray(oldPlan?.days) ? oldPlan.days.length : '?'
+
+  // Workout renewal is split across two Anthropic calls so each finishes under
+  // the 60s Vercel function ceiling (Hobby plan). The full 6-week plan with
+  // ~28 detailed exercise blocks is ~5–7k output tokens — even Sonnet 4.6 ran
+  // ~50–65s in one shot and timed out routinely. Part 1 emits the plan-level
+  // metadata + the first half of training days; Part 2 emits the remaining
+  // training days with the same split, and the server merges them into one
+  // preview row before the user confirms apply.
+  const trainingDayCount = Math.max(1, parseInt(profile.training_days || '4') || 4)
+  const firstHalfDays = Math.ceil(trainingDayCount / 2)
+  const partInstruction =
+    workoutPart === 1
+      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART 1 OF 2\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput plan-level fields (name, schedule, split_type, weeks, notes, progressive_overload, deload_weeks, deload_protocol, rest_days, ion_message) AND ONLY the FIRST ${firstHalfDays} training days (the earliest ${firstHalfDays} weekdays of the ${w.splitType} split). Do NOT include the later ${trainingDayCount - firstHalfDays} training days — a second call will generate those and the server will merge them in.\n`
+      : workoutPart === 2
+      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART 2 OF 2\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput ONLY the REMAINING training days (training days ${firstHalfDays + 1} through ${trainingDayCount} of the ${w.splitType} split), continuing the SAME split so they fit seamlessly with Part 1. Use weekdays that do NOT overlap with Part 1's days. Return a JSON object with just { "days": [...] } — no plan-level fields, no ion_message, just the days array.\n`
+      : ''
 
   // Pre-renewal feedback the user supplied via the freshness gate. Use these
   // EXACT numbers as the starting loads for the new cycle; treat the flags as
@@ -677,6 +873,7 @@ function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, old
   return `You are Ion, a world-class AI personal trainer. Generate a RENEWED 6-week progressive workout programme for this client. This is their next training cycle — build on where they left off.
 
 ${aiLanguageInstruction(language, 'all user-facing JSON string values including plan name, session goals, exercise form tips, progression notes, and coaching notes')}
+${partInstruction}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CLIENT PROFILE
