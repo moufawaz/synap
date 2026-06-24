@@ -114,33 +114,40 @@ export default function PlanPage() {
         if (!res.ok) throw new Error(data.error || 'Renewal preview failed')
         setRenewalPreview(data)
       } else {
-        // 3-phase workout chain: part1 (with metadata) → part2 merge →
-        // part3 merge (final). Each call stays under the 60s Vercel cap.
-        const part1Res = await fetch('/api/renew-plan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part1' }),
-        })
-        const part1 = await readJsonSafe(part1Res)
-        if (!part1Res.ok) throw new Error(part1.error || 'Renewal part 1 failed')
-        if (!part1?.previewId) throw new Error('Workout renewal part 1 did not return a previewId')
+        // Server-driven phase chain: part 1 returns next_phase, we follow
+        // until next_phase is null. The server can change the part count
+        // (3, 4, 5+) without any client change.
+        let current = await (async () => {
+          const r = await fetch('/api/renew-plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part1' }),
+          })
+          const j = await readJsonSafe(r)
+          if (!r.ok) throw new Error(j.error || 'Renewal part 1 failed')
+          if (!j?.previewId) throw new Error('Workout renewal part 1 did not return a previewId')
+          return j
+        })()
 
-        const part2Res = await fetch('/api/renew-plan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part2', previewId: part1.previewId }),
-        })
-        const part2 = await readJsonSafe(part2Res)
-        if (!part2Res.ok) throw new Error(part2.error || 'Renewal part 2 failed')
-
-        const part3Res = await fetch('/api/renew-plan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part3', previewId: part1.previewId }),
-        })
-        const part3 = await readJsonSafe(part3Res)
-        if (!part3Res.ok) throw new Error(part3.error || 'Renewal part 3 failed')
-        setRenewalPreview(part3)
+        const MAX_HOPS = 8 // safety stop — current server is 4 phases
+        for (let hop = 0; hop < MAX_HOPS; hop++) {
+          if (!current.next_phase) break
+          const r = await fetch('/api/renew-plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'preview',
+              planType: 'workout',
+              phase: current.next_phase,
+              previewId: current.previewId,
+            }),
+          })
+          const j = await readJsonSafe(r)
+          if (!r.ok) throw new Error(j.error || `Renewal ${current.next_phase} failed`)
+          current = j
+        }
+        if (current.next_phase) throw new Error('Workout renewal chain exceeded safety limit')
+        setRenewalPreview(current)
       }
     } catch (err: any) {
       setRenewalPreview({ error: err?.message || 'Renewal preview failed' })

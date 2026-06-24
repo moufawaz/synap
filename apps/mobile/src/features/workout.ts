@@ -51,27 +51,29 @@ export type RenewalContext = {
   flags?: string[]
 }
 
-type RenewPreviewResponse = { ok: boolean; action: 'preview'; previewId: string; preview: any; plan: any; phase_status?: string }
+type RenewPreviewResponse = {
+  ok: boolean
+  action: 'preview'
+  previewId: string
+  preview: any
+  plan: any
+  phase_status?: string
+  /** Server-driven phase chain: when set, the client should immediately POST
+   *  again with `phase: next_phase` and the same `previewId`. When null/absent
+   *  the preview is complete and ready for apply. Lets the server change the
+   *  part count (3, 4, 5+) without ever needing a new mobile build. */
+  next_phase?: string | null
+}
+
+const MAX_RENEW_CHAIN_HOPS = 8 // safety stop — current server is 4 phases
 
 /**
  * Renewal flow:
- *   - Diet: one call. Output fits in the 60s Vercel function window.
- *   - Workout: THREE calls, chained. The full 6-week plan runs ~5–7k output
- *     tokens which no model reliably finishes in a single 60s invocation, and
- *     a 2-phase Sonnet split also tipped 60s for half the days. 3-phase
- *     Opus emits ~1500-2000 tokens per call (~30-40s) and reliably fits.
- *
- *     Part 1: plan metadata + ceil(N/3) training days. Server creates the
- *             preview row tagged 'awaiting_part2'.
- *     Part 2: next ceil((N - part1) / 2) training days. Merged into the row,
- *             tagged 'awaiting_part3'.
- *     Part 3: remaining training days. Merged in, tagged 'complete'.
- *
- *     applyRenewalPreview() rejects anything not 'complete'. The
- *     PlanGenerating overlay animates 0–100% over the full sequence so the
- *     user sees one continuous load (~90-120s end-to-end).
+ *   - Diet: one call. Output fits the 60s Vercel function window.
+ *   - Workout: server-driven chain. Part 1 returns `next_phase`; we follow
+ *     until `next_phase` is null. Each call stays under 60s on Opus.
  */
-export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalContext) {
+export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalContext): Promise<RenewPreviewResponse> {
   if (planType === 'diet') {
     return apiFetch<RenewPreviewResponse>('/api/renew-plan', {
       method: 'POST',
@@ -80,26 +82,30 @@ export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalC
     })
   }
 
-  // ── Workout: three-phase chain ───────────────────────────────────────
-  const part1 = await apiFetch<RenewPreviewResponse>('/api/renew-plan', {
+  // ── Workout: follow next_phase chain ─────────────────────────────────
+  let current = await apiFetch<RenewPreviewResponse>('/api/renew-plan', {
     method: 'POST',
     body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part1', context }),
     timeoutMs: 55_000,
   })
-  if (!part1?.previewId) {
+  if (!current?.previewId) {
     throw new Error('Workout renewal part 1 did not return a previewId')
   }
-  await apiFetch<RenewPreviewResponse>('/api/renew-plan', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part2', previewId: part1.previewId, context }),
-    timeoutMs: 55_000,
-  })
-  // Part 3 is the final merge — it returns the complete preview ready for apply.
-  return apiFetch<RenewPreviewResponse>('/api/renew-plan', {
-    method: 'POST',
-    body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part3', previewId: part1.previewId, context }),
-    timeoutMs: 55_000,
-  })
+  for (let hop = 0; hop < MAX_RENEW_CHAIN_HOPS; hop++) {
+    if (!current.next_phase) return current
+    current = await apiFetch<RenewPreviewResponse>('/api/renew-plan', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'preview',
+        planType: 'workout',
+        phase: current.next_phase,
+        previewId: current.previewId,
+        context,
+      }),
+      timeoutMs: 55_000,
+    })
+  }
+  throw new Error('Workout renewal chain exceeded safety limit')
 }
 
 export async function applyRenewalPreview(previewId: string) {

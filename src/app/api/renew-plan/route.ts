@@ -48,26 +48,33 @@ export async function POST(req: Request) {
     const { planType }: { planType: 'diet' | 'workout' } = body
     if (!planType) return NextResponse.json({ error: 'Missing planType' }, { status: 400 })
 
-    // Workout renewal is generated in THREE phases to stay under Vercel's 60s
-    // function cap on Opus. Diet ignores phase (single call already fits).
-    // 1.0.1 and earlier clients that don't send `phase` fall through to the
-    // legacy single-call path — kept for backwards compat, though it will
-    // time out for workout on any model that produces full-quality output.
-    const VALID_PHASES = ['workout-part1', 'workout-part2', 'workout-part3'] as const
-    type WorkoutPhase = (typeof VALID_PHASES)[number]
-    const phase: WorkoutPhase | undefined =
-      planType === 'workout' && (VALID_PHASES as readonly string[]).includes(body.phase)
-        ? (body.phase as WorkoutPhase)
-        : undefined
+    // Workout renewal is generated across WORKOUT_RENEWAL_PARTS phases so each
+    // call fits under Vercel's 60s function cap on Opus. Diet ignores phase
+    // (single call already fits). 1.0.1 clients that don't send `phase` fall
+    // through to the legacy single-call path — best-effort, will time out for
+    // workout on any high-quality model.
+    //
+    // The phase format is `workout-partN` where N is 1..WORKOUT_RENEWAL_PARTS.
+    // Server-driven chaining: each response includes `next_phase` (or null
+    // when complete), so clients follow the chain without knowing the part
+    // count up front. This lets us bump WORKOUT_RENEWAL_PARTS without ever
+    // needing another mobile rebuild.
+    const phaseMatch = typeof body.phase === 'string' ? body.phase.match(/^workout-part(\d+)$/) : null
+    const phasePartNumber = phaseMatch ? parseInt(phaseMatch[1], 10) : null
+    const isValidPhase =
+      planType === 'workout' &&
+      phasePartNumber !== null &&
+      phasePartNumber >= 1 &&
+      phasePartNumber <= WORKOUT_RENEWAL_PARTS
+    const phase = isValidPhase ? (body.phase as string) : undefined
     const partPreviewId: string | undefined = body.previewId
 
-    // ── Phase 2/3: merge new days into the existing preview ──────────────
-    if (phase === 'workout-part2' || phase === 'workout-part3') {
+    // ── Phase 2+: merge new days into the existing preview ───────────────
+    if (phase && phasePartNumber !== null && phasePartNumber >= 2) {
       if (!partPreviewId) {
         return NextResponse.json({ error: `${phase} requires previewId from part1` }, { status: 400 })
       }
-      const partNumber = phase === 'workout-part2' ? 2 : 3
-      return generateWorkoutPartMerge({ admin, client, userId: user.id, previewId: partPreviewId, body, partNumber })
+      return generateWorkoutPartMerge({ admin, client, userId: user.id, previewId: partPreviewId, body, partNumber: phasePartNumber })
     }
 
     // Optional pre-renewal feedback the user supplied via the freshness gate.
@@ -132,31 +139,16 @@ export async function POST(req: Request) {
 
     // ── Build prompt ───────────────────────────────────────────────────
     // workoutPart: 0 = legacy single-call (for old clients), 1 = phased part 1.
-    // Parts 2 and 3 are handled by generateWorkoutPartMerge above.
+    // Parts 2+ are handled by generateWorkoutPartMerge above.
     const workoutPart: 0 | 1 = planType === 'workout' && phase === 'workout-part1' ? 1 : 0
     const prompt = planType === 'diet'
       ? buildDietRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, dietPrefs, supplements, latestMeasurement })
       : buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart })
 
     // ── Call Claude ────────────────────────────────────────────────────
-    // Renewal model selection:
-    //
-    //   Diet (single call, 2-week / ~4 meals/day): Opus 4.5. 8000 tokens fits
-    //   in 60s and diet planning benefits most from Opus's calorie/macro
-    //   reasoning.
-    //
-    //   Workout — phased (workoutPart === 1, plus parts 2/3 in
-    //   generateWorkoutPartMerge): Opus 4.5. Each phase emits ~1500-2000
-    //   tokens (~30-40s on Opus) so we get full Opus quality back without
-    //   tripping the 60s cap. Confirmed against runtime logs: 2-phase Sonnet
-    //   still tipped 60s, but 3-phase Opus has plenty of headroom because
-    //   each call is much shorter.
-    //
-    //   Workout — legacy single-call (workoutPart === 0, 1.0.1 clients with
-    //   no `phase`): kept on Sonnet 4.6 as a best-effort. No model reliably
-    //   fits a full 6-week plan in one shot under 60s on Hobby; users on
-    //   1.0.1 should update to 1.0.2+ for the phased path.
-    //
+    // Diet single-call → Opus 4.5 (8000 tokens, fits 60s).
+    // Workout phased → Opus 4.5 (each phase ~1000-1500 tokens).
+    // Workout legacy single-call → Sonnet 4.6 best-effort (will time out).
     // All overridable via env so we can swap without redeploys.
     const planModel = planType === 'workout'
       ? (
@@ -165,18 +157,29 @@ export async function POST(req: Request) {
           (workoutPart === 1 ? 'claude-opus-4-5' : 'claude-sonnet-4-6')
         )
       : (process.env.ANTHROPIC_RENEW_DIET_MODEL || process.env.ANTHROPIC_RENEW_MODEL || process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5')
-    // Per-phase output budget:
-    //   diet single-call        → 8000 (full plan)
-    //   workout phased part 1   → 4500 (plan metadata + ceil(N/3) days)
-    //   workout legacy single   → 9000 (full plan, best-effort)
+    // Per-phase output budget. Workout part 1 emits plan metadata + ceil(N/4)
+    // days only, so 3500 is generous; tighter than before because we're now
+    // splitting into 4 phases instead of 3.
     const partMaxTokens = planType === 'diet'
       ? 8000
-      : workoutPart === 1 ? 4500 : 9000
+      : workoutPart === 1 ? 3500 : 9000
+
+    const anthropicStartedAt = Date.now()
     const message = await withAnthropicRetry(() => client.messages.create({
       model: planModel,
       max_tokens: partMaxTokens,
       system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
+    }))
+    const anthropicMs = Date.now() - anthropicStartedAt
+    console.info('[renew-plan] anthropic', JSON.stringify({
+      planType,
+      phase: phase ?? 'legacy-single-call',
+      model: message.model,
+      ms: anthropicMs,
+      input_tokens: message.usage?.input_tokens,
+      output_tokens: message.usage?.output_tokens,
+      stop_reason: message.stop_reason,
     }))
 
     await recordAiUsage({ userId: user.id, feature: `renew_plan_${planType}`, model: message.model, usage: message.usage })
@@ -228,7 +231,9 @@ export async function POST(req: Request) {
         // Phased workout previews are only safe to apply after all parts merge.
         // Phase status values: 'awaiting_part2' → 'awaiting_part3' → 'complete'.
         // applyRenewalPreview rejects anything not 'complete'.
-        phase_status: workoutPart === 1 ? 'awaiting_part2' : 'complete',
+        phase_status: workoutPart === 1
+          ? nextPhaseStatusAfter(1, profile)
+          : 'complete',
         expected_training_days: planType === 'workout' ? Math.max(1, parseInt(profile.training_days || '4') || 4) : undefined,
       },
     }).select('id').single()
@@ -243,7 +248,19 @@ export async function POST(req: Request) {
       metadata: { planType, previewId: previewRow?.id, cost: estimateRenewalCost(message) },
     })
 
-    return NextResponse.json({ ok: true, action: 'preview', previewId: previewRow?.id, preview, plan: planJson })
+    // For phased workout renewals, tell the client what to call next so it
+    // can follow the chain without hard-coding the part count. Diet returns
+    // no next_phase (single call).
+    const nextPhase = workoutPart === 1 ? nextWorkoutPhase(1, profile) : null
+    return NextResponse.json({
+      ok: true,
+      action: 'preview',
+      previewId: previewRow?.id,
+      preview,
+      plan: planJson,
+      next_phase: nextPhase,
+      phase_status: workoutPart === 1 ? nextPhaseStatusAfter(1, profile) : 'complete',
+    })
   } catch (err: any) {
     console.error('[renew-plan]', err)
     await recordAppEvent({
@@ -290,10 +307,9 @@ async function generateWorkoutPartMerge({
   userId: string
   previewId: string
   body: any
-  partNumber: 2 | 3
+  partNumber: number
 }) {
-  const expectedPriorStatus = partNumber === 2 ? 'awaiting_part2' : 'awaiting_part3'
-  const nextStatus = partNumber === 2 ? 'awaiting_part3' : 'complete'
+  const expectedPriorStatus = `awaiting_part${partNumber}`
   const partLabel = `part ${partNumber}`
 
   const { data: previewRow, error: lookupErr } = await admin.from('chat_messages')
@@ -310,29 +326,33 @@ async function generateWorkoutPartMerge({
   if (previewRow.metadata.pending_plan_type !== 'workout') {
     return NextResponse.json({ error: 'Preview is not a workout renewal' }, { status: 400 })
   }
-  // Idempotent: if this part (or a later one) already ran, return the current
-  // preview state without re-generating. Prevents double charges if the client
-  // retries after a network blip.
-  if (previewRow.metadata.phase_status === 'complete' ||
-      (partNumber === 2 && previewRow.metadata.phase_status === 'awaiting_part3')) {
+  // Idempotent: if the current preview is already at this phase status or past
+  // it, return current state without re-generating. Avoids double charges on
+  // client retries after a network blip.
+  const currentStatus: string = previewRow.metadata.phase_status || 'complete'
+  const currentAwaitingPart = currentStatus.startsWith('awaiting_part')
+    ? parseInt(currentStatus.split('awaiting_part')[1], 10)
+    : Infinity
+  if (currentStatus === 'complete' || currentAwaitingPart > partNumber) {
     return NextResponse.json({
       ok: true,
       action: 'preview',
       previewId,
       preview: previewRow.metadata.preview,
       plan: previewRow.metadata.pending_plan_json,
-      phase_status: previewRow.metadata.phase_status,
+      phase_status: currentStatus,
+      next_phase: currentStatus === 'complete' ? null : `workout-part${currentAwaitingPart}`,
     })
   }
-  if (previewRow.metadata.phase_status !== expectedPriorStatus) {
+  if (currentStatus !== expectedPriorStatus) {
     return NextResponse.json({
-      error: `Preview is in phase '${previewRow.metadata.phase_status}', expected '${expectedPriorStatus}' before ${partLabel}.`,
+      error: `Preview is in phase '${currentStatus}', expected '${expectedPriorStatus}' before ${partLabel}.`,
     }, { status: 409 })
   }
 
-  // Rebuild the context the part1 call had: same profile, measurements, params,
-  // renewalContext. Flags/lifts are stable across all three parts so they stay
-  // consistent with part 1's load anchors.
+  // Rebuild context: same profile, measurements, params, renewalContext as
+  // part 1. Flags/lifts are stable across all parts so they stay consistent
+  // with part 1's load anchors.
   const renewalContext: { lifts?: Array<{ name: string; weight_kg: number; reps: number }>; flags?: string[] } = body.context || {}
   const [profileRes, userLangRes, latestMeasRes, measureHistRes, oldPlanRes] = await Promise.all([
     admin.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
@@ -350,52 +370,77 @@ async function generateWorkoutPartMerge({
   const m = calculateMacros(profile, latestMeasurement)
   const w = calculateWorkoutParams(profile)
   const progressBlock = buildProgressBlock(measurementHistory)
+  const trainingDayCount = Math.max(1, parseInt(profile.training_days || '4') || 4)
+  const splits = computeWorkoutPartSplits(trainingDayCount)
+  const thisPartDays = splits[partNumber - 1] || 0
 
-  const prompt = buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart: partNumber })
-  const planModel = process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-opus-4-5'
-  const message = await withAnthropicRetry(() => client.messages.create({
-    model: planModel,
-    max_tokens: 3500, // ~1 to ceil(N/3) days — Opus needs comfortable headroom under 60s
-    system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
-    messages: [{ role: 'user', content: prompt }],
-  }))
-  await recordAiUsage({ userId, feature: `renew_plan_workout_part${partNumber}`, model: message.model, usage: message.usage })
+  // Compute downstream phase info ONCE so the no-op path and the LLM path
+  // emit consistent next_phase / phase_status.
+  const downstreamNextPhase = nextWorkoutPhase(partNumber, profile)
+  const downstreamPhaseStatus = nextPhaseStatusAfter(partNumber, profile)
 
-  const raw = message.content[0].type === 'text' ? message.content[0].text : ''
-  const matchObj = raw.match(/\{[\s\S]*\}/)
-  if (!matchObj) return NextResponse.json({ error: `Failed to parse ${partLabel} days` }, { status: 500 })
-  let parsed: any
-  try { parsed = JSON.parse(matchObj[0]) } catch {
-    return NextResponse.json({ error: `${partLabel} returned invalid JSON` }, { status: 500 })
-  }
-  const newDays: any[] = Array.isArray(parsed?.days) ? parsed.days : []
-  if (!newDays.length) {
-    return NextResponse.json({ error: `${partLabel} returned no training days` }, { status: 500 })
-  }
+  // No-op phase: this partN has zero training days (small N). Skip Anthropic,
+  // just flip the phase status forward.
+  let merged = previewRow.metadata.pending_plan_json
+  let messageUsageCost = 0
+  if (thisPartDays > 0) {
+    const prompt = buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart: partNumber })
+    const planModel = process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-opus-4-5'
+    const anthropicStartedAt = Date.now()
+    const message = await withAnthropicRetry(() => client.messages.create({
+      model: planModel,
+      max_tokens: 3000, // ~1-2 days of exercises; Opus needs headroom under 60s
+      system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
+      messages: [{ role: 'user', content: prompt }],
+    }))
+    const anthropicMs = Date.now() - anthropicStartedAt
+    console.info('[renew-plan] anthropic', JSON.stringify({
+      planType: 'workout',
+      phase: `workout-part${partNumber}`,
+      model: message.model,
+      ms: anthropicMs,
+      input_tokens: message.usage?.input_tokens,
+      output_tokens: message.usage?.output_tokens,
+      stop_reason: message.stop_reason,
+    }))
+    await recordAiUsage({ userId, feature: `renew_plan_workout_part${partNumber}`, model: message.model, usage: message.usage })
+    messageUsageCost = estimateRenewalCost(message)
 
-  // Merge: append any day whose canonical weekday isn't already in the plan.
-  const partial = previewRow.metadata.pending_plan_json
-  const existing: any[] = Array.isArray(partial?.days) ? partial.days : []
-  const dayKey = (d: any) => String(d?.day_name ?? d?.day ?? '').toLowerCase().trim()
-  const seen = new Set(existing.map(dayKey).filter(Boolean))
-  for (const d of newDays) {
-    if (!d) continue
-    if (Array.isArray(d.exercises)) {
-      for (const ex of d.exercises) {
-        if (ex && typeof ex === 'object' && ex.video_id == null) ex.video_id = null
-      }
+    const raw = message.content[0].type === 'text' ? message.content[0].text : ''
+    const matchObj = raw.match(/\{[\s\S]*\}/)
+    if (!matchObj) return NextResponse.json({ error: `Failed to parse ${partLabel} days` }, { status: 500 })
+    let parsed: any
+    try { parsed = JSON.parse(matchObj[0]) } catch {
+      return NextResponse.json({ error: `${partLabel} returned invalid JSON` }, { status: 500 })
     }
-    const k = dayKey(d)
-    if (!k || seen.has(k)) continue
-    existing.push(d)
-    seen.add(k)
+    const newDays: any[] = Array.isArray(parsed?.days) ? parsed.days : []
+    if (!newDays.length) {
+      return NextResponse.json({ error: `${partLabel} returned no training days` }, { status: 500 })
+    }
+
+    // Merge: append any day whose canonical weekday isn't already in the plan.
+    const existing: any[] = Array.isArray(merged?.days) ? [...merged.days] : []
+    const dayKey = (d: any) => String(d?.day_name ?? d?.day ?? '').toLowerCase().trim()
+    const seen = new Set(existing.map(dayKey).filter(Boolean))
+    for (const d of newDays) {
+      if (!d) continue
+      if (Array.isArray(d.exercises)) {
+        for (const ex of d.exercises) {
+          if (ex && typeof ex === 'object' && ex.video_id == null) ex.video_id = null
+        }
+      }
+      const k = dayKey(d)
+      if (!k || seen.has(k)) continue
+      existing.push(d)
+      seen.add(k)
+    }
+    merged = normalizeWorkoutPlanDays({ ...merged, days: existing })
   }
-  const merged = normalizeWorkoutPlanDays({ ...partial, days: existing })
 
   // Only rebuild the user-facing summary on the FINAL part. Intermediate parts
-  // leave the part1 preview text untouched so the user-visible message isn't
-  // jittered between phases.
-  const isFinal = partNumber === 3
+  // leave the existing preview text untouched so the user-visible message
+  // isn't jittered between phases.
+  const isFinal = downstreamNextPhase === null
   const refreshedPreview = isFinal
     ? buildRenewalPreview({ planType: 'workout', oldPlan, newPlan: merged, progressBlock, language })
     : previewRow.metadata.preview
@@ -404,21 +449,21 @@ async function generateWorkoutPartMerge({
     ...previewRow.metadata,
     pending_plan_json: merged,
     preview: refreshedPreview,
-    phase_status: nextStatus as 'awaiting_part3' | 'complete',
-    total_estimated_cost_usd: (previewRow.metadata.total_estimated_cost_usd || 0) + estimateRenewalCost(message),
+    phase_status: downstreamPhaseStatus,
+    total_estimated_cost_usd: (previewRow.metadata.total_estimated_cost_usd || 0) + messageUsageCost,
   }
   const { error: updateErr } = await admin.from('chat_messages')
-    .update({ content: isFinal ? refreshedPreview.message : previewRow.metadata.preview?.message, metadata: newMetadata })
+    .update({ content: isFinal ? refreshedPreview.message : (previewRow.metadata.preview?.message ?? null), metadata: newMetadata })
     .eq('id', previewId)
   if (updateErr) throw updateErr
 
   await recordAppEvent({
     userId,
-    eventType: `plan_renewal_preview_${partLabel.replace(' ', '')}_merged`,
+    eventType: `plan_renewal_preview_part${partNumber}_merged`,
     severity: 'info',
     source: 'renew-plan',
     message: `Workout renewal ${partLabel} merged`,
-    metadata: { previewId, totalDays: merged.days?.length, expected: previewRow.metadata.expected_training_days, phase_status: nextStatus },
+    metadata: { previewId, totalDays: merged?.days?.length, expected: previewRow.metadata.expected_training_days, phase_status: downstreamPhaseStatus, no_op: thisPartDays === 0 },
   })
 
   return NextResponse.json({
@@ -427,7 +472,8 @@ async function generateWorkoutPartMerge({
     previewId,
     preview: refreshedPreview,
     plan: merged,
-    phase_status: nextStatus,
+    phase_status: downstreamPhaseStatus,
+    next_phase: downstreamNextPhase,
   })
 }
 
@@ -876,18 +922,65 @@ Return ONLY valid JSON:
 
 // ── Workout renewal prompt ────────────────────────────────────────────────────
 
-/** Distribute N training days across 3 phases as [part1, part2, part3].
- *  Part 1 carries the plan-level metadata so it gets a few more days when
- *  uneven. Formula: ceil(N/3), ceil(remaining/2), the rest. Each part is
- *  guaranteed ≥1 day for N≥3, and at minimum [1,0,0] for N<3 (treated as
- *  edge cases by the caller).
+/** Total number of workout renewal phases. Each phase emits at most 2 training
+ *  days so Opus stays comfortably under the 60s Vercel function cap. The 3-phase
+ *  variant tipped 60s for at least one user; 4 phases is the safety margin.
+ *  Bumpable to 5 or 6 here without any client change (clients follow the
+ *  server-issued next_phase chain).
  */
-function computeWorkoutPartSplits(n: number): [number, number, number] {
-  const part1 = Math.max(1, Math.ceil(n / 3))
-  const rem1 = Math.max(0, n - part1)
-  const part2 = Math.max(0, Math.ceil(rem1 / 2))
-  const part3 = Math.max(0, n - part1 - part2)
-  return [part1, part2, part3]
+const WORKOUT_RENEWAL_PARTS = 4
+
+/** Distribute N training days across WORKOUT_RENEWAL_PARTS phases. Part 1
+ *  carries the plan-level metadata so it gets a few more days when uneven.
+ *  Formula generalises ceil-divide-remainder so it scales to any part count:
+ *      part_i = ceil(remaining / (PARTS - i + 1))
+ *  Result has WORKOUT_RENEWAL_PARTS entries; some may be 0 for small N (the
+ *  caller treats 0-day phases as no-op merges that just flip the phase status
+ *  forward).
+ */
+function computeWorkoutPartSplits(n: number): number[] {
+  const splits: number[] = []
+  let remaining = n
+  for (let i = 0; i < WORKOUT_RENEWAL_PARTS; i++) {
+    const slotsLeft = WORKOUT_RENEWAL_PARTS - i
+    const days = i === 0
+      ? Math.max(1, Math.ceil(remaining / slotsLeft))      // part 1 always ≥ 1
+      : Math.max(0, Math.ceil(remaining / slotsLeft))
+    splits.push(days)
+    remaining = Math.max(0, remaining - days)
+  }
+  return splits
+}
+
+/** Given the splits, return the inclusive 1-based day-range for a part. */
+function partDayRange(splits: number[], partNumber: number): { start: number; end: number; count: number } {
+  let start = 1
+  for (let i = 0; i < partNumber - 1; i++) start += splits[i] || 0
+  const count = splits[partNumber - 1] || 0
+  return { start, end: start + count - 1, count }
+}
+
+/** Return the next phase identifier the client should call after partN, or
+ *  null when there are no more days to generate. Skips zero-day phases
+ *  (small N where the tail parts have nothing to emit).
+ */
+function nextWorkoutPhase(currentPart: number, profile: any): string | null {
+  const trainingDayCount = Math.max(1, parseInt(profile?.training_days || '4') || 4)
+  const splits = computeWorkoutPartSplits(trainingDayCount)
+  for (let p = currentPart + 1; p <= WORKOUT_RENEWAL_PARTS; p++) {
+    if ((splits[p - 1] || 0) > 0) return `workout-part${p}`
+  }
+  return null
+}
+
+/** Return the phase_status value to store after partN. If no later non-empty
+ *  parts remain, returns 'complete'. Otherwise returns 'awaiting_part{next}'.
+ */
+function nextPhaseStatusAfter(currentPart: number, profile: any): string {
+  const next = nextWorkoutPhase(currentPart, profile)
+  if (!next) return 'complete'
+  const m = next.match(/^workout-part(\d+)$/)
+  return m ? `awaiting_part${m[1]}` : 'complete'
 }
 
 function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart = 0 }: any) {
@@ -895,31 +988,33 @@ function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, old
   const prevSplit = oldPlan?.split_type || 'unknown'
   const prevDays  = Array.isArray(oldPlan?.days) ? oldPlan.days.length : '?'
 
-  // Workout renewal is split across THREE Anthropic calls so each finishes
-  // well under the 60s Vercel function ceiling on Opus. The full 6-week plan
-  // with ~28 detailed exercise blocks is ~5–7k output tokens — Opus did
-  // ~70-90s in one shot, Sonnet ~50-65s, both unreliable. Even 2-phase Sonnet
-  // tipped 60s for half the days. 3-phase Opus emits ~1500-2000 tokens per
-  // call (~30-40s) and reliably fits.
+  // Workout renewal is split across WORKOUT_RENEWAL_PARTS (currently 4)
+  // Anthropic calls. The full 6-week plan with ~28 detailed exercise blocks is
+  // ~5-7k output tokens. Opus did ~70-90s in one shot, Sonnet ~50-65s; even
+  // 2-phase Sonnet and 3-phase Opus tipped 60s. 4-phase Opus emits ~1000-1500
+  // tokens per call (~20-30s) with comfortable headroom.
   //
-  // Split formula:
-  //   part1 = ceil(N/3) days (with plan-level metadata)
-  //   part2 = ceil((N - part1) / 2) days
-  //   part3 = remaining days
-  //
-  //   N=3 → 1/1/1, N=4 → 2/1/1, N=5 → 2/2/1, N=6 → 2/2/2
+  //   N=3 → 1/1/1/0, N=4 → 1/1/1/1, N=5 → 2/1/1/1, N=6 → 2/2/1/1
   const trainingDayCount = Math.max(1, parseInt(profile.training_days || '4') || 4)
   const partSplits = computeWorkoutPartSplits(trainingDayCount)
-  const part1End = partSplits[0]                          // last day index of part1 (1-based)
-  const part2End = partSplits[0] + partSplits[1]          // last day index of part2 (1-based)
-  const partInstruction =
-    workoutPart === 1
-      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART 1 OF 3\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput plan-level fields (name, schedule, split_type, weeks, notes, progressive_overload, deload_weeks, deload_protocol, rest_days, ion_message) AND ONLY the FIRST ${partSplits[0]} training day${partSplits[0] === 1 ? '' : 's'} (the earliest ${partSplits[0]} weekday${partSplits[0] === 1 ? '' : 's'} of the ${w.splitType} split). Do NOT include the later ${trainingDayCount - partSplits[0]} training days — two more calls will generate those and the server will merge them in.\n`
-      : workoutPart === 2
-      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART 2 OF 3\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput ONLY training days ${part1End + 1} through ${part2End} of the ${w.splitType} split (${partSplits[1]} training day${partSplits[1] === 1 ? '' : 's'}), continuing the SAME split so they fit seamlessly with Part 1. Use weekdays that do NOT overlap with Part 1's days. Return a JSON object with just { "days": [...] } — no plan-level fields, no ion_message, just the days array.\n`
-      : workoutPart === 3
-      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART 3 OF 3\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput ONLY training days ${part2End + 1} through ${trainingDayCount} of the ${w.splitType} split (${partSplits[2]} training day${partSplits[2] === 1 ? '' : 's'}), continuing the SAME split so they fit seamlessly with Parts 1 and 2. Use weekdays that do NOT overlap with Parts 1 or 2. Return a JSON object with just { "days": [...] } — no plan-level fields, no ion_message, just the days array.\n`
-      : ''
+  const range = workoutPart >= 1 ? partDayRange(partSplits, workoutPart) : null
+
+  let partInstruction = ''
+  if (workoutPart >= 1 && range && range.count > 0) {
+    const isFirst = workoutPart === 1
+    const dayWord = range.count === 1 ? 'training day' : 'training days'
+    const rangeLabel = range.count === 1
+      ? `training day ${range.start}`
+      : `training days ${range.start} through ${range.end}`
+    partInstruction = isFirst
+      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART ${workoutPart} OF ${WORKOUT_RENEWAL_PARTS}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput plan-level fields (name, schedule, split_type, weeks, notes, progressive_overload, deload_weeks, deload_protocol, rest_days, ion_message) AND ONLY the FIRST ${range.count} ${dayWord} (the earliest ${range.count} weekday${range.count === 1 ? '' : 's'} of the ${w.splitType} split). Do NOT include the later ${trainingDayCount - range.count} training days — additional calls will generate those and the server will merge them in.\n`
+      : `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART ${workoutPart} OF ${WORKOUT_RENEWAL_PARTS}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput ONLY ${rangeLabel} of the ${w.splitType} split (${range.count} ${dayWord}), continuing the SAME split so they fit seamlessly with the earlier parts. Use weekdays that do NOT overlap with previous parts. Return a JSON object with just { "days": [...] } — no plan-level fields, no ion_message, just the days array.\n`
+  } else if (workoutPart >= 1 && range && range.count === 0) {
+    // No-op phase (small training-day counts can leave the tail parts empty).
+    // The handler will short-circuit before calling Anthropic, but we set an
+    // instruction here for safety in case it's ever called directly.
+    partInstruction = `\nThis split has no remaining training days for part ${workoutPart}. Return { "days": [] }.\n`
+  }
 
   // Pre-renewal feedback the user supplied via the freshness gate. Use these
   // EXACT numbers as the starting loads for the new cycle; treat the flags as
