@@ -51,19 +51,25 @@ export type RenewalContext = {
   flags?: string[]
 }
 
-type RenewPreviewResponse = { ok: boolean; action: 'preview'; previewId: string; preview: any; plan: any }
+type RenewPreviewResponse = { ok: boolean; action: 'preview'; previewId: string; preview: any; plan: any; phase_status?: string }
 
 /**
  * Renewal flow:
  *   - Diet: one call. Output fits in the 60s Vercel function window.
- *   - Workout: two calls, chained. The full 6-week plan runs ~5–7k output
- *     tokens which Sonnet 4.6 can't finish in a single 60s invocation. We
- *     split it: Part 1 generates plan metadata + the first half of training
- *     days and creates the preview row (server flags it `awaiting_part2` so
- *     apply is blocked until the merge lands). Part 2 generates the remaining
- *     training days and the server merges them into the same preview row,
- *     flipping it to `complete`. The PlanGenerating overlay animates the
- *     0–100% so the user sees one continuous load.
+ *   - Workout: THREE calls, chained. The full 6-week plan runs ~5–7k output
+ *     tokens which no model reliably finishes in a single 60s invocation, and
+ *     a 2-phase Sonnet split also tipped 60s for half the days. 3-phase
+ *     Opus emits ~1500-2000 tokens per call (~30-40s) and reliably fits.
+ *
+ *     Part 1: plan metadata + ceil(N/3) training days. Server creates the
+ *             preview row tagged 'awaiting_part2'.
+ *     Part 2: next ceil((N - part1) / 2) training days. Merged into the row,
+ *             tagged 'awaiting_part3'.
+ *     Part 3: remaining training days. Merged in, tagged 'complete'.
+ *
+ *     applyRenewalPreview() rejects anything not 'complete'. The
+ *     PlanGenerating overlay animates 0–100% over the full sequence so the
+ *     user sees one continuous load (~90-120s end-to-end).
  */
 export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalContext) {
   if (planType === 'diet') {
@@ -74,20 +80,25 @@ export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalC
     })
   }
 
-  // ── Workout: two-phase chain ─────────────────────────────────────────
+  // ── Workout: three-phase chain ───────────────────────────────────────
   const part1 = await apiFetch<RenewPreviewResponse>('/api/renew-plan', {
     method: 'POST',
     body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part1', context }),
-    timeoutMs: 60_000,
+    timeoutMs: 55_000,
   })
   if (!part1?.previewId) {
     throw new Error('Workout renewal part 1 did not return a previewId')
   }
-  // Part 2 merges into the same preview row and returns the final preview.
-  return apiFetch<RenewPreviewResponse>('/api/renew-plan', {
+  await apiFetch<RenewPreviewResponse>('/api/renew-plan', {
     method: 'POST',
     body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part2', previewId: part1.previewId, context }),
-    timeoutMs: 60_000,
+    timeoutMs: 55_000,
+  })
+  // Part 3 is the final merge — it returns the complete preview ready for apply.
+  return apiFetch<RenewPreviewResponse>('/api/renew-plan', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part3', previewId: part1.previewId, context }),
+    timeoutMs: 55_000,
   })
 }
 

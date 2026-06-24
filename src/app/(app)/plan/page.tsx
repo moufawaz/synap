@@ -114,6 +114,8 @@ export default function PlanPage() {
         if (!res.ok) throw new Error(data.error || 'Renewal preview failed')
         setRenewalPreview(data)
       } else {
+        // 3-phase workout chain: part1 (with metadata) → part2 merge →
+        // part3 merge (final). Each call stays under the 60s Vercel cap.
         const part1Res = await fetch('/api/renew-plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -130,7 +132,15 @@ export default function PlanPage() {
         })
         const part2 = await readJsonSafe(part2Res)
         if (!part2Res.ok) throw new Error(part2.error || 'Renewal part 2 failed')
-        setRenewalPreview(part2)
+
+        const part3Res = await fetch('/api/renew-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part3', previewId: part1.previewId }),
+        })
+        const part3 = await readJsonSafe(part3Res)
+        if (!part3Res.ok) throw new Error(part3.error || 'Renewal part 3 failed')
+        setRenewalPreview(part3)
       }
     } catch (err: any) {
       setRenewalPreview({ error: err?.message || 'Renewal preview failed' })
