@@ -120,12 +120,23 @@ export async function POST(req: Request) {
       : buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext })
 
     // ── Call Claude ────────────────────────────────────────────────────
-    // Renewal is for ONE side (diet OR workout), not both. Capping max_tokens
-    // tighter (was 16k) keeps the call well under the 60s Vercel Hobby ceiling
-    // and prevents the "took too long" timeout. Diet (2-week, ~4 meals/day) and
-    // workout (6-week, 4-day split) both comfortably finish in this budget.
+    // Renewal generates ONE side (diet OR workout) in a single call. Model
+    // selection is asymmetric on purpose:
+    //   - Workout (6-week, ~4-day split, structured exercise data): Sonnet 4.6.
+    //     Opus 4.5 averaged 70-90s on 9000 tokens — past Vercel's 60s ceiling,
+    //     which surfaced as FUNCTION_INVOCATION_TIMEOUT on device and a
+    //     plain-text error on web. Sonnet finishes the same plan in ~35-45s
+    //     at very close quality on structured prompts. Initial-plan generation
+    //     keeps Opus because it's already split into two phases.
+    //   - Diet (2-week, ~4 meals/day, nuanced calorie/macro math): Opus 4.5.
+    //     Smaller token budget (8000) fits the 60s ceiling, and diet
+    //     personalisation benefits more from Opus's reasoning.
+    // Allow env overrides per side for tuning without redeploys.
+    const planModel = planType === 'workout'
+      ? (process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-sonnet-4-6')
+      : (process.env.ANTHROPIC_RENEW_DIET_MODEL || process.env.ANTHROPIC_RENEW_MODEL || process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5')
     const message = await withAnthropicRetry(() => client.messages.create({
-      model: process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5',
+      model: planModel,
       max_tokens: planType === 'diet' ? 8000 : 9000,
       system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
