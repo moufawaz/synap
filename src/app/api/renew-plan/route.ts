@@ -384,7 +384,12 @@ async function generateWorkoutPartMerge({
   let merged = previewRow.metadata.pending_plan_json
   let messageUsageCost = 0
   if (thisPartDays > 0) {
-    const prompt = buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart: partNumber })
+    // Pass already-generated days so Opus varies muscle focus / exercises /
+    // weekdays instead of producing duplicate sessions. Without this the
+    // separate phases were each generating "lower-body posterior chain" days
+    // with identical exercises.
+    const priorDays: any[] = Array.isArray(merged?.days) ? merged.days : []
+    const prompt = buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart: partNumber, priorDays })
     const planModel = process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-opus-4-5'
     const anthropicStartedAt = Date.now()
     const message = await withAnthropicRetry(() => client.messages.create({
@@ -983,7 +988,43 @@ function nextPhaseStatusAfter(currentPart: number, profile: any): string {
   return m ? `awaiting_part${m[1]}` : 'complete'
 }
 
-function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart = 0 }: any) {
+/**
+ * Compact summary of training days already generated in earlier phases. Each
+ * line: `day_name | muscle_focus | key exercises`. Lets Opus see exactly what
+ * the other phases produced so it can vary the new days instead of repeating
+ * an entire day (which was happening — two days came back as identical
+ * "lower body posterior chain & power" sessions because phase N couldn't see
+ * phase M's output).
+ */
+function buildPriorPartsBlock(priorDays: any[], splitType: string): string {
+  if (!Array.isArray(priorDays) || !priorDays.length) return ''
+  const lines = priorDays
+    .filter(d => d && (d.exercises?.length || d.day_name))
+    .map(d => {
+      const dayName = d.day_name || d.day || '?'
+      const focus = d.muscle_focus || d.focus || d.session_goal || '?'
+      const exercises = (d.exercises || [])
+        .map((ex: any) => ex?.name || ex?.title)
+        .filter(Boolean)
+        .slice(0, 8)
+        .join(', ')
+      return `  ${dayName} (${focus}): ${exercises}`
+    })
+  if (!lines.length) return ''
+  return `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ALREADY-GENERATED TRAINING DAYS (earlier phases of this same renewal)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+These training days were written by earlier phases of this renewal call. Your new days MUST:
+  - Use a DIFFERENT muscle_focus / session_goal than every day listed below.
+  - Use DIFFERENT exercises (main compounds — squat, bench, deadlift, OHP — may repeat at most ONCE across the whole week; everything else must be unique).
+  - Use DIFFERENT weekday names than every day listed below.
+  - Fit seamlessly with these existing days as part of the SAME ${splitType} split (so the full week reads as one coherent programme, not duplicated sessions).
+
+${lines.join('\n')}
+`
+}
+
+function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart = 0, priorDays = [] }: any) {
   const ar = language === 'ar'
   const prevSplit = oldPlan?.split_type || 'unknown'
   const prevDays  = Array.isArray(oldPlan?.days) ? oldPlan.days.length : '?'
@@ -1055,7 +1096,7 @@ PROGRESS HISTORY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${progressBlock}
 ${renewalFeedbackBlock}
-
+${buildPriorPartsBlock(priorDays, w.splitType)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CALCULATED WORKOUT PARAMETERS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
