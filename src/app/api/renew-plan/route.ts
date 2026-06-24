@@ -147,8 +147,21 @@ export async function POST(req: Request) {
     //     Smaller token budget (8000) fits the 60s ceiling, and diet
     //     personalisation benefits more from Opus's reasoning.
     // Allow env overrides per side for tuning without redeploys.
+    //
+    // Legacy single-call workout (no phase) on 1.0.1 clients: even Sonnet 4.6
+    // averages 50-65s on 9000 tokens and routinely trips the 60s ceiling.
+    // For those clients only, fall back to Haiku 4.5 so renewal completes in
+    // ~20-25s. Plan quality is lower than Sonnet/Opus, but a complete-but-
+    // simpler plan is strictly better than a timeout. 1.0.2+ clients send
+    // `phase` and use the phased Sonnet path (workoutPart === 1), which gets
+    // full Sonnet quality without hitting the cap.
+    const isLegacyWorkoutSingleCall = planType === 'workout' && workoutPart === 0
     const planModel = planType === 'workout'
-      ? (process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-sonnet-4-6')
+      ? (
+          process.env.ANTHROPIC_RENEW_WORKOUT_MODEL ||
+          process.env.ANTHROPIC_RENEW_MODEL ||
+          (isLegacyWorkoutSingleCall ? 'claude-haiku-4-5' : 'claude-sonnet-4-6')
+        )
       : (process.env.ANTHROPIC_RENEW_DIET_MODEL || process.env.ANTHROPIC_RENEW_MODEL || process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5')
     // Each phased call only generates ~half the output, so max_tokens can be
     // tighter. Legacy single-call workout stays at 9000 (will likely time out
