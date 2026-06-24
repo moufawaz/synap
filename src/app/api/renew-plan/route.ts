@@ -59,6 +59,16 @@ export async function POST(req: Request) {
         : undefined
     const partPreviewId: string | undefined = body.previewId
 
+    // TEMP — surface the path being taken so we can tell from Vercel logs
+    // whether the chained client is reaching us or the legacy single-call is.
+    // Remove once renewal is verified working end-to-end on 1.0.2.
+    console.info('[renew-plan] entry', JSON.stringify({
+      planType,
+      phase: phase ?? 'legacy-single-call',
+      hasPreviewId: !!partPreviewId,
+      rawPhaseField: body.phase ?? null,
+    }))
+
     // ── Phase 2: merge new days into the existing preview ─────────────────
     if (phase === 'workout-part2') {
       if (!partPreviewId) {
