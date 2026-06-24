@@ -1,8 +1,13 @@
 # SYNAP — App Store Launch Checklist
 
-**Current state:** Build 1.0 (1105) submitted for review with 4 subscriptions
-attached (round-2 resubmission, 2026-06-09). Demo account:
-apple-review@synapfit.app.
+**Current state:** SYNAP is **live on the App Store**.
+- 1.0 (build 1097) — approved + released
+- 1.0.1 (build 1117) — approved 2026-06-24 (post-launch update: renewal
+  freshness gates + Ramadan mode + Sentry + Arabic listing)
+- 1.0.2 (build 1119) — in CI, about to submit (workout renewal 2-phase
+  reliability fix)
+
+Demo account for App Review: apple-review@synapfit.app.
 
 ---
 

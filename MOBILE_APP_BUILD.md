@@ -2273,3 +2273,105 @@ screenshots are a later task. In-app Arabic was already supported via
 mismatch) → 1116 (Sentry pinned + admin test button) → 1117 (test button +
 diagnostic stripped, **submission build**). All merged to main. Each
 successful build comes off `1000 + run_number`.
+
+**Approved by Apple 2026-06-24 as build 1117.** The 1.0.1 train then closed
+automatically — next iteration must be 1.0.2+.
+
+## 1.0.2 — workout renewal reliability (2026-06, builds 1118–)
+
+Single theme: stop "Building yours, Training plan" from timing out at 51%
+during workout renewal. Built and submitted hours after 1.0.1 was
+approved because the renewal failure was reaching real users.
+
+### Closed-train rejection on 1118
+altool returned `90186: Invalid Pre-Release Train. The train version
+'1.0.1' is closed for new build submissions.` That's Apple's signal that
+1.0.1 had just been approved on the store. Bumped app.json `1.0.1 →
+1.0.2` and the more.tsx footer fallback accordingly; build 1119 then
+uploaded clean under the 1.0.2 train.
+
+### 2-phase workout renewal split
+`/api/renew-plan` couldn't fit a full workout renewal under Vercel's 60s
+function ceiling. Confirmed against Vercel runtime logs: two consecutive
+`FUNCTION_INVOCATION_TIMEOUT` 504s on the deploy that switched to Sonnet
+4.6 (`dpl_EAmXGJTd…`). The 6-week plan with ~28 detailed exercise blocks
+is ~5–7k output tokens; Opus averaged 70-90s, Sonnet 50-65s, both
+unreliable.
+
+The durable fix mirrors what initial generation already does: split
+into two Anthropic calls. Diet renewal (`8000` tokens, single call) is
+unchanged — it already fits.
+
+- Server (`src/app/api/renew-plan/route.ts`):
+  - New `phase: 'workout-part1' | 'workout-part2'` body param.
+  - Part 1 (`workoutPart=1`): generates plan metadata + the first half
+    of training days (`Math.ceil(N/2)`). `max_tokens=6000`. Stores
+    preview row with `metadata.phase_status='awaiting_part2'`.
+  - Part 2 (`workoutPart=2`): requires `previewId`; generates remaining
+    training days; server merges (dedup by canonical weekday) into the
+    part-1 row; flips `phase_status='complete'`; returns final preview.
+  - `applyRenewalPreview()` now refuses `awaiting_part2` previews with
+    a 409 so a partial plan can't accidentally be saved.
+  - Legacy single-call path (no phase) still works for 1.0.1 clients,
+    but the workout side keeps timing out for them — the durable fix
+    only reaches users once they update to 1.0.2.
+  - Extracted `buildProgressBlock()` so both call sites stay consistent.
+  - New `ai_usage` feature key `renew_plan_workout_part2` and
+    `plan_renewal_preview_part2_merged` app event for monitoring.
+- Web (`src/app/(app)/plan/page.tsx`): `previewRenewal('workout')`
+  chains part1 → part2 with `readJsonSafe()` on each response. Diet
+  unchanged.
+- Mobile (`apps/mobile/src/features/workout.ts`):
+  `renewPlan('workout')` chains part1 → part2 with 60s timeouts each.
+  Diet stays single-call at 90s.
+
+### Two preceding fixes that didn't fully solve it
+Kept here for context (both committed, both helped, neither sufficient
+on their own):
+
+1. **Video enrichment deferred** from preview to apply (commit
+   `96ea0ba`). Saved ~10s on the preview path. Wasn't enough — Opus
+   itself was the bottleneck.
+2. **Sonnet 4.6 model swap** for workout renewal (commit `ea76ae4`).
+   Server-side, no app rebuild. Brought average down from ~70-90s to
+   ~50-65s — still over the 60s cap on plans with many exercises.
+   Diet stayed on Opus.
+
+### `readJsonSafe()` helper for renewal handlers
+When `/api/renew-plan` exceeds 60s, Vercel returns a plain-text/HTML
+timeout page. The web client previously did `res.json()` on this,
+which threw `Unexpected token 'A', "An error o"... is not valid JSON`
+and masked the real cause. New helper reads body as text first,
+JSON-parses, and synthesizes `{ error: 'This took too long…' }` for
+non-JSON bodies. Applied to preview, apply, and rollback.
+
+### Other server hardening that landed in the same train
+- Chat plan-edit bug: `applyWorkoutDayToday` wrote `today` to both day
+  names instead of swapping, creating duplicate weekdays which then
+  failed the structure validator with "duplicate <day> in the same
+  workout cycle". Fixed (commit `c949ea6`).
+- Chat plan-edit bug: `applyWorkoutDayMove` could relocate the
+  displaced workout back onto `targetDay`, producing the same
+  duplicate-day validator error. Fixed (commit `a7ef461`).
+- Diet edits previously saved without validation; workout edits went
+  through `prepareWorkoutPlanForSave`. New `validateDietPlanStructure`
+  symmetry guard now blocks a truncated LLM diet response from
+  overwriting the user's plan (commit `a7ef461`).
+- Structured error logging on the chat apply-pending-proposal failure
+  path so the next variant of "could not apply" surfaces its actual
+  validator/PG/enrich reason in Vercel logs.
+
+### Founder grant utility (untracked)
+`scripts/grant-elite.mjs` (NOT committed) — one-off CLI to upsert an
+active Elite subscription for an email for N days. Reads
+`SUPABASE_SERVICE_ROLE_KEY` from `.env.local`. Used to comp the
+founder account for testing. Survives until the RevenueCat webhook
+fires a real lifecycle event for that user_id.
+
+### Build trail
+1118 (first 1.0.2 attempt; hit closed-train 90186 because 1.0.1 had
+just been approved) → 1119 (version bumped to 1.0.2; carries the
+2-phase renewal fix). Server-side fixes (video defer, Sonnet swap,
+2-phase split, readJsonSafe, chat-edit hardening) all deployed via
+Vercel to existing 1.0.0 / 1.0.1 users too. Web /plan workout
+renewal works as soon as Vercel finishes the 2-phase deploy.
