@@ -68,9 +68,13 @@ export function PlanGenerating({
     setProgress(0)
     setStepIndex(0)
 
-    // Climb through the "thinking" steps to ~90% while the generation phases run
-    // (workout ×2 + diet + videos ≈ 90–120s total). Pace the steps over that
-    // window so the bar tracks real progress instead of racing to 90% and sitting.
+    // Climb through the "thinking" steps to ~90% while the generation phases
+    // run. Total wall time varies by flow:
+    //   - Renewal (4-phase Opus chain): ~115–130s typical
+    //   - Initial gen (workout1+workout2+diet+videos): ~110–140s typical
+    // Pace ~17s per step so the bar reaches 90% around 120s — close enough
+    // to actual completion that users don't see it sitting full for ages.
+    // After the task() promise resolves we jump to 100% and dismiss.
     let i = 0
     const ticker = setInterval(() => {
       i++
@@ -78,7 +82,7 @@ export function PlanGenerating({
         setStepIndex(i)
         setProgress(Math.round((i / (steps.length - 1)) * 90))
       }
-    }, 13000)
+    }, 17000)
 
     try {
       await task()
@@ -136,7 +140,24 @@ export function PlanGenerating({
             </View>
           </>
         ) : (
-          <Text style={[styles.step, { color: color.muted }]}>{steps[Math.min(stepIndex, steps.length - 1)]}</Text>
+          <>
+            <Text style={[styles.step, { color: color.muted }]}>{steps[Math.min(stepIndex, steps.length - 1)]}</Text>
+            {/* In-progress cancel — gives users an out if they realise the
+                renewal is taking too long instead of forcing them to wait
+                for the per-phase timeout to fire. Server keeps processing
+                the in-flight phase in the background (no clean way to
+                cancel a Vercel function mid-flight), but the user is
+                returned to the Plan page immediately. */}
+            <Pressable
+              onPress={onComplete}
+              style={[styles.cancelBtn, { borderColor: color.border }]}
+              hitSlop={8}
+            >
+              <Text style={[styles.cancelText, { color: color.muted }]}>
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </Text>
+            </Pressable>
+          </>
         )}
 
         {/* Step dots */}
@@ -176,6 +197,8 @@ const styles = StyleSheet.create({
   retryText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
   continueBtn: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 14, borderWidth: 1 },
   continueText: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
+  cancelBtn: { marginTop: 18, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
+  cancelText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase' },
   dots: { flexDirection: 'row', gap: 8 },
   dot: { height: 6, borderRadius: 999 },
 })

@@ -66,6 +66,12 @@ type RenewPreviewResponse = {
 }
 
 const MAX_RENEW_CHAIN_HOPS = 8 // safety stop — current server is 4 phases
+/** Per-phase client timeout. Must be slightly above the server's 60s function
+ *  cap so the client doesn't abort before the server's own timeout response
+ *  has time to arrive. 65s = 60s server cap + 5s network/parse buffer. Going
+ *  lower (the 55s we had) caused false "took too long" alerts on phases that
+ *  ran a coherence retry and legitimately neared the cap. */
+const RENEW_PHASE_TIMEOUT_MS = 65_000
 
 /**
  * Renewal flow:
@@ -86,7 +92,7 @@ export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalC
   let current = await apiFetch<RenewPreviewResponse>('/api/renew-plan', {
     method: 'POST',
     body: JSON.stringify({ action: 'preview', planType: 'workout', phase: 'workout-part1', context }),
-    timeoutMs: 55_000,
+    timeoutMs: RENEW_PHASE_TIMEOUT_MS,
   })
   if (!current?.previewId) {
     throw new Error('Workout renewal part 1 did not return a previewId')
@@ -102,7 +108,7 @@ export async function renewPlan(planType: 'diet' | 'workout', context?: RenewalC
         previewId: current.previewId,
         context,
       }),
-      timeoutMs: 55_000,
+      timeoutMs: RENEW_PHASE_TIMEOUT_MS,
     })
   }
   throw new Error('Workout renewal chain exceeded safety limit')
