@@ -38,9 +38,26 @@ export async function apiFetch<T>(path: string, init: ApiFetchOptions = {}): Pro
   }
 
   if (!response.ok) {
+    // Try to pull a friendly message out of the server's error body. Server
+    // routes return shapes like {"error":"Unauthorized"} or {"message":"…"};
+    // without this parsing the UI ended up rendering raw JSON
+    // ('{"error":"Unauthorized"}') as if it were a user-facing message.
     const text = await response.text().catch(() => '')
-    throw new Error(text || `Request failed: ${response.status}`)
+    let message = text
+    if (text) {
+      try {
+        const parsed = JSON.parse(text)
+        message = parsed?.error || parsed?.message || text
+      } catch { /* not JSON — leave as raw text */ }
+    }
+    const err = new Error(message || `Request failed: ${response.status}`) as ApiFetchError
+    err.status = response.status
+    throw err
   }
 
   return response.json() as Promise<T>
 }
+
+/** Error thrown by apiFetch on non-OK responses. Carries the HTTP status so
+ *  screens can branch on 401 / 404 / 5xx without parsing the message string. */
+export type ApiFetchError = Error & { status?: number }

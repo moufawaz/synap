@@ -37,6 +37,9 @@ export function useAsyncData<T>(
   const [data, setData]       = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
+  /** HTTP status from the last failed apiFetch (if available). Lets screens
+   *  branch on 401/404 to show a friendly empty state instead of error text. */
+  const [errorStatus, setErrorStatus] = useState<number | null>(null)
   const mounted = useRef(true)
 
   const cacheKey = options?.cacheKey
@@ -46,13 +49,17 @@ export function useAsyncData<T>(
   const reload = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setErrorStatus(null)
     try {
       const fresh = await loader()
       if (!mounted.current) return
       setData(fresh)
       if (cacheKey) cacheWrite(cacheKey, fresh)
     } catch (err: any) {
-      if (mounted.current) setError(err?.message || 'Something went wrong')
+      if (mounted.current) {
+        setError(err?.message || 'Something went wrong')
+        setErrorStatus(typeof err?.status === 'number' ? err.status : null)
+      }
     } finally {
       if (mounted.current) setLoading(false)
     }
@@ -95,5 +102,5 @@ export function useAsyncData<T>(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload])
 
-  return { data, loading, error, reload, silentRefresh, setData }
+  return { data, loading, error, errorStatus, reload, silentRefresh, setData }
 }
