@@ -1043,17 +1043,26 @@ type MuscleCategory = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'arms' | 'f
 function classifyMuscleFocus(focus: string | undefined): MuscleCategory {
   const t = String(focus || '').toLowerCase()
   if (!t) return 'unknown'
-  // Emphasis words win first.
-  if (/\bpush\b|\bchest\b|\bshoulder\b|\btricep\b|\banterior\b/.test(t) &&
-      !/\bpull\b|\bback\b|\bbicep\b|\bposterior\b/.test(t)) return 'push'
-  if (/\bpull\b|\bback\b|\bbicep\b|\blat\b|\bposterior\s+chain\b/.test(t) &&
-      !/\bpush\b|\bchest\b|\btricep\b/.test(t)) return 'pull'
-  if (/\bleg\b|\blower\s+body\b|\blower\b|\bquad\b|\bhamstring\b|\bglute\b|\bcalf\b|\bcalves\b/.test(t)) return 'legs'
-  if (/\barm\b/.test(t)) return 'arms'
+
+  // LEGS context wins over "posterior chain" ambiguity. The word "posterior
+  // chain" alone matches pull (rear delts/traps/lats), but on a lower-body
+  // day it means hamstrings/glutes/lower back. Previously this was misfiring
+  // and rejecting legitimate RDL/hip thrust as "wrong on a pull day."
+  if (/\bleg(s)?\b|\blower(\s+body)?\b|\bquad(s|riceps)?\b|\bhamstring(s)?\b|\bglute(s)?\b|\bcalf\b|\bcalves\b/.test(t)) return 'legs'
+
+  // Push emphasis (chest/shoulders/tris/anterior). Excludes pull tokens.
+  if (/\bpush\b|\bchest\b|\bshoulder(s)?\b|\btricep(s)?\b|\banterior\b/.test(t) &&
+      !/\bpull\b|\bback\b|\bbicep(s)?\b|\bposterior\b/.test(t)) return 'push'
+
+  // Pull emphasis. Reachable here only when no leg/lower context above.
+  if (/\bpull\b|\bback\b|\bbicep(s)?\b|\blat(s)?\b|\bposterior(\s+chain)?\b/.test(t) &&
+      !/\bpush\b|\bchest\b|\btricep(s)?\b/.test(t)) return 'pull'
+
+  if (/\barm(s)?\b/.test(t)) return 'arms'
   if (/\bfull\s+body\b|\btotal\s+body\b/.test(t)) return 'full_body'
   if (/\bcore\b|\babs?\b/.test(t)) return 'core'
   if (/\bcardio\b|\bconditioning\b/.test(t)) return 'cardio'
-  if (/\bupper\b/.test(t)) return 'upper'   // generic "Upper Body" with no emphasis → allow both push and pull
+  if (/\bupper(\s+body)?\b/.test(t)) return 'upper'   // generic "Upper Body" with no emphasis → allow both push and pull
   return 'unknown'
 }
 
@@ -1082,13 +1091,21 @@ function classifyExercise(exercise: { name?: string; muscle_group?: string; musc
   if (/\b(bench\s*press|incline\s+(db|dumbbell|barbell)\s+press|incline\s+press|decline\s+press|chest\s+press|machine\s+press|chest\s+fly|pec\s+deck|cable\s+fly|dumbbell\s+fly|dip|push-?up|shoulder\s+press|overhead\s+press|ohp|military\s+press|arnold\s+press|lateral\s+raise|front\s+raise|tricep\s+pushdown|skull\s*crusher|skullcrusher|overhead\s+tricep|close-?grip\s+bench|tricep\s+extension|tricep\s+kickback|tricep\s+dip|tate\s+press|jm\s+press|landmine\s+press)\b/.test(name)) cats.add('push')
   if (/\b(chest|pectoral|triceps?|tricep|anterior\s+delt|front\s+delt|side\s+delt|lateral\s+delt|medial\s+delt)\b/.test(mg) && !cats.has('pull')) cats.add('push')
 
-  // PULL — back / lats / biceps / rear delts / shrugs
-  if (/\b(row\b|barbell\s+row|dumbbell\s+row|cable\s+row|seated\s+row|t-?bar\s+row|chest-?supported\s+row|pendlay\s+row|pulldown|lat\s+pulldown|pull-?up|chin-?up|face\s+pull|rear\s+delt|reverse\s+fly|bicep\s+curl|biceps\s+curl|hammer\s+curl|preacher\s+curl|cable\s+curl|ez(-|\s)?bar\s+curl|spider\s+curl|incline\s+curl|concentration\s+curl|shrug|back\s+extension|hyperextension|reverse\s+hyperextension|straight-?arm\s+pulldown|pull-?through)\b/.test(name)) cats.add('pull')
+  // PULL — back / lats / biceps / rear delts / shrugs.
+  // Note: "pull-through" / "cable pull-through" is INTENTIONALLY excluded
+  // here — despite the name, it's mechanically a hip-hinge glute/hamstring
+  // movement universally placed on leg days. It's caught by the LEGS block
+  // below via muscle_group match.
+  if (/\b(row\b|barbell\s+row|dumbbell\s+row|cable\s+row|seated\s+row|t-?bar\s+row|chest-?supported\s+row|pendlay\s+row|pulldown|lat\s+pulldown|pull-?up|chin-?up|face\s+pull|rear\s+delt|reverse\s+fly|bicep\s+curl|biceps\s+curl|hammer\s+curl|preacher\s+curl|cable\s+curl|ez(-|\s)?bar\s+curl|spider\s+curl|incline\s+curl|concentration\s+curl|shrug|back\s+extension|hyperextension|reverse\s+hyperextension|straight-?arm\s+pulldown)\b/.test(name)) cats.add('pull')
   if (/\b(back|lats?|latissimus|mid\s+back|upper\s+back|rhomboid|biceps?|brachialis|rear\s+delt|posterior\s+delt|trap(eziu?s)?)\b/.test(mg) && !cats.has('push')) cats.add('pull')
 
-  // LEGS — quads / hams / glutes / calves
-  if (/\b(squat|leg\s+press|leg\s+extension|leg\s+curl|hack\s+squat|front\s+squat|goblet\s+squat|lunge|step-?up|bulgarian|split\s+squat|romanian\s+deadlift|rdl|stiff-?leg\s+deadlift|hip\s+thrust|glute\s+bridge|calf\s+raise|nordic|good\s+morning|sled\s+push|hip\s+abduct|adductor|sissy\s+squat)\b/.test(name)) cats.add('legs')
-  if (/\b(quad(riceps)?|hamstring|glute|calf|calves|soleus|adductor|abductor|hip\s+flex)\b/.test(mg)) cats.add('legs')
+  // LEGS — quads / hams / glutes / calves.
+  // muscle_group regex now tolerates plurals (Glutes, Hamstrings, Quads) —
+  // earlier these used singular-only word boundaries which missed real
+  // muscle_group values like "Glutes / Hamstrings" and triggered false
+  // positives on the validator.
+  if (/\b(squat|leg\s+press|leg\s+extension|leg\s+curl|hack\s+squat|front\s+squat|goblet\s+squat|lunge|step-?up|bulgarian|split\s+squat|romanian\s+deadlift|rdl|stiff-?leg\s+deadlift|hip\s+thrust|glute\s+bridge|calf\s+raise|nordic|good\s+morning|sled\s+push|hip\s+abduct|adductor|sissy\s+squat|pull-?through|cable\s+pull-?through|hip\s+hinge)\b/.test(name)) cats.add('legs')
+  if (/\b(quad(s|riceps)?|hamstring(s)?|glute(s)?|calf|calves|soleus|adductor(s)?|abductor(s)?|hip\s+flex(or(s)?)?|lower\s+back|posterior\s+chain)\b/.test(mg)) cats.add('legs')
 
   // Conventional deadlift — counts as BOTH legs (posterior chain) and pull (back/traps).
   if (/\b(conventional\s+deadlift|sumo\s+deadlift|deadlift)\b/.test(name) && !/(romanian|stiff)/.test(name)) {
