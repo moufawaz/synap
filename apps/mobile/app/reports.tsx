@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
 import { BackButton } from '@/components/BackButton'
@@ -36,7 +37,7 @@ export default function ReportsScreen() {
       <Card style={styles.cardGap}>
         <Text style={[styles.title, { color: color.text }]}>Weekly Reports</Text>
         {weekly.loading ? <ActivityIndicator color={color.spark} /> : null}
-        {weekly.error ? <Text style={[styles.body, { color: color.danger }]}>{weekly.error}</Text> : null}
+        <DataError error={weekly.error} status={weekly.errorStatus} />
         {(weekly.data?.reports || []).map(report => <Text key={report.id} style={[styles.body, { color: color.text }]}>{report.week_start}: {report.report_md || report.report_json?.summary || 'Report available'}</Text>)}
       </Card>
     </Screen>

@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Tex
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { BackButton } from '@/components/BackButton'
@@ -82,11 +83,7 @@ export default function GroceryScreen() {
       />
 
       {list.loading ? <ActivityIndicator color={color.spark} style={{ marginTop: 20 }} /> : null}
-      {list.error ? (
-        <Card>
-          <Text style={[styles.body, { color: color.danger, textAlign: align }]}>{list.error}</Text>
-        </Card>
-      ) : null}
+      <DataError error={list.error} status={list.errorStatus} isRtl={isRtl} />
 
       {!list.loading && !list.error && allItems.length > 0 ? (
         <>

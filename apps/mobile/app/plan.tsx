@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { BackButton } from '@/components/BackButton'
@@ -166,7 +167,7 @@ export default function PlanScreen() {
         }}
       />
       {plan.loading ? <ActivityIndicator color={color.spark} /> : null}
-      {plan.error ? <Text style={[styles.body, { color: color.danger }]}>{plan.error}</Text> : null}
+      <DataError error={plan.error} status={plan.errorStatus} isRtl={language === 'ar'} />
 
       <View style={styles.tabs}>
         {(['diet', 'workout'] as const).map(item => (

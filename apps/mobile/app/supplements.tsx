@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
 import { BackButton } from '@/components/BackButton'
@@ -52,11 +53,7 @@ export default function SupplementsScreen() {
       <BackButton />
       <PageHeader eyebrow="ELITE" title="Supplement Stack" subtitle="Personalized timing, dosage, rationale, and purchase guidance." />
 
-      {recs.error ? (
-        <Card style={styles.errorCard}>
-          <Text style={[styles.errorText, { color: color.danger }]}>{recs.error}</Text>
-        </Card>
-      ) : null}
+      <DataError error={recs.error} status={recs.errorStatus} />
 
       {/* Empty state or regen */}
       <Card>

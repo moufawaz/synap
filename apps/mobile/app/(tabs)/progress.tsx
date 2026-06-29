@@ -5,6 +5,7 @@ import * as Sharing from 'expo-sharing'
 import Feather from '@expo/vector-icons/Feather'
 import { useFocusEffect } from 'expo-router'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { analyzeInBodyPhoto, createMeasurement, getMeasurements } from '@/features/measurements'
@@ -210,25 +211,12 @@ export default function ProgressScreen() {
       <IonPageHeader eyebrow="PROGRESS" title={text.progress} subtitle={isRtl ? 'سجل القياسات ورصد التقدم' : 'Measurement history and trend tracking.'} />
 
       {measurements.loading ? <ActivityIndicator color={color.spark} /> : null}
-      {measurements.error ? (
-        // 401 → user isn't fully signed in / onboarded yet. Don't show a scary
-        // raw error; show a friendly empty state instead. apiFetch surfaces
-        // err.status via useAsyncData.errorStatus. Other status codes get a
-        // softer message than the raw server text (which is already
-        // JSON-parsed to a single field by apiFetch).
-        <Card>
-          <Text style={[styles.body, { color: color.text, textAlign: align, fontWeight: '700', marginBottom: 6 }]}>
-            {measurements.errorStatus === 401
-              ? (isRtl ? 'أكمل ملفك الشخصي أولاً' : 'Finish setting up your profile')
-              : (isRtl ? 'تعذّر تحميل القياسات' : "Couldn't load your measurements")}
-          </Text>
-          <Text style={[styles.body, { color: color.dim, textAlign: align }]}>
-            {measurements.errorStatus === 401
-              ? (isRtl ? 'بعد إتمام الإعداد ستظهر قياساتك وتقدمك هنا.' : 'Once onboarding is complete, your measurements and trends will live here.')
-              : (isRtl ? 'تحقق من الاتصال وحاول مرة أخرى.' : 'Check your connection and try again in a moment.')}
-          </Text>
-        </Card>
-      ) : null}
+      <DataError
+        error={measurements.error}
+        status={measurements.errorStatus}
+        isRtl={isRtl}
+        title={measurements.errorStatus !== 401 ? (isRtl ? 'تعذّر تحميل القياسات' : "Couldn't load your measurements") : undefined}
+      />
 
       {!measurements.loading && !measurements.error ? (
         <>

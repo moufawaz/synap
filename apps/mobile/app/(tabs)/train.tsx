@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { router, useFocusEffect } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { MedicalDisclaimer } from '@/components/MedicalDisclaimer'
@@ -369,9 +370,7 @@ export default function TrainScreen() {
       {plan.loading ? (
         <ActivityIndicator color={color.spark} />
       ) : plan.error ? (
-        <Card>
-          <Text style={[styles.body, { color: color.danger, textAlign: align }]}>{plan.error}</Text>
-        </Card>
+        <DataError error={plan.error} status={plan.errorStatus} isRtl={isRtl} />
       ) : (
         <>
           {/* ── 7-day selector ──────────────────────────── */}

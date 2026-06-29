@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, TextInpu
 import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { IonAvatar } from '@/components/IonAvatar'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
@@ -214,7 +215,7 @@ export default function SettingsScreen() {
           <Card style={styles.cardGap}>
             <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'الملف الشخصي' : 'Profile'}</Text>
             {profile.loading ? <ActivityIndicator color={color.spark} /> : null}
-            {profile.error ? <Text style={[styles.body, { color: color.danger }]}>{profile.error}</Text> : null}
+            <DataError error={profile.error} status={profile.errorStatus} isRtl={isRtl} />
             {PROFILE_FIELDS.map(([key, labelEn, labelAr, keyboardType]) => (
               <TextInput
                 key={key}
@@ -303,7 +304,7 @@ export default function SettingsScreen() {
           <Card style={styles.cardGap}>
             <Text style={[styles.title, { color: color.text }]}>{isRtl ? 'اشتراكك' : 'Your plan'}</Text>
             {subscription.loading ? <ActivityIndicator color={color.spark} /> : null}
-            {subscription.error ? <Text style={[styles.body, { color: color.danger }]}>{subscription.error}</Text> : null}
+            <DataError error={subscription.error} status={subscription.errorStatus} isRtl={isRtl} />
 
             {!subscription.loading && sub ? (
               <>

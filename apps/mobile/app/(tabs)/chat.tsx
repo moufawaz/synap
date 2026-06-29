@@ -16,6 +16,7 @@ import {
 import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { IonAvatar } from '@/components/IonAvatar'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
@@ -512,7 +513,7 @@ export default function ChatScreen() {
 
         {/* Loading / error */}
         {history.loading ? <ActivityIndicator color={color.spark} style={{ marginTop: 12 }} /> : null}
-        {history.error ? <Text style={[styles.error, { color: color.danger }]}>{history.error}</Text> : null}
+        <DataError error={history.error} status={history.errorStatus} isRtl={isRtl} />
 
         {/* Message list */}
         <FlatList

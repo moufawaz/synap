@@ -18,6 +18,7 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'ex
 import * as ImagePicker from 'expo-image-picker'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { IonPageHeader } from '@/components/IonPageHeader'
 import { MedicalDisclaimer } from '@/components/MedicalDisclaimer'
 import { Screen } from '@/components/Screen'
@@ -673,7 +674,7 @@ export default function NutritionScreen() {
       {/* ── Logged foods ── */}
       <View style={styles.list}>
         {logs.loading ? <ActivityIndicator color={color.spark} /> : null}
-        {logs.error ? <Text style={[styles.body, { color: color.danger }]}>{logs.error}</Text> : null}
+        <DataError error={logs.error} status={logs.errorStatus} isRtl={isRtl} />
         {allLogs.length > 0 ? (
           <View style={[styles.section]}>
             <Text style={[styles.sectionTitle, { color: color.text, textAlign: align, marginBottom: 8 }]}>
