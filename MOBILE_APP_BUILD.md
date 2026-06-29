@@ -2375,3 +2375,112 @@ just been approved) → 1119 (version bumped to 1.0.2; carries the
 2-phase split, readJsonSafe, chat-edit hardening) all deployed via
 Vercel to existing 1.0.0 / 1.0.1 users too. Web /plan workout
 renewal works as soon as Vercel finishes the 2-phase deploy.
+
+### Iterating on renewal — what got us to 1125
+Build 1119 (2-phase Sonnet) was the first working architecture but
+each phase still tipped the 60s Vercel cap when generating half a
+6-week plan. The next few builds iterated on the architecture and
+prompt while keeping the same 1.0.2 marketing version (train stayed
+open because 1119 was on TestFlight, not approved).
+
+- **1120 — 3-phase Opus + Sonnet fallback retained for legacy
+  clients.** Still tipped 60s on part 1 for 4-day-plan users. Plan
+  quality was solid but reliability was 60-70%.
+- **1121 — 4-phase + server-driven `next_phase` chain.** Server now
+  tells the client the next phase to call instead of the client
+  hardcoding 3 or 4. Lets us bump WORKOUT_RENEWAL_PARTS server-side
+  to 5 or 6 in the future without ever needing another mobile
+  rebuild. Per-phase output dropped to ~1500-1800 tokens (~25-30s
+  on Opus). Reliability went to ~95%.
+- **1122 — More-tab Privacy/Terms/Support links rewritten.** Sentry
+  caught iOS 26.5.1 rejecting `Linking.openURL` for an HTTPS link.
+  Switched to `expo-web-browser.openBrowserAsync` (in-app Safari
+  sheet) with a Linking fallback and a `reportError` final catch —
+  so a broken link is now logged with full context instead of
+  surfacing as an unhandled promise rejection. Other external-link
+  call sites (paywall, billing, medical disclaimer) already had
+  local `.catch()` guards; only More-tab was unprotected.
+- **1124 — Friendly empty states across every data screen.** User
+  saw `{"error":"Unauthorized"}` as raw text in the Progress tab.
+  Three-layer fix:
+  1. `apiFetch` now parses JSON error bodies and attaches HTTP
+     status to the thrown Error (`err.status`).
+  2. `useAsyncData` exposes `errorStatus` alongside `error`.
+  3. New `<DataError>` component renders nothing when error is null,
+     a calm "Finish setting up your profile" Card for 401s, and a
+     soft "Couldn't load this / try again" for everything else.
+     Bilingual EN/AR. Applied to 10 data screens (Chat, Nutrition,
+     Train, Progress, Plan, Grocery, Reports, Settings ×2,
+     Supplements).
+  Worst case anyone sees now is a friendly title + detail. No JSON,
+  no "Unauthorized" header text, no server stack traces.
+- **1125 — Renewal speed/UX tune.** Investigated user complaint of
+  "took too long" alerts on the new 4-phase path. Found via Vercel
+  runtime logs that the coherence validator was firing FALSE
+  POSITIVES on legitimate exercises (Cable Pull-Through, Romanian
+  Deadlift, Hip Thrust on "Lower Body — Posterior Chain Emphasis"
+  days), forcing unnecessary retries that pushed total renewal time
+  from ~115s to ~167s. Two bugs in the classifier:
+
+    (a) `classifyMuscleFocus` routed "Lower Body — Posterior Chain
+        Emphasis" to `pull` because "posterior chain" matched the
+        pull pattern before the legs check ran. Fix: leg/lower
+        context wins first.
+    (b) `classifyExercise` muscle_group regex used singular-only
+        word boundaries (`\bglute\b`), so "Glutes / Hamstrings"
+        never matched and exercises with those muscle_groups got
+        misclassified. Fix: added `(s)?` plural support and listed
+        "Pull-Through" explicitly in the legs name regex.
+
+  Verified with 22 inline test cases — false positives gone, real
+  cross-category catches preserved.
+
+  Same build also bumped:
+    - Per-phase client timeout 55s → 65s (server caps at 60s, so
+      the 55s client was aborting fetch right as the server's
+      timeout response was in flight → "took too long" alert on
+      plans that were 2s from succeeding).
+    - PlanGenerating step interval 13s → 17s so the bar reaches
+      90% around 120s (matches actual 4-phase wall time) instead
+      of sitting full for 30 seconds before completion.
+    - Added an in-progress Cancel button to PlanGenerating so
+      users can bail mid-renewal without waiting for the timeout.
+
+### Coherence validator architecture (lives in renew-plan/route.ts)
+For future-me: the multi-phase Opus chain has an inherent risk that
+each phase generates its day(s) in isolation and produces a
+push-emphasis day that contains pull movements (or vice versa). Two
+defenses:
+
+1. **Locked split via `week_outline`.** Phase 1 outputs a
+   `week_outline: [{day_name, muscle_focus, session_goal}, …]`
+   array for the whole week. Server stores it in the preview row.
+   Phases 2+ receive the outline and must use the EXACT labels —
+   they can't reinterpret what a day is supposed to be.
+
+2. **Server-side coherence validator + one retry.**
+   - `classifyMuscleFocus(focus)` → 'push' | 'pull' | 'legs' |
+     'upper' | 'lower' | 'arms' | 'full_body' | 'core' | 'cardio' |
+     'unknown'. Emphasis word wins ("Upper Body — Push Emphasis"
+     → 'push', not 'upper').
+   - `classifyExercise(exercise)` → returns categories from name
+     + muscle_group regex pattern match. Some movements (conventional
+     deadlift) belong to two categories. Cardio finishers and core
+     work always pass.
+   - `findCoherenceViolations(days)` returns per-day lists of
+     offending exercises.
+   - If violations found: phase reruns ONCE with the original
+     prompt + a `buildCoherenceRetryInstruction` block calling out
+     the specific violations. If retry STILL violates, log to
+     `app_events` (`plan_renewal_coherence_failed`) and accept.
+   - Retries are tracked separately in `ai_usage` under the
+     `_coherence_retry` suffix so we can measure how often this
+     fires in production.
+
+### Submission build
+**1125** — the build to submit as 1.0.2 for App Review. Bundles
+every iteration from 1119 onward. Same submission listing copy
+(name, subtitle, promotional text, keywords, description, both
+locales). Updated "What's New in This Version" covers renewal
+reliability + friendly empty states + iOS 26 link fix + Cancel
+button (bilingual EN/AR, fits well under the 4000-char cap).
