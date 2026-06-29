@@ -164,30 +164,71 @@ export async function POST(req: Request) {
       ? 8000
       : workoutPart === 1 ? 3500 : 9000
 
-    const anthropicStartedAt = Date.now()
-    const message = await withAnthropicRetry(() => client.messages.create({
-      model: planModel,
-      max_tokens: partMaxTokens,
-      system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
-      messages: [{ role: 'user', content: prompt }],
-    }))
-    const anthropicMs = Date.now() - anthropicStartedAt
-    console.info('[renew-plan] anthropic', JSON.stringify({
-      planType,
-      phase: phase ?? 'legacy-single-call',
-      model: message.model,
-      ms: anthropicMs,
-      input_tokens: message.usage?.input_tokens,
-      output_tokens: message.usage?.output_tokens,
-      stop_reason: message.stop_reason,
-    }))
+    const systemPrompt = 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.'
 
-    await recordAiUsage({ userId: user.id, feature: `renew_plan_${planType}`, model: message.model, usage: message.usage })
+    const callOpus = async (userPrompt: string) => {
+      const startedAt = Date.now()
+      const msg = await withAnthropicRetry(() => client.messages.create({
+        model: planModel,
+        max_tokens: partMaxTokens,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }))
+      console.info('[renew-plan] anthropic', JSON.stringify({
+        planType,
+        phase: phase ?? 'legacy-single-call',
+        model: msg.model,
+        ms: Date.now() - startedAt,
+        input_tokens: msg.usage?.input_tokens,
+        output_tokens: msg.usage?.output_tokens,
+        stop_reason: msg.stop_reason,
+      }))
+      return msg
+    }
 
-    const raw = message.content[0].type === 'text' ? message.content[0].text : ''
-    const match = raw.match(/\{[\s\S]*\}/)
+    let message = await callOpus(prompt)
+    let raw = message.content[0].type === 'text' ? message.content[0].text : ''
+    let match = raw.match(/\{[\s\S]*\}/)
     if (!match) return NextResponse.json({ error: 'Failed to parse renewed plan' }, { status: 500 })
     let planJson = JSON.parse(match[0])
+    let totalUsageCost = estimateRenewalCost(message)
+    await recordAiUsage({ userId: user.id, feature: `renew_plan_${planType}`, model: message.model, usage: message.usage })
+
+    // ── Coherence validation + one retry (workout phased part 1 only) ──
+    // Diet has no muscle-focus semantics to violate. Legacy single-call paths
+    // are best-effort. Phase 1 is where the split structure gets established
+    // and where most drift happens, so the validator + retry are scoped here
+    // and inside generateWorkoutPartMerge for parts 2+.
+    if (planType === 'workout' && workoutPart === 1) {
+      const normalizedForCheck = normalizeWorkoutPlanDays(JSON.parse(JSON.stringify(planJson)))
+      const violations = findCoherenceViolations(normalizedForCheck.days || [])
+      if (violations.length) {
+        console.warn('[renew-plan] phase 1 coherence violations — retrying', JSON.stringify(violations))
+        const retryMessage = await callOpus(prompt + buildCoherenceRetryInstruction(violations))
+        const retryRaw = retryMessage.content[0].type === 'text' ? retryMessage.content[0].text : ''
+        const retryMatch = retryRaw.match(/\{[\s\S]*\}/)
+        if (retryMatch) {
+          planJson = JSON.parse(retryMatch[0])
+          message = retryMessage
+          totalUsageCost += estimateRenewalCost(retryMessage)
+          await recordAiUsage({ userId: user.id, feature: `renew_plan_${planType}_coherence_retry`, model: retryMessage.model, usage: retryMessage.usage })
+          // Re-validate to see if retry actually fixed it; if not, log + accept.
+          const reNormalized = normalizeWorkoutPlanDays(JSON.parse(JSON.stringify(planJson)))
+          const stillViolating = findCoherenceViolations(reNormalized.days || [])
+          if (stillViolating.length) {
+            console.error('[renew-plan] phase 1 coherence violations persist after retry', JSON.stringify(stillViolating))
+            await recordAppEvent({
+              userId: user.id,
+              eventType: 'plan_renewal_coherence_failed',
+              severity: 'warning',
+              source: 'renew-plan',
+              message: 'Coherence validator retry did not resolve violations (workout-part1)',
+              metadata: { violations: stillViolating, phase: 'workout-part1' },
+            }).catch(() => {})
+          }
+        }
+      }
+    }
 
     // ── Post-process ───────────────────────────────────────────────────
     if (planType === 'workout') {
@@ -227,7 +268,7 @@ export async function POST(req: Request) {
         previous_plan_id: oldPlanRes.data?.id ?? null,
         preview,
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        total_estimated_cost_usd: estimateRenewalCost(message),
+        total_estimated_cost_usd: totalUsageCost,
         // Phased workout previews are only safe to apply after all parts merge.
         // Phase status values: 'awaiting_part2' → 'awaiting_part3' → 'complete'.
         // applyRenewalPreview rejects anything not 'complete'.
@@ -245,7 +286,7 @@ export async function POST(req: Request) {
       eventType: 'plan_renewal_preview_generated',
       source: 'renew-plan',
       message: `${planType} renewal preview generated`,
-      metadata: { planType, previewId: previewRow?.id, cost: estimateRenewalCost(message) },
+      metadata: { planType, previewId: previewRow?.id, cost: totalUsageCost },
     })
 
     // For phased workout renewals, tell the client what to call next so it
@@ -385,42 +426,86 @@ async function generateWorkoutPartMerge({
   let messageUsageCost = 0
   if (thisPartDays > 0) {
     // Pass already-generated days so Opus varies muscle focus / exercises /
-    // weekdays instead of producing duplicate sessions. Without this the
-    // separate phases were each generating "lower-body posterior chain" days
-    // with identical exercises.
+    // weekdays instead of producing duplicate sessions.
     const priorDays: any[] = Array.isArray(merged?.days) ? merged.days : []
-    const prompt = buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart: partNumber, priorDays })
+
+    // Pull the week_outline locked by phase 1, derive which day_names this
+    // phase is responsible for. The outline tells the model EXACTLY which
+    // labels to use, killing the cross-phase drift that put rows on a "push"
+    // day in earlier renewals.
+    const weekOutline: any[] = Array.isArray(merged?.week_outline) ? merged.week_outline : []
+    const priorDayNamesLc = new Set(priorDays.map((d: any) => String(d?.day_name ?? d?.day ?? '').toLowerCase().trim()))
+    const remainingOutline = weekOutline.filter((o: any) => o && !priorDayNamesLc.has(String(o.day_name || '').toLowerCase().trim()))
+    const assignedDayNames: string[] = remainingOutline.slice(0, thisPartDays).map((o: any) => String(o.day_name || ''))
+
+    const systemPrompt = 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.'
     const planModel = process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-opus-4-5'
-    const anthropicStartedAt = Date.now()
-    const message = await withAnthropicRetry(() => client.messages.create({
-      model: planModel,
-      max_tokens: 3000, // ~1-2 days of exercises; Opus needs headroom under 60s
-      system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
-      messages: [{ role: 'user', content: prompt }],
-    }))
-    const anthropicMs = Date.now() - anthropicStartedAt
-    console.info('[renew-plan] anthropic', JSON.stringify({
-      planType: 'workout',
-      phase: `workout-part${partNumber}`,
-      model: message.model,
-      ms: anthropicMs,
-      input_tokens: message.usage?.input_tokens,
-      output_tokens: message.usage?.output_tokens,
-      stop_reason: message.stop_reason,
-    }))
+
+    const callOpus = async (userPrompt: string) => {
+      const startedAt = Date.now()
+      const msg = await withAnthropicRetry(() => client.messages.create({
+        model: planModel,
+        max_tokens: 3000, // ~1-2 days of exercises; Opus needs headroom under 60s
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }))
+      console.info('[renew-plan] anthropic', JSON.stringify({
+        planType: 'workout',
+        phase: `workout-part${partNumber}`,
+        model: msg.model,
+        ms: Date.now() - startedAt,
+        input_tokens: msg.usage?.input_tokens,
+        output_tokens: msg.usage?.output_tokens,
+        stop_reason: msg.stop_reason,
+      }))
+      return msg
+    }
+
+    const prompt = buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart: partNumber, priorDays, weekOutline, assignedDayNames })
+    let message = await callOpus(prompt)
     await recordAiUsage({ userId, feature: `renew_plan_workout_part${partNumber}`, model: message.model, usage: message.usage })
     messageUsageCost = estimateRenewalCost(message)
 
-    const raw = message.content[0].type === 'text' ? message.content[0].text : ''
-    const matchObj = raw.match(/\{[\s\S]*\}/)
-    if (!matchObj) return NextResponse.json({ error: `Failed to parse ${partLabel} days` }, { status: 500 })
-    let parsed: any
-    try { parsed = JSON.parse(matchObj[0]) } catch {
-      return NextResponse.json({ error: `${partLabel} returned invalid JSON` }, { status: 500 })
+    const parseDays = (msg: any): any[] | null => {
+      const raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
+      const matchObj = raw.match(/\{[\s\S]*\}/)
+      if (!matchObj) return null
+      try {
+        const parsed = JSON.parse(matchObj[0])
+        return Array.isArray(parsed?.days) ? parsed.days : null
+      } catch { return null }
     }
-    const newDays: any[] = Array.isArray(parsed?.days) ? parsed.days : []
-    if (!newDays.length) {
+
+    let newDays = parseDays(message)
+    if (!newDays || !newDays.length) {
       return NextResponse.json({ error: `${partLabel} returned no training days` }, { status: 500 })
+    }
+
+    // Coherence validation + one retry. Each phase generates 1-2 days, so it's
+    // cheap to retry only when we detect drift (push day with rows on it, etc.).
+    const violations = findCoherenceViolations(normalizeWorkoutPlanDays({ days: newDays }).days || newDays)
+    if (violations.length) {
+      console.warn(`[renew-plan] ${partLabel} coherence violations — retrying`, JSON.stringify(violations))
+      const retryMessage = await callOpus(prompt + buildCoherenceRetryInstruction(violations))
+      await recordAiUsage({ userId, feature: `renew_plan_workout_part${partNumber}_coherence_retry`, model: retryMessage.model, usage: retryMessage.usage })
+      messageUsageCost += estimateRenewalCost(retryMessage)
+      const retryDays = parseDays(retryMessage)
+      if (retryDays && retryDays.length) {
+        newDays = retryDays
+        message = retryMessage
+        const stillViolating = findCoherenceViolations(normalizeWorkoutPlanDays({ days: newDays }).days || newDays)
+        if (stillViolating.length) {
+          console.error(`[renew-plan] ${partLabel} coherence violations persist after retry`, JSON.stringify(stillViolating))
+          await recordAppEvent({
+            userId,
+            eventType: 'plan_renewal_coherence_failed',
+            severity: 'warning',
+            source: 'renew-plan',
+            message: `Coherence validator retry did not resolve violations (workout-part${partNumber})`,
+            metadata: { violations: stillViolating, phase: `workout-part${partNumber}` },
+          }).catch(() => {})
+        }
+      }
     }
 
     // Merge: append any day whose canonical weekday isn't already in the plan.
@@ -943,6 +1028,137 @@ const WORKOUT_RENEWAL_PARTS = 4
  *  caller treats 0-day phases as no-op merges that just flip the phase status
  *  forward).
  */
+// ── Exercise-muscle coherence: classifier + validator + retry helper ───────
+// Catches multi-phase drift where one phase puts "Lat Pulldown" on a day it
+// labelled "Push Emphasis". Each phase only sees its own slice of the week,
+// so we have to enforce label↔exercise coherence server-side after the LLM
+// returns. If a violation is found, the route retries the phase once with a
+// stricter constraint; if that also fails, we report to Sentry but keep the
+// plan rather than breaking renewal.
+
+type MuscleCategory = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'arms' | 'full_body' | 'core' | 'cardio' | 'unknown'
+
+/** Classify a day's muscle_focus string. "Push Emphasis" anywhere in the
+ *  text trumps "Upper Body" — the emphasis word is what the user reads. */
+function classifyMuscleFocus(focus: string | undefined): MuscleCategory {
+  const t = String(focus || '').toLowerCase()
+  if (!t) return 'unknown'
+  // Emphasis words win first.
+  if (/\bpush\b|\bchest\b|\bshoulder\b|\btricep\b|\banterior\b/.test(t) &&
+      !/\bpull\b|\bback\b|\bbicep\b|\bposterior\b/.test(t)) return 'push'
+  if (/\bpull\b|\bback\b|\bbicep\b|\blat\b|\bposterior\s+chain\b/.test(t) &&
+      !/\bpush\b|\bchest\b|\btricep\b/.test(t)) return 'pull'
+  if (/\bleg\b|\blower\s+body\b|\blower\b|\bquad\b|\bhamstring\b|\bglute\b|\bcalf\b|\bcalves\b/.test(t)) return 'legs'
+  if (/\barm\b/.test(t)) return 'arms'
+  if (/\bfull\s+body\b|\btotal\s+body\b/.test(t)) return 'full_body'
+  if (/\bcore\b|\babs?\b/.test(t)) return 'core'
+  if (/\bcardio\b|\bconditioning\b/.test(t)) return 'cardio'
+  if (/\bupper\b/.test(t)) return 'upper'   // generic "Upper Body" with no emphasis → allow both push and pull
+  return 'unknown'
+}
+
+/** Categories an exercise belongs to. Some movements (deadlift) intentionally
+ *  belong to two categories and validate against either. Returns [] for things
+ *  we can't classify confidently — we don't flag those. */
+function classifyExercise(exercise: { name?: string; muscle_group?: string; muscle_groups?: string[] }): MuscleCategory[] {
+  const name = String(exercise.name || '').toLowerCase()
+  const mg = [
+    String(exercise.muscle_group || '').toLowerCase(),
+    ...(Array.isArray(exercise.muscle_groups) ? exercise.muscle_groups.map((x: any) => String(x).toLowerCase()) : []),
+  ].join(' ')
+  const haystack = `${name} ${mg}`
+  if (!haystack.trim()) return []
+
+  // Cardio/finisher escape — never violates anything.
+  if (/\b(cardio|treadmill|sprint|hiit|jump\s*rope|burpee|incline\s+walk|conditioning|metabolic\s+finisher)\b/.test(haystack)) return ['cardio']
+
+  // Core / abs — neutral, fits any day.
+  if (/\b(plank|crunch|leg\s+raise|hanging\s+knee|cable\s+crunch|ab\s+wheel|side\s+plank|russian\s+twist|sit-?up|dead\s*bug|core)\b/.test(haystack) &&
+      !/\bsquat|press|row|pulldown\b/.test(name)) return ['core']
+
+  const cats = new Set<MuscleCategory>()
+
+  // PUSH — chest / front-or-side delt / triceps
+  if (/\b(bench\s*press|incline\s+(db|dumbbell|barbell)\s+press|incline\s+press|decline\s+press|chest\s+press|machine\s+press|chest\s+fly|pec\s+deck|cable\s+fly|dumbbell\s+fly|dip|push-?up|shoulder\s+press|overhead\s+press|ohp|military\s+press|arnold\s+press|lateral\s+raise|front\s+raise|tricep\s+pushdown|skull\s*crusher|skullcrusher|overhead\s+tricep|close-?grip\s+bench|tricep\s+extension|tricep\s+kickback|tricep\s+dip|tate\s+press|jm\s+press|landmine\s+press)\b/.test(name)) cats.add('push')
+  if (/\b(chest|pectoral|triceps?|tricep|anterior\s+delt|front\s+delt|side\s+delt|lateral\s+delt|medial\s+delt)\b/.test(mg) && !cats.has('pull')) cats.add('push')
+
+  // PULL — back / lats / biceps / rear delts / shrugs
+  if (/\b(row\b|barbell\s+row|dumbbell\s+row|cable\s+row|seated\s+row|t-?bar\s+row|chest-?supported\s+row|pendlay\s+row|pulldown|lat\s+pulldown|pull-?up|chin-?up|face\s+pull|rear\s+delt|reverse\s+fly|bicep\s+curl|biceps\s+curl|hammer\s+curl|preacher\s+curl|cable\s+curl|ez(-|\s)?bar\s+curl|spider\s+curl|incline\s+curl|concentration\s+curl|shrug|back\s+extension|hyperextension|reverse\s+hyperextension|straight-?arm\s+pulldown|pull-?through)\b/.test(name)) cats.add('pull')
+  if (/\b(back|lats?|latissimus|mid\s+back|upper\s+back|rhomboid|biceps?|brachialis|rear\s+delt|posterior\s+delt|trap(eziu?s)?)\b/.test(mg) && !cats.has('push')) cats.add('pull')
+
+  // LEGS — quads / hams / glutes / calves
+  if (/\b(squat|leg\s+press|leg\s+extension|leg\s+curl|hack\s+squat|front\s+squat|goblet\s+squat|lunge|step-?up|bulgarian|split\s+squat|romanian\s+deadlift|rdl|stiff-?leg\s+deadlift|hip\s+thrust|glute\s+bridge|calf\s+raise|nordic|good\s+morning|sled\s+push|hip\s+abduct|adductor|sissy\s+squat)\b/.test(name)) cats.add('legs')
+  if (/\b(quad(riceps)?|hamstring|glute|calf|calves|soleus|adductor|abductor|hip\s+flex)\b/.test(mg)) cats.add('legs')
+
+  // Conventional deadlift — counts as BOTH legs (posterior chain) and pull (back/traps).
+  if (/\b(conventional\s+deadlift|sumo\s+deadlift|deadlift)\b/.test(name) && !/(romanian|stiff)/.test(name)) {
+    cats.add('legs'); cats.add('pull')
+  }
+
+  return Array.from(cats)
+}
+
+/** Is the exercise compatible with the day's muscle_focus category? */
+function isExerciseAllowed(exCats: MuscleCategory[], dayCat: MuscleCategory): boolean {
+  if (exCats.length === 0) return true                       // unclassified → don't flag
+  if (exCats.includes('cardio') || exCats.includes('core')) return true  // finishers/core fit any day
+  switch (dayCat) {
+    case 'push':       return exCats.includes('push')
+    case 'pull':       return exCats.includes('pull')
+    case 'legs':
+    case 'lower':      return exCats.includes('legs')
+    case 'upper':      return exCats.includes('push') || exCats.includes('pull')    // generic upper allows both
+    case 'arms':       return exCats.includes('push') || exCats.includes('pull')    // arms = biceps + triceps
+    case 'full_body':  return true
+    case 'core':       return exCats.includes('core')
+    case 'cardio':     return exCats.includes('cardio')
+    case 'unknown':    return true   // can't validate, don't flag
+  }
+}
+
+type CoherenceViolation = { dayName: string; focus: string; offendingExercises: string[] }
+
+/** Check the days produced by a phase for label↔exercise drift. Returns one
+ *  CoherenceViolation per day with at least one offending exercise. */
+function findCoherenceViolations(days: any[]): CoherenceViolation[] {
+  const out: CoherenceViolation[] = []
+  for (const day of days || []) {
+    if (!day || !Array.isArray(day.exercises)) continue
+    const focusCat = classifyMuscleFocus(day.muscle_focus)
+    if (focusCat === 'unknown' || focusCat === 'upper' || focusCat === 'full_body') continue
+    const offenders: string[] = []
+    for (const ex of day.exercises) {
+      const cats = classifyExercise(ex)
+      if (!isExerciseAllowed(cats, focusCat)) offenders.push(String(ex.name || '<unnamed>'))
+    }
+    if (offenders.length) {
+      out.push({ dayName: String(day.day_name || day.day || ''), focus: String(day.muscle_focus || ''), offendingExercises: offenders })
+    }
+  }
+  return out
+}
+
+/** Build a strict retry instruction listing the specific violations. Appended
+ *  to the original prompt verbatim so the model gets every other constraint
+ *  plus this targeted correction. */
+function buildCoherenceRetryInstruction(violations: CoherenceViolation[]): string {
+  const lines = violations.map(v =>
+    `  • "${v.dayName}" (focus: ${v.focus}) contained these forbidden exercises: ${v.offendingExercises.join(', ')}`
+  )
+  return `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RETRY — YOUR PREVIOUS ATTEMPT VIOLATED EXERCISE-MUSCLE COHERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${lines.join('\n')}
+
+Generate the same days again, but this time STRICTLY follow rule 2b:
+  • Push / push-emphasis days = ONLY chest, shoulders, triceps. NO rows, pulldowns, pull-ups, curls, shrugs, face pulls, rear delt work, deadlifts, or back movements of any kind.
+  • Pull / pull-emphasis days = ONLY back, lats, biceps, rear delts, traps. NO bench, fly, overhead press, lateral raise, tricep work, or chest/triceps movements.
+  • Legs / lower days = ONLY squats, lunges, leg press, RDLs, leg curls, hip thrusts, calf raises, glute work. NO upper-body movements.
+  • Cardio finishers and core/abs are allowed on any day.
+
+Return the corrected JSON object in exactly the same shape as before.\n`
+}
+
 function computeWorkoutPartSplits(n: number): number[] {
   const splits: number[] = []
   let remaining = n
@@ -1024,7 +1240,32 @@ ${lines.join('\n')}
 `
 }
 
-function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart = 0, priorDays = [] }: any) {
+/** Compact "WEEK OUTLINE" block for phases 2+ so they see the locked split
+ *  structure and know which day_names belong to them. assignedDayNames are
+ *  case-insensitive matched against the outline. */
+function buildWeekOutlineBlock(weekOutline: any[], assignedDayNames: string[]): string {
+  if (!Array.isArray(weekOutline) || !weekOutline.length) return ''
+  const lcAssigned = assignedDayNames.map(n => n.toLowerCase())
+  const lines = weekOutline
+    .filter(d => d && (d.day_name || d.day))
+    .map(d => {
+      const dayName = String(d.day_name || d.day || '?')
+      const marker = lcAssigned.includes(dayName.toLowerCase()) ? '  → ASSIGNED TO YOU' : '  [already written]'
+      return `  ${dayName} | ${d.muscle_focus || '?'} | ${d.session_goal || '?'}${marker}`
+    })
+  if (!lines.length) return ''
+  const assignedLine = assignedDayNames.length
+    ? `\nYOUR ASSIGNED DAYS (write full exercise details for these only, using the labels above exactly): ${assignedDayNames.join(', ')}`
+    : ''
+  return `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WEEK OUTLINE (locked by Part 1 — use day_name + muscle_focus EXACTLY as below)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${lines.join('\n')}
+${assignedLine}
+`
+}
+
+function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, oldPlan, renewalContext, workoutPart = 0, priorDays = [], weekOutline = [], assignedDayNames = [] }: any) {
   const ar = language === 'ar'
   const prevSplit = oldPlan?.split_type || 'unknown'
   const prevDays  = Array.isArray(oldPlan?.days) ? oldPlan.days.length : '?'
@@ -1048,8 +1289,8 @@ function buildWorkoutRenewalPrompt({ profile, language, m, w, progressBlock, old
       ? `training day ${range.start}`
       : `training days ${range.start} through ${range.end}`
     partInstruction = isFirst
-      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART ${workoutPart} OF ${WORKOUT_RENEWAL_PARTS}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput plan-level fields (name, schedule, split_type, weeks, notes, progressive_overload, deload_weeks, deload_protocol, rest_days, ion_message) AND ONLY the FIRST ${range.count} ${dayWord} (the earliest ${range.count} weekday${range.count === 1 ? '' : 's'} of the ${w.splitType} split). Do NOT include the later ${trainingDayCount - range.count} training days — additional calls will generate those and the server will merge them in.\n`
-      : `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART ${workoutPart} OF ${WORKOUT_RENEWAL_PARTS}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOutput ONLY ${rangeLabel} of the ${w.splitType} split (${range.count} ${dayWord}), continuing the SAME split so they fit seamlessly with the earlier parts. Use weekdays that do NOT overlap with previous parts. Return a JSON object with just { "days": [...] } — no plan-level fields, no ion_message, just the days array.\n`
+      ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART ${workoutPart} OF ${WORKOUT_RENEWAL_PARTS}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nYou MUST output:\n  (a) plan-level fields (name, schedule, split_type, weeks, notes, progressive_overload, deload_weeks, deload_protocol, rest_days, ion_message);\n  (b) "week_outline": an array with one entry per training day for the WHOLE week (${trainingDayCount} entries total, in weekday order). Each entry has { "day_name", "muscle_focus", "session_goal" }. This locks the split structure — later phases will use these labels EXACTLY, so think carefully about how a ${w.splitType} split should distribute across ${trainingDayCount} training days;\n  (c) "days": full exercise details for ONLY the FIRST ${range.count} ${dayWord} of the week_outline (${range.count === 1 ? 'the earliest one' : `the earliest ${range.count}`}). Do NOT include the later ${trainingDayCount - range.count} training days in "days" — additional calls will generate those and the server will merge them in.\n\nThe day_name + muscle_focus on each "days" entry MUST match the corresponding week_outline entry exactly.\n`
+      : `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSPLIT GENERATION — PART ${workoutPart} OF ${WORKOUT_RENEWAL_PARTS}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nThe week's split structure was already locked in by Part 1 and is given to you under WEEK OUTLINE below. Generate full exercise details for the ${range.count} ${dayWord} you are assigned (listed under YOUR ASSIGNED DAYS below). Use the EXACT day_name, muscle_focus, and session_goal from the outline — do NOT invent new labels or change them. Return a JSON object with just { "days": [...] } — no plan-level fields, no week_outline, no ion_message. Exercises in each day MUST match that day's muscle_focus per rule 2b — strict coherence (push days have no pull movements; pull days have no chest/triceps; legs/lower contain no upper-body work).\n`
   } else if (workoutPart >= 1 && range && range.count === 0) {
     // No-op phase (small training-day counts can leave the tail parts empty).
     // The handler will short-circuit before calling Anthropic, but we set an
@@ -1096,6 +1337,7 @@ PROGRESS HISTORY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${progressBlock}
 ${renewalFeedbackBlock}
+${buildWeekOutlineBlock(weekOutline, assignedDayNames)}
 ${buildPriorPartsBlock(priorDays, w.splitType)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CALCULATED WORKOUT PARAMETERS
@@ -1125,6 +1367,49 @@ RENEWAL RULES
    NEVER use: ${profile.exercises_hated || 'none'} | Respect injuries: ${profile.injuries || 'none'}
    ${machineIntelligenceRule(profile, w)}
 
+2b. EXERCISE-MUSCLE COHERENCE — HARD CONSTRAINT (server validates this, retries are expensive):
+   Each day's muscle_focus dictates exactly which exercises are allowed. The
+   emphasis word always wins (e.g. "Upper Body — Push Emphasis" → PUSH ONLY,
+   even though the day is on an upper-body split). Do not mix categories
+   "for balance" — balance comes from the OTHER days in the week, not from
+   inside this day.
+
+   • Push / Push Emphasis / Chest / Shoulders / Triceps / Anterior →
+       ALLOWED: bench press (any angle), incline / decline press, dumbbell
+       press, chest fly, pec deck, dips, overhead / shoulder press, Arnold
+       press, lateral raise, front raise, tricep pushdown, skullcrusher,
+       close-grip bench, overhead tricep extension, kickback.
+       FORBIDDEN: any row, pulldown, pull-up, chin-up, face pull, rear delt
+       fly, biceps curl (any), hammer curl, shrug, back extension, lat work,
+       deadlift of any kind.
+
+   • Pull / Pull Emphasis / Back / Biceps / Posterior chain (upper) →
+       ALLOWED: row (any), pulldown, pull-up, chin-up, face pull, rear delt
+       fly, biceps curl (any), hammer curl, preacher curl, cable curl,
+       Romanian / conventional / stiff-leg deadlift, shrug, back extension,
+       straight-arm pulldown.
+       FORBIDDEN: bench press, chest press, chest fly, overhead / shoulder
+       press, lateral raise, front raise, tricep pushdown, skullcrusher,
+       tricep extension, dip, close-grip bench.
+
+   • Legs / Lower / Quad / Hamstring / Glute / Calf / Posterior chain (lower) →
+       ALLOWED: squat (any), front squat, hack squat, leg press, leg
+       extension, lunge, Bulgarian split squat, walking lunge, Romanian
+       deadlift, stiff-leg deadlift, conventional deadlift, leg curl, hip
+       thrust, glute bridge, calf raise, Nordic curl, good morning, sled
+       push.
+       FORBIDDEN: any chest, shoulder, triceps, biceps, back / lat, row, or
+       pulldown movement.
+
+   • Upper (generic, no emphasis word): mix push and pull. NO leg work.
+   • Full body: mix all three. At least one compound from push, pull, and
+     legs categories.
+   • Arms day: biceps + triceps only.
+
+   Cardio finishers (e.g. "Treadmill Incline Walk", "HIIT", "Burpees") and
+   core/abs work (planks, leg raises, crunches, hanging knee raises) are
+   allowed on any day.
+
 3. LOAD GUIDANCE:
    - Since this is a renewal, weight_guidance should reference progression FROM last cycle: "Start 2.5–5 kg heavier than your previous cycle's working weight" or give RPE ${w.targetRPE} guidance if no prior data
    - progression_note per exercise must be specific to this cycle's wave
@@ -1149,6 +1434,11 @@ Return ONLY valid JSON:
   "deload_weeks": [${w.deloadWeeks.map((d: number) => Math.min(d, 6)).filter((d: number, i: number, a: number[]) => a.indexOf(d) === i).join(', ')}],
   "deload_protocol": "On deload week: reduce sets to 50%, keep same weight, focus on form",
   "rest_days": ["rest day names"],
+  "week_outline": [
+    /* Exactly ${profile.training_days} entries. One row per training day for the WHOLE week, in chronological weekday order. Locks the split structure so later phases use these labels verbatim. */
+    { "day_name": "Monday",    "muscle_focus": "Upper Body — Push Emphasis",  "session_goal": "1-line goal" }
+    /* ... one entry per training day ... */
+  ],
   "days": [
     {
       "day_name": "Monday",
