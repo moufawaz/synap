@@ -597,9 +597,20 @@ async function applyRenewalPreview({
   if (previewRow.metadata?.applied_at) {
     return NextResponse.json({ error: 'Renewal preview already applied' }, { status: 409 })
   }
-  // Gate on any non-complete phase. Renewals are 3-phase for workouts; until
-  // the merge of part 3 lands and flips phase_status='complete', the preview
-  // can't be applied.
+  // Enforce the 24h expiry that preview generation stamps. A preview is a
+  // snapshot of the user's measurements/logs at generation time — applying
+  // one weeks later would install a plan built from stale data. Regenerating
+  // is cheap; silently applying stale data is not.
+  const expiresAt = previewRow.metadata?.expires_at
+  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+    return NextResponse.json(
+      { error: 'This renewal preview has expired. Please generate a fresh preview — it only takes a couple of minutes.' },
+      { status: 410 },
+    )
+  }
+  // Gate on any non-complete phase. Workout renewals are multi-phase; until
+  // the final merge flips phase_status='complete', the preview can't be
+  // applied.
   const phaseStatus = previewRow.metadata?.phase_status
   if (phaseStatus && phaseStatus !== 'complete') {
     const nextPart = phaseStatus === 'awaiting_part2' ? 'Part 2' : phaseStatus === 'awaiting_part3' ? 'Part 3' : 'remaining parts'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { IonAvatar } from '@/components/IonAvatar'
@@ -12,6 +12,7 @@ import {
   type Buyable,
 } from '@/features/purchases'
 import { useLanguage } from '@/i18n/LanguageProvider'
+import { openExternalLink } from '@/lib/links'
 import { useTheme } from '@/theme/ThemeProvider'
 
 const TERMS_URL = 'https://www.synapfit.app/terms'
@@ -188,11 +189,16 @@ export default function PaywallScreen() {
           : 'Subscriptions auto-renew unless cancelled at least 24 hours before the end of the current period. Payment is charged to your Apple ID. Manage or cancel anytime in your App Store account settings.'}
       </Text>
       <View style={[styles.legalLinks, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
-        <Pressable onPress={() => Linking.openURL(TERMS_URL).catch(() => {})} hitSlop={8}>
+        {/* App Review requires these legal links to actually work. iOS 26
+            rejects plain Linking.openURL for HTTPS links intermittently
+            (Sentry-confirmed on the More tab), so use the shared in-app
+            browser helper which also reports failures instead of
+            swallowing them. */}
+        <Pressable onPress={() => openExternalLink(TERMS_URL)} hitSlop={8}>
           <Text style={[styles.legalLink, { color: color.muted }]}>{isRtl ? 'شروط الاستخدام' : 'Terms of Use'}</Text>
         </Pressable>
         <Text style={[styles.legalDot, { color: color.dim }]}>·</Text>
-        <Pressable onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})} hitSlop={8}>
+        <Pressable onPress={() => openExternalLink(PRIVACY_URL)} hitSlop={8}>
           <Text style={[styles.legalLink, { color: color.muted }]}>{isRtl ? 'سياسة الخصوصية' : 'Privacy Policy'}</Text>
         </Pressable>
       </View>

@@ -70,3 +70,25 @@ patch-for-synap-app/
 *.p12
 *.p8
 tmp_*.json
+
+# Local design assets & App Store marketing files (kept on disk, not in git)
+App Phoeos/
+Icon PNG.png
+iphone image.png
+paywall.png
+paywall_review.png
+synap_iap_promo_1024.png
+
+# One-off local utility scripts (founder tooling, ad-hoc tests — not part of the app)
+scripts/check-cache.js
+scripts/grant-elite.mjs
+scripts/send-apology.mjs
+scripts/setup-apple-review-user.mjs
+scripts/test-full-recovery-flow.mjs
+scripts/test-recovery-route.mjs
+scripts/test-recovery-ssr.mjs
+
+# Stray Expo CLI artifact — a root app.json ({"expo":{}}) appeared once and
+# could make tools misidentify the repo root as an Expo project. The real
+# Expo config lives in apps/mobile/app.json.
+/app.json
