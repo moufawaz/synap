@@ -10,6 +10,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { PlanGenerating } from '@/components/PlanGenerating'
 import { generateMobilePlan, MobileProfileInput, saveMobileProfile } from '@/features/onboarding'
 import { syncSynapReminders } from '@/features/notifications'
+import { cancelOnboardingReminder } from '@/lib/onboardingReminder'
 import { analyzeInBodyPhoto, createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -24,7 +25,11 @@ const initialProfile: MobileProfileInput = {
   goal: 'lose_fat', goal_speed: 'moderate', goal_target: '', goal_date: '',
   work_schedule: 'work', work_hours: '', wake_time: '7:30', sleep_time: '23:00',
   lunch_break: '', stress_level: 'moderate', sleep_quality: 'average',
-  currently_training: 'fresh', current_training_desc: '', gym_access: 'gym',
+  // activity_level and training_experience start EMPTY on purpose (same
+  // reasoning as age): both materially change the plan, so the user must
+  // pick — their steps validate the choice.
+  activity_level: '',
+  currently_training: 'fresh', training_experience: '', current_training_desc: '', gym_access: 'gym',
   equipment: '', training_days: '4', session_duration: '60', training_time: 'evening',
   training_style: 'mix', exercises_hated: '', strength_levels: '',
   foods_loved: '', foods_hated: '', dietary_preference: '', allergies: '',
@@ -204,6 +209,12 @@ export default function OnboardingScreen() {
         return t('Weight and height are required.', 'الوزن والطول مطلوبان.')
       }
     }
+    if (step === 2 && !profile.activity_level) {
+      return t('Pick your daily activity level — it changes your calorie target.', 'اختر مستوى نشاطك اليومي — يغيّر هدف سعراتك.')
+    }
+    if (step === 3 && !profile.training_experience) {
+      return t('Pick your training experience — it sets your volume and progression.', 'اختر خبرتك التدريبية — تحدد حجم تمرينك وتقدمك.')
+    }
     if (step === 4 && !profile.foods_loved.trim()) {
       return t('Tell Ion at least a few foods you enjoy.', 'أخبر آيون ببعض الأطعمة التي تحبها على الأقل.')
     }
@@ -307,8 +318,10 @@ export default function OnboardingScreen() {
           await generateMobilePlan(genPayload, 'videos').catch(() => {})
         }}
         onComplete={() => {
-          // Plan exists now — request notification permission and schedule the
-          // full proactive reminder set, then land on the dashboard.
+          // Plan exists now — the pending "finish onboarding" reminder is moot.
+          cancelOnboardingReminder()
+          // Request notification permission and schedule the full proactive
+          // reminder set, then land on the dashboard.
           syncSynapReminders(true).catch(() => {})
           router.replace('/(tabs)')
         }}
@@ -376,6 +389,9 @@ export default function OnboardingScreen() {
             {profile.work_schedule !== 'neither' ? (
               <Field label={t('Your hours (optional)', 'ساعاتك (اختياري)')} value={profile.work_hours} onChangeText={v => update('work_hours', v)} placeholder={t('e.g. 9–5, rotating shifts', 'مثال: 9-5، ورديات')} color={color} isRtl={isRtl} />
             ) : null}
+            <Segment label={t('Daily activity (outside training)', 'نشاطك اليومي (خارج التمرين)')} value={profile.activity_level} wrap color={color} isRtl={isRtl}
+              options={[['desk', t('Mostly sitting', 'جالس غالباً')], ['mixed', t('On my feet sometimes', 'أتحرك أحياناً')], ['on_feet', t('On my feet all day', 'واقف طوال اليوم')]]}
+              onChange={v => update('activity_level', v)} />
             <Segment label={t('Wake up', 'الاستيقاظ')} value={profile.wake_time} wrap color={color} isRtl={isRtl}
               options={[['5:30', t('5–6 AM', '5-6 ص')], ['6:30', t('6–7 AM', '6-7 ص')], ['7:30', t('7–8 AM', '7-8 ص')], ['8:30', t('8–9 AM', '8-9 ص')], ['9:30', t('9 AM+', 'بعد 9 ص')]]}
               onChange={v => update('wake_time', v)} />
@@ -396,6 +412,9 @@ export default function OnboardingScreen() {
             <Segment label={t('Currently training?', 'هل تتمرن حالياً؟')} value={profile.currently_training} color={color} isRtl={isRtl}
               options={[['already', t('Already training', 'أتمرن بالفعل')], ['fresh', t('Starting fresh', 'أبدأ من جديد')]]}
               onChange={v => update('currently_training', v)} />
+            <Segment label={t('Training experience', 'خبرتك التدريبية')} value={profile.training_experience} wrap color={color} isRtl={isRtl}
+              options={[['beginner', t('Under 1 year', 'أقل من سنة')], ['intermediate', t('1–3 years', '1-3 سنوات')], ['advanced', t('3+ years', 'أكثر من 3 سنوات')]]}
+              onChange={v => update('training_experience', v)} />
             {profile.currently_training === 'already' ? (
               <Field label={t('Your current routine', 'روتينك الحالي')} value={profile.current_training_desc} onChangeText={v => update('current_training_desc', v)} placeholder={t('gym, home, sports, cardio…', 'جيم، منزل، رياضات، كارديو…')} color={color} isRtl={isRtl} />
             ) : null}

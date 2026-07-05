@@ -944,6 +944,7 @@ Goal: ${goalLabels[profile.goal] || profile.goal}
 Goal speed: ${profile.goal_speed || 'moderate'}
 LBM: ${m.leanMass} kg | Body fat: ${m.bodyFatPct}% (${m.usingRealBf ? 'measured via InBody scan' : 'estimated — no InBody scan'})${profile.muscle_mass_kg ? `\nSkeletal Muscle Mass (InBody): ${profile.muscle_mass_kg} kg` : ''}${profile.visceral_fat != null ? `\nVisceral Fat Level (InBody): ${profile.visceral_fat}${Number(profile.visceral_fat) > 10 ? ' ⚠️ HIGH — cardiovascular risk, prioritise fat loss' : ''}` : ''}${profile.inbody_score != null ? `\nInBody Score: ${profile.inbody_score}/100` : ''}${profile.bmr_kcal ? `\nMeasured BMR (InBody): ${profile.bmr_kcal} kcal/day` : ''}
 Wake: ${profile.wake_time || '7:00'} | Sleep: ${profile.sleep_time || '23:00'}
+Daily activity outside training: ${profile.activity_level === 'desk' ? 'mostly sitting' : profile.activity_level === 'mixed' ? 'on their feet part of the day' : profile.activity_level === 'on_feet' ? 'on their feet all day (higher NEAT — reflected in calorie target)' : profile.activity_level || 'not specified'}
 Meals per day: ${profile.meals_per_day || 3} | Cooking: ${profile.cooking_ability || 'moderate'} | Budget: ${profile.food_budget || 'moderate'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1356,7 +1357,7 @@ Training: ${profile.training_days} days/week | ${profile.session_duration} min/s
 Gym access: ${profile.gym_access ? 'Yes' : 'No'} | Equipment: ${equipmentString(profile)}
 Exercises NEVER to include: ${profile.exercises_hated || 'None'}
 Injuries/limitations: ${profile.injuries || 'None'}
-Stress: ${profile.stress_level || 'moderate'} | Sleep: ${profile.sleep_quality || 'average'}
+Stress: ${profile.stress_level || 'moderate'} | Sleep: ${profile.sleep_quality || 'average'} | Daily activity: ${profile.activity_level === 'desk' ? 'mostly sitting' : profile.activity_level === 'mixed' ? 'on feet part of day' : profile.activity_level === 'on_feet' ? 'on feet all day' : profile.activity_level || 'not specified'}
 Previous split: ${prevSplit} (${prevDays} training days)
 Body composition: LBM ${m.leanMass} kg | BF% ${m.bodyFatPct}% (${m.usingRealBf ? 'InBody scan' : 'estimated'})${profile.muscle_mass_kg ? ` | Muscle mass ${profile.muscle_mass_kg} kg` : ''}${profile.visceral_fat != null ? ` | Visceral fat ${profile.visceral_fat}${Number(profile.visceral_fat) > 10 ? ' (HIGH)' : ''}` : ''}${profile.inbody_score != null ? ` | InBody score ${profile.inbody_score}/100` : ''}
 

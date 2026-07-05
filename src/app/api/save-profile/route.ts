@@ -45,7 +45,11 @@ export async function POST(req: Request) {
       goal: profileData.goal || 'be_healthier',
       goal_target: profileData.goal_target || null,
       goal_date: profileData.goal_date || null,
-      activity_level: profileData.currently_training === 'already' ? 'active' : 'sedentary',
+      // Prefer the explicit answer (1.0.3+ onboarding asks directly); fall
+      // back to the old currently_training derivation for older clients.
+      activity_level: ['desk', 'mixed', 'on_feet'].includes(profileData.activity_level)
+        ? profileData.activity_level
+        : (profileData.currently_training === 'already' ? 'active' : 'sedentary'),
       training_time: profileData.training_time || 'morning',
       training_days: parseInt(profileData.training_days) || 3,
       session_duration: parseInt(profileData.session_duration) || 60,
@@ -68,7 +72,11 @@ export async function POST(req: Request) {
       meals_per_day: parseInt(profileData.meals_per_day) || 3,
       cooking_ability: profileData.cooking_ability || 'cook',
       food_budget: profileData.food_budget || 'moderate',
-      training_experience: profileData.currently_training === 'already' ? 'intermediate' : 'beginner',
+      // Prefer the explicit answer — previously derived from currently_training,
+      // which made 'advanced' unreachable and mis-tiered experienced lifters.
+      training_experience: ['beginner', 'intermediate', 'advanced'].includes(profileData.training_experience)
+        ? profileData.training_experience
+        : (profileData.currently_training === 'already' ? 'intermediate' : 'beginner'),
       ion_gender: profileData.ion_gender || 'male',
       goal_speed: profileData.goal_speed || null,
       exercises_hated: profileData.exercises_hated || null,

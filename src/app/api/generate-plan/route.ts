@@ -545,11 +545,12 @@ LIFESTYLE & SCHEDULE:
   Wake: ${p.wake_time || '7:00'} | Sleep: ${p.sleep_time || '23:00'}
   Work: ${p.work_schedule || 'standard'} | Stress: ${p.stress_level || 'moderate'}
   Sleep quality: ${p.sleep_quality || 'average'} | Lunch break: ${p.lunch_break || 'flexible'}
+  Daily activity outside training: ${p.activity_level === 'desk' ? 'Mostly sitting (desk)' : p.activity_level === 'mixed' ? 'On their feet part of the day' : p.activity_level === 'on_feet' ? 'On their feet all day (physical job — higher NEAT, already reflected in the calorie target)' : p.activity_level || 'Not specified'}
 
 TRAINING:
   Location: ${p.gym_access ? 'Gym' : 'Home'} | Equipment: ${Array.isArray(p.equipment) ? p.equipment.join(', ') : p.equipment || (p.gym_access ? 'Full gym' : 'Bodyweight only')}
   Days/week: ${p.training_days} | Session: ${p.session_duration} min | Preferred time: ${p.training_time || 'morning'}
-  Experience: ${p.currently_training === 'already' ? 'Currently training' : 'Beginner / returning'} | Style: ${p.training_style || 'mix'}
+  Experience: ${p.training_experience || (p.currently_training === 'already' ? 'intermediate' : 'beginner')} (${p.currently_training === 'already' ? 'currently training' : 'starting fresh / returning'}) | Style: ${p.training_style || 'mix'}
   Exercises to NEVER program: ${p.exercises_hated || 'None'}
   Injuries: ${p.injuries || 'None'} | Medical: ${p.medical_conditions || 'None'}
   Strength levels: ${p.strength_levels || 'Not provided'}

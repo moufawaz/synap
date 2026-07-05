@@ -28,8 +28,16 @@ export type MobileProfileInput = {
   lunch_break: string
   stress_level: string        // low | moderate | high
   sleep_quality: string       // solid | average | struggling
+  // Daily activity outside training — drives the NEAT multiplier in the
+  // calorie math (a desk worker and someone on their feet all day can differ
+  // by 300+ kcal/day of TDEE).
+  activity_level: string      // desk | mixed | on_feet
   // Training
   currently_training: string  // already | fresh
+  // Experience tier drives sets/muscle, RPE, progression model, deloads, and
+  // intensity techniques in calculateWorkoutParams. Previously derived from
+  // currently_training which made 'advanced' unreachable.
+  training_experience: string // beginner | intermediate | advanced
   current_training_desc: string
   gym_access: 'gym' | 'home'
   equipment: string           // csv: bodyweight,bands,dumbbells,pullup_bar,mixed

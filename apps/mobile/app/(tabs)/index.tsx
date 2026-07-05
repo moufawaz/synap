@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router, useFocusEffect } from 'expo-router'
@@ -18,6 +18,7 @@ import { runAdaptationCheck } from '@/features/tools'
 import { getPlanHistory } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
+import { cancelOnboardingReminder, scheduleOnboardingReminder } from '@/lib/onboardingReminder'
 import { useTheme } from '@/theme/ThemeProvider'
 
 function timeGreeting(isRtl: boolean) {
@@ -28,7 +29,7 @@ function timeGreeting(isRtl: boolean) {
 
 export default function DashboardScreen() {
   const { color } = useTheme()
-  const { text, isRtl } = useLanguage()
+  const { text, isRtl, language } = useLanguage()
   const subscription = useAsyncData(getSubscriptionStatus, [], { cacheKey: 'subscription' })
   const plan         = useAsyncData(getPlanHistory,        [], { cacheKey: 'plan-history' })
   const meals        = useAsyncData(getMealLogs,           [], { cacheKey: 'meal-logs-today', cacheTtlMs: 2 * 60 * 1000 })
@@ -73,6 +74,16 @@ export default function DashboardScreen() {
   const trainingDays = plan.data?.timing?.workout?.label ?? ''
 
   const hasPlan = !plan.loading && !!plan.data?.activeWorkoutPlan
+
+  // Onboarding reminder: schedule a 24h local notification the first time we
+  // see this user without a plan; cancel it as soon as a plan exists (covers
+  // onboarding completed here, on another device, or via web). Both calls are
+  // idempotent and permission-gated inside the helper.
+  useEffect(() => {
+    if (plan.loading) return
+    if (hasPlan) cancelOnboardingReminder()
+    else scheduleOnboardingReminder(language)
+  }, [hasPlan, plan.loading, language])
   const profileMeasurements: Array<{ weight_kg?: number }> = (profile.data as any)?.measurements ?? []
   // Weight priority must be ACCOUNT-specific first: this account's measurement,
   // then this account's onboarding weight. Apple Health weight is device-level
@@ -137,7 +148,9 @@ export default function DashboardScreen() {
         <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}    value={latestWeight ? `${Math.round(latestWeight * 10) / 10} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
       </View>
 
-      {/* No-plan CTA — guides users who haven't generated a plan yet */}
+      {/* No-plan teaching card — shows what onboarding unlocks, how long it
+          takes, and one tap to start. Replaces the old two-line CTA so new
+          users understand the value before committing 3 minutes. */}
       {!hasPlan && !plan.loading ? (
         <Pressable onPress={() => router.push('/onboarding')} style={styles.bigCardWrap}>
           <LinearGradient
@@ -153,10 +166,24 @@ export default function DashboardScreen() {
                   {isRtl ? 'لنبنِ خطتك' : "Let's build your plan"}
                 </Text>
                 <Text style={[styles.noPlanSub, { textAlign: align }]}>
-                  {isRtl ? 'أجب على أسئلة آيون لتحصل على خطة تمرين وتغذية مخصصة.' : 'Answer a few questions and Ion builds your custom training + nutrition plan.'}
+                  {isRtl ? 'أجب على أسئلة آيون وستحصل على:' : 'Answer a few questions and Ion builds you:'}
                 </Text>
               </View>
               <Feather name={isRtl ? 'chevron-left' : 'chevron-right'} size={18} color="#fff" />
+            </View>
+            {([
+              [isRtl ? 'خطة تمرين 6 أسابيع على مقاسك — مستواك، جدولك، معداتك' : 'A 6-week training plan built for your level, schedule, and equipment'],
+              [isRtl ? 'وجبات من أطعمة تحبها فعلاً بسعرات محسوبة لهدفك' : 'Meals from foods you actually love, with calories set for your goal'],
+              [isRtl ? 'آيون معك على مدار الساعة — اسأل وعدّل وقتما تشاء' : 'Ion on call 24/7 — ask questions, tweak anything, anytime'],
+            ] as const).map(([line], i) => (
+              <View key={i} style={[styles.noPlanBullet, { flexDirection: rowDir }]}>
+                <Feather name="check-circle" size={13} color="rgba(255,255,255,0.9)" />
+                <Text style={[styles.noPlanBulletText, { textAlign: align }]}>{line}</Text>
+              </View>
+            ))}
+            <View style={[styles.noPlanTimeChip, { alignSelf: isRtl ? 'flex-end' : 'flex-start' }]}>
+              <Feather name="clock" size={11} color="#fff" />
+              <Text style={styles.noPlanTimeText}>{isRtl ? 'حوالي 3 دقائق' : 'Takes about 3 minutes'}</Text>
             </View>
           </LinearGradient>
         </Pressable>
@@ -388,6 +415,10 @@ const styles = StyleSheet.create({
   noPlanRow: { alignItems: 'center', gap: 12 },
   noPlanTitle: { color: '#fff', fontSize: 16, fontWeight: '900' },
   noPlanSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600', lineHeight: 17, marginTop: 2 },
+  noPlanBullet: { alignItems: 'center', gap: 8, marginTop: 8, paddingHorizontal: 2 },
+  noPlanBulletText: { flex: 1, color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  noPlanTimeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.16)' },
+  noPlanTimeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   cardHeader: { alignItems: 'center', gap: 12, marginBottom: 4 },
   iconBadge: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   cardHeaderText: { flex: 1 },

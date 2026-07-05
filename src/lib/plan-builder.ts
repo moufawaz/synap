@@ -158,8 +158,22 @@ export function calculateMacros(p: any, latestMeasurement?: any): MacroTargets {
     && inbodyBmr <= formulaBmr * 1.25
   const bmr = usingInbodyBmr ? inbodyBmr : formulaBmr
 
+  // ── NEAT multiplier ──────────────────────────────────────────────
+  // Prefer the explicit daily-activity answer (onboarding 1.0.3+):
+  //   desk    → 1.35 (mostly sitting)
+  //   mixed   → 1.45 (on their feet part of the day)
+  //   on_feet → 1.55 (standing/walking job — easily 300+ kcal/day more)
+  // Legacy profiles (values 'active'/'sedentary' derived from
+  // currently_training) keep the old work_schedule heuristic so existing
+  // users' calorie targets don't shift under them on renewal.
+  const activityLevel = (p.activity_level || '').toLowerCase()
+  const explicitNeat  = activityLevel === 'desk' ? 1.35
+    : activityLevel === 'mixed'                  ? 1.45
+    : activityLevel === 'on_feet'                ? 1.55
+    : null
   const workType        = (p.work_schedule || 'work').toLowerCase()
-  const neatMult        = workType.includes('shift') ? 1.5 : workType === 'flexible' ? 1.45 : 1.4
+  const legacyNeat      = workType.includes('shift') ? 1.5 : workType === 'flexible' ? 1.45 : 1.4
+  const neatMult        = explicitNeat ?? legacyNeat
   const weeklyTrainKcal = days * duration * (days >= 5 ? 6 : 5)
   const tdee            = Math.round(bmr * neatMult + weeklyTrainKcal / 7)
 
