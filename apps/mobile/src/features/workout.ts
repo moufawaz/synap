@@ -150,6 +150,15 @@ export async function clearWorkoutSession() {
   return apiFetch<{ ok: boolean }>('/api/workout-session', { method: 'DELETE' })
 }
 
+/** New personal record detected by the server at log time. */
+export type WorkoutPr = {
+  exercise: string
+  weight_kg: number
+  reps: number
+  prev_weight_kg: number
+  prev_reps: number
+}
+
 export async function logWorkout(payload: {
   date: string
   day_name: string
@@ -160,8 +169,31 @@ export async function logWorkout(payload: {
   exercisePerformance?: Record<string, unknown>
   notes?: string | null
 }) {
-  return apiFetch<{ log: unknown }>('/api/log-workout', {
+  return apiFetch<{ log: unknown; prs?: WorkoutPr[] }>('/api/log-workout', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+// ── One-tap exercise swap (mid-workout) ───────────────────────────────────────
+
+export type ExerciseAlternative = {
+  name: string
+  sets: number
+  reps: string
+  rest_sec: number
+  why: string
+}
+
+/** Ask Ion for 3 equivalent alternatives to an exercise the user can't do
+ *  right now (machine taken, joint niggle). Fast Haiku lookup (~2-3s). */
+export async function swapExercise(
+  exercise: { name: string; sets?: number | null; reps?: string | number | null; muscle_group?: string | null },
+  dayFocus?: string | null,
+) {
+  return apiFetch<{ alternatives: ExerciseAlternative[] }>('/api/swap-exercise', {
+    method: 'POST',
+    body: JSON.stringify({ exercise, day_focus: dayFocus }),
+    timeoutMs: 30_000,
   })
 }

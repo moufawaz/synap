@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { router, useFocusEffect } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
@@ -9,7 +9,7 @@ import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { MedicalDisclaimer } from '@/components/MedicalDisclaimer'
 import { VideoModal } from '@/components/VideoModal'
-import { getPlanHistory, logWorkout, TodayWorkout } from '@/features/workout'
+import { getPlanHistory, logWorkout, swapExercise, TodayWorkout, type ExerciseAlternative } from '@/features/workout'
 import { notifyError, notifySuccess, tapLight, tapMedium } from '@/lib/haptics'
 import { endWorkoutActivity, startWorkoutActivity, updateWorkoutActivity } from '@/lib/liveActivity'
 import { recordWorkoutCompletedAndMaybeAskForReview } from '@/lib/storeReview'
@@ -20,17 +20,31 @@ import { useTheme } from '@/theme/ThemeProvider'
 // Local session helpers — persisted in AsyncStorage, instant, no network needed
 const SESSION_KEY = (date: string) => `@synap:workout-session:${date}`
 
+/** Today-only exercise replacement chosen via the swap button (machine taken,
+ *  joint niggle). Keyed by the exercise's index in the plan day. The PLAN is
+ *  untouched — permanent swaps go through Ion chat; this heals one session. */
+type ExerciseOverride = { name: string; sets: number; reps: string; rest_sec: number; original: string }
+
 async function loadLocalSession(date: string) {
   try {
     const raw = await AsyncStorage.getItem(SESSION_KEY(date))
     if (!raw) return null
-    return JSON.parse(raw) as { completedExercises: number[]; exercisePerformance: Record<string, { weight?: string; reps?: string }> }
+    return JSON.parse(raw) as {
+      completedExercises: number[]
+      exercisePerformance: Record<string, { weight?: string; reps?: string }>
+      exerciseOverrides?: Record<string, ExerciseOverride>
+    }
   } catch { return null }
 }
 
-async function saveLocalSession(date: string, completedExercises: number[], exercisePerformance: Record<string, { weight?: string; reps?: string }>) {
+async function saveLocalSession(
+  date: string,
+  completedExercises: number[],
+  exercisePerformance: Record<string, { weight?: string; reps?: string }>,
+  exerciseOverrides?: Record<string, ExerciseOverride>,
+) {
   try {
-    await AsyncStorage.setItem(SESSION_KEY(date), JSON.stringify({ completedExercises, exercisePerformance }))
+    await AsyncStorage.setItem(SESSION_KEY(date), JSON.stringify({ completedExercises, exercisePerformance, exerciseOverrides: exerciseOverrides || {} }))
   } catch {}
 }
 
@@ -177,6 +191,12 @@ export default function TrainScreen() {
   // ── Video modal ──────────────────────────────────────────
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null)
 
+  // ── Exercise swap (today only) ───────────────────────────
+  const [overrides, setOverrides] = useState<Record<string, ExerciseOverride>>({})
+  const [swapTarget, setSwapTarget] = useState<{ index: number; name: string } | null>(null)
+  const [swapAlternatives, setSwapAlternatives] = useState<ExerciseAlternative[] | null>(null)
+  const [swapLoading, setSwapLoading] = useState(false)
+
   // ── Timer state ──────────────────────────────────────────
   const [timerState, setTimerState] = useState<'idle' | 'running' | 'paused'>('idle')
   const [elapsed, setElapsed] = useState(0)   // seconds
@@ -196,6 +216,7 @@ export default function TrainScreen() {
         if (session) {
           setCompleted(session.completedExercises ?? [])
           setPerformance(session.exercisePerformance ?? {})
+          setOverrides(session.exerciseOverrides ?? {})
         }
       })
     }, [date])
@@ -212,12 +233,27 @@ export default function TrainScreen() {
     const restDay = (d: CanonicalDay): TodayWorkout => ({
       day_name: d, muscle_focus: null, duration_min: null, is_rest_day: true, exercises: [],
     })
-    if (!planJson) return plan.data?.todayWorkout ?? null
-    if (selectedDay === todayCanonical) {
-      return plan.data?.todayWorkout ?? buildTodayWorkout(getDayWorkout(planJson, selectedDay)) ?? restDay(selectedDay)
+    let base: TodayWorkout | null
+    if (!planJson) base = plan.data?.todayWorkout ?? null
+    else if (selectedDay === todayCanonical) {
+      base = plan.data?.todayWorkout ?? buildTodayWorkout(getDayWorkout(planJson, selectedDay)) ?? restDay(selectedDay)
+    } else {
+      base = buildTodayWorkout(getDayWorkout(planJson, selectedDay)) ?? restDay(selectedDay)
     }
-    return buildTodayWorkout(getDayWorkout(planJson, selectedDay)) ?? restDay(selectedDay)
-  }, [plan.data, planJson, selectedDay, todayCanonical])
+    // Apply today-only swap overrides (machine taken etc.) so the rendered
+    // list, the completion log, and PR detection all use the swapped exercise.
+    if (base && selectedDay === todayCanonical && Object.keys(overrides).length) {
+      base = {
+        ...base,
+        exercises: base.exercises.map(ex => {
+          const o = overrides[String(ex.index)]
+          if (!o) return ex
+          return { ...ex, name: o.name, sets: o.sets, reps: o.reps, rest_sec: o.rest_sec, video_id: null, swapped_from: o.original } as any
+        }),
+      }
+    }
+    return base
+  }, [plan.data, planJson, selectedDay, todayCanonical, overrides])
 
   const workoutDays = useMemo(() => {
     if (!planJson) return []
@@ -289,7 +325,7 @@ export default function TrainScreen() {
     // Keep the Live Activity progress ring in sync (no-op when unsupported).
     updateWorkoutActivity({ paused: timerState === 'paused', elapsedSec: elapsed, completed: next.length, total: totalExercises })
     if (selectedDay === todayCanonical) {
-      await saveLocalSession(date, next, performance)
+      await saveLocalSession(date, next, performance, overrides)
     }
   }
 
@@ -297,12 +333,57 @@ export default function TrainScreen() {
     const next = { ...performance, [index]: { ...(performance[index] || {}), [key]: value } }
     setPerformance(next)
     if (selectedDay === todayCanonical) {
-      await saveLocalSession(date, completed, next)
+      await saveLocalSession(date, completed, next, overrides)
     }
   }
 
   function toggleExpand(index: number) {
     setExpanded(prev => ({ ...prev, [index]: !prev[index] }))
+  }
+
+  // ── Exercise swap ─────────────────────────────────────────
+  async function openSwap(exercise: TodayWorkout['exercises'][number]) {
+    tapLight()
+    setSwapTarget({ index: exercise.index, name: exercise.name })
+    setSwapAlternatives(null)
+    setSwapLoading(true)
+    try {
+      const res = await swapExercise(
+        { name: exercise.name, sets: exercise.sets, reps: exercise.reps, muscle_group: exercise.muscle_group },
+        workout?.muscle_focus,
+      )
+      setSwapAlternatives(res.alternatives)
+    } catch (e) {
+      setSwapTarget(null)
+      Alert.alert('SYNAP', e instanceof Error ? e.message : (isRtl ? 'تعذّر إيجاد بدائل.' : 'Could not find alternatives.'))
+    } finally {
+      setSwapLoading(false)
+    }
+  }
+
+  async function applySwap(alt: ExerciseAlternative) {
+    if (!swapTarget) return
+    tapMedium()
+    const next: Record<string, ExerciseOverride> = {
+      ...overrides,
+      [String(swapTarget.index)]: { name: alt.name, sets: alt.sets, reps: alt.reps, rest_sec: alt.rest_sec, original: swapTarget.name },
+    }
+    setOverrides(next)
+    setSwapTarget(null)
+    setSwapAlternatives(null)
+    if (selectedDay === todayCanonical) {
+      await saveLocalSession(date, completed, performance, next)
+    }
+  }
+
+  async function undoSwap(index: number) {
+    tapLight()
+    const next = { ...overrides }
+    delete next[String(index)]
+    setOverrides(next)
+    if (selectedDay === todayCanonical) {
+      await saveLocalSession(date, completed, performance, next)
+    }
   }
 
   function selectDay(day: CanonicalDay) {
@@ -325,7 +406,7 @@ export default function TrainScreen() {
     setSaving(true)
     try {
       const durationMin = elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : (workout.duration_min ?? 0)
-      await logWorkout({
+      const logRes = await logWorkout({
         date,
         day_name: workout.day_name,
         duration_min: durationMin,
@@ -341,16 +422,27 @@ export default function TrainScreen() {
       })
       resetTimer()
       notifySuccess()
+
+      // PR celebration — the server compares today's sets against all history
+      // (Epley est-1RM) and returns any records. Lead the alert with them:
+      // this is the single best feel-good moment the app has.
+      const prs = logRes.prs || []
+      const summaryLine = isRtl
+        ? `تمارين مكتملة: ${completed.length}/${totalExercises}  ·  المدة: ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
+        : `${completed.length}/${totalExercises} exercises  ·  ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
+      const prLines = prs.map(pr => isRtl
+        ? `🏆 ${pr.exercise}: ${pr.weight_kg} كغ × ${pr.reps} (سابقاً ${pr.prev_weight_kg} كغ)`
+        : `🏆 ${pr.exercise}: ${pr.weight_kg}kg × ${pr.reps} (was ${pr.prev_weight_kg}kg)`)
       Alert.alert(
-        isRtl ? '🏁 تم حفظ التمرين' : '🏁 Workout saved',
-        isRtl
-          ? `تمارين مكتملة: ${completed.length}/${totalExercises}  ·  المدة: ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
-          : `${completed.length}/${totalExercises} exercises  ·  ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`,
+        prs.length
+          ? (isRtl ? `🏆 رقم قياسي جديد${prs.length > 1 ? ' — أرقام قياسية' : ''}!` : `🏆 New personal record${prs.length > 1 ? 's' : ''}!`)
+          : (isRtl ? '🏁 تم حفظ التمرين' : '🏁 Workout saved'),
+        prs.length ? `${prLines.join('\n')}\n\n${summaryLine}` : summaryLine,
         [{
           text: isRtl ? 'حسناً' : 'OK',
           // Ask for an App Store rating at the 3rd/20th completed workout —
-          // a positive moment, and after the alert is dismissed so the native
-          // review card never competes with it for presentation.
+          // a positive moment (even better right after a PR), after the alert
+          // is dismissed so the review card never competes with it.
           onPress: () => { recordWorkoutCompletedAndMaybeAskForReview() },
         }]
       )
@@ -368,6 +460,51 @@ export default function TrainScreen() {
   return (
     <Screen>
       <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
+
+      {/* Exercise swap sheet — Ion suggests 3 same-muscle alternatives that
+          respect the user's equipment/injuries. Today-only override; permanent
+          swaps still go through Ion chat. */}
+      <Modal visible={!!swapTarget} transparent animationType="slide" onRequestClose={() => setSwapTarget(null)}>
+        <View style={styles.swapBackdrop}>
+          <View style={[styles.swapSheet, { backgroundColor: color.bg, borderColor: color.border }]}>
+            <View style={{ flexDirection: isRtl ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Text style={[styles.swapTitle, { color: color.text, textAlign: align }]}>
+                {isRtl ? `بديل عن ${swapTarget?.name ?? ''}` : `Swap ${swapTarget?.name ?? ''}`}
+              </Text>
+              <Pressable onPress={() => setSwapTarget(null)} hitSlop={12}>
+                <Feather name="x" size={22} color={color.muted} />
+              </Pressable>
+            </View>
+            <Text style={[styles.swapSub, { color: color.muted, textAlign: align }]}>
+              {isRtl
+                ? 'بدائل تستهدف نفس العضلات بمعداتك المتاحة — لجلسة اليوم فقط.'
+                : 'Same-muscle alternatives with your equipment — for today\'s session only.'}
+            </Text>
+            {swapLoading ? (
+              <ActivityIndicator color={color.spark} style={{ marginVertical: 28 }} />
+            ) : (
+              (swapAlternatives || []).map((alt, i) => (
+                <Pressable
+                  key={i}
+                  onPress={() => applySwap(alt)}
+                  style={[styles.swapOption, { borderColor: color.border, backgroundColor: color.elevated }]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.swapOptionName, { color: color.text, textAlign: align }]}>{alt.name}</Text>
+                    <Text style={[styles.swapOptionMeta, { color: color.spark, textAlign: align }]}>
+                      {alt.sets} × {alt.reps} · {alt.rest_sec}s
+                    </Text>
+                    {alt.why ? (
+                      <Text style={[styles.swapOptionWhy, { color: color.muted, textAlign: align }]}>{alt.why}</Text>
+                    ) : null}
+                  </View>
+                  <Feather name={isRtl ? 'chevron-left' : 'chevron-right'} size={16} color={color.dim} />
+                </Pressable>
+              ))
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <IonPageHeader
         eyebrow="WORKOUT"
@@ -592,6 +729,11 @@ export default function TrainScreen() {
 
                           {/* Right buttons */}
                           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                            {!isBrowsing && !done ? (
+                              <Pressable onPress={() => openSwap(exercise)} style={[styles.videoBtn, { backgroundColor: `${color.spark}14`, borderColor: `${color.spark}33` }]}>
+                                <Feather name="refresh-cw" size={13} color={color.spark} />
+                              </Pressable>
+                            ) : null}
                             {hasVideo ? (
                               <Pressable onPress={() => setActiveVideoId(exercise.video_id ?? null)} style={[styles.videoBtn, { backgroundColor: '#FF000018', borderColor: '#FF000033' }]}>
                                 <Feather name="youtube" size={14} color="#FF4444" />
@@ -602,6 +744,21 @@ export default function TrainScreen() {
                             </Pressable>
                           </View>
                         </View>
+
+                        {/* Swapped-for-today indicator + undo */}
+                        {overrides[String(exercise.index)] && !isBrowsing ? (
+                          <View style={[styles.swappedRow, { flexDirection: isRtl ? 'row-reverse' : 'row', borderTopColor: color.border }]}>
+                            <Feather name="refresh-cw" size={11} color={color.spark} />
+                            <Text style={[styles.swappedText, { color: color.muted, textAlign: align }]} numberOfLines={1}>
+                              {isRtl
+                                ? `بديل اليوم عن ${overrides[String(exercise.index)].original}`
+                                : `Today's swap for ${overrides[String(exercise.index)].original}`}
+                            </Text>
+                            <Pressable onPress={() => undoSwap(exercise.index)} hitSlop={8}>
+                              <Text style={[styles.swappedUndo, { color: color.spark }]}>{isRtl ? 'تراجع' : 'Undo'}</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
 
                         {/* Expanded section */}
                         {isExpandedEx ? (
@@ -743,6 +900,17 @@ const styles = StyleSheet.create({
   muscleTag: { fontSize: 11, fontWeight: '700', marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.8 },
   videoBtn: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   chevronBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  swappedRow: { alignItems: 'center', gap: 6, paddingTop: 8, marginTop: 8, borderTopWidth: 1 },
+  swappedText: { flex: 1, fontSize: 11, fontWeight: '600' },
+  swappedUndo: { fontSize: 11, fontWeight: '900', letterSpacing: 0.3 },
+  swapBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  swapSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 20, paddingBottom: 34 },
+  swapTitle: { fontSize: 18, fontWeight: '900', flex: 1, marginRight: 8 },
+  swapSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginBottom: 12 },
+  swapOption: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, marginTop: 8 },
+  swapOptionName: { fontSize: 14, fontWeight: '900' },
+  swapOptionMeta: { fontSize: 12, fontWeight: '800', marginTop: 2 },
+  swapOptionWhy: { fontSize: 12, fontWeight: '600', lineHeight: 16, marginTop: 3 },
   // expanded
   expandSection: { borderTopWidth: 1, padding: 12, gap: 8 },
   tipBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, borderWidth: 1 },

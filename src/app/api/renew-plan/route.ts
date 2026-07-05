@@ -77,6 +77,31 @@ export async function POST(req: Request) {
       return generateWorkoutPartMerge({ admin, client, userId: user.id, previewId: partPreviewId, body, partNumber: phasePartNumber })
     }
 
+    // ── Rate limit: 3 fresh previews per plan type per 7 days ─────────────
+    // Each preview is a full Opus generation (~$0.25 for the 4-phase workout
+    // chain). A free-trial user hammering "Renew with Ion" could burn real
+    // money; 3/week is generous for legitimate use (regenerate-if-unhappy,
+    // then once more) while capping abuse. Parts 2+ merge into an EXISTING
+    // preview and never hit this branch, and apply/rollback returned earlier.
+    {
+      const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()
+      const { count } = await admin
+        .from('chat_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .contains('metadata', { renewal_preview: true, pending_plan_type: planType })
+        .gte('created_at', since)
+      if ((count ?? 0) >= 3) {
+        const { data: langRow } = await admin.from('users').select('language').eq('id', user.id).maybeSingle()
+        const ar = langRow?.language === 'ar'
+        return NextResponse.json({
+          error: ar
+            ? 'وصلت إلى حد تجديد الخطة لهذا الأسبوع (3 مرات). خطتك الحالية جاهزة — وللتعديلات الصغيرة تحدث مع آيون في الدردشة.'
+            : "You've hit this week's renewal limit (3). Your current plan is ready to train — for small tweaks, just ask Ion in chat.",
+        }, { status: 429 })
+      }
+    }
+
     // Optional pre-renewal feedback the user supplied via the freshness gate.
     // Workout gate: { lifts, flags, training_experience }. Nutrition gate:
     // { activity_level }. Everything here is persisted to the profile BEFORE
