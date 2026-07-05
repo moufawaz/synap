@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const [latestRes, latestCircumferenceRes, profileRes, activeWorkoutRes, workoutLogsRes] = await Promise.all([
     admin.from('measurements').select('weight_kg, date').eq('user_id', user.id).not('weight_kg', 'is', null).order('date', { ascending: false }).limit(1).maybeSingle(),
     admin.from('measurements').select('waist_cm, chest_cm, hips_cm, date').eq('user_id', user.id).order('date', { ascending: false }).limit(10),
-    admin.from('profiles').select('body_fat_pct, muscle_mass_kg, bmr_kcal, updated_at, training_days, strength_levels, goal').eq('user_id', user.id).maybeSingle(),
+    admin.from('profiles').select('body_fat_pct, muscle_mass_kg, bmr_kcal, updated_at, training_days, strength_levels, goal, training_experience, activity_level').eq('user_id', user.id).maybeSingle(),
     admin.from('workout_plans').select('plan_json, start_date, end_date').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     admin.from('workout_log').select('date, exercises, completion_pct').eq('user_id', user.id).gte('date', new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10)).order('date', { ascending: false }),
   ])
@@ -97,6 +97,13 @@ export async function GET(req: Request) {
   })
 
   return NextResponse.json({
+    // Current profile settings the renewal gates let users confirm/correct.
+    // Older accounts hold legacy derived values ('active'/'sedentary', or
+    // experience guessed from currently_training) — the gates normalize them.
+    profile: {
+      training_experience: profileRes.data?.training_experience ?? null,
+      activity_level: profileRes.data?.activity_level ?? null,
+    },
     weight: {
       value: latestRes.data?.weight_kg ?? null,
       daysAgo: weightDays,

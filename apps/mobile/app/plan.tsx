@@ -152,7 +152,8 @@ export default function PlanScreen() {
       <RenewalFreshness
         visible={pendingRenew === 'diet'}
         onClose={() => setPendingRenew(null)}
-        onProceed={() => {
+        onProceed={(ctx) => {
+          setRenewContext(ctx)
           setPendingRenew(null)
           setRenewType('diet')
         }}

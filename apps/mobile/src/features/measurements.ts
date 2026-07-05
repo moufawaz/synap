@@ -44,6 +44,9 @@ export type PlanReadinessLift = {
 }
 
 export type PlanReadiness = {
+  /** Current profile settings the renewal gates let the user confirm/correct.
+   *  May hold legacy derived values ('active'/'sedentary') on older accounts. */
+  profile?: { training_experience: string | null; activity_level: string | null }
   weight: { value: number | null; daysAgo: number | null; fresh: boolean }
   measurements: { waist_cm: number | null; chest_cm: number | null; hips_cm: number | null; daysAgo: number | null; fresh: boolean }
   inbody: { present: boolean; body_fat_pct: number | null; muscle_mass_kg: number | null; bmr_kcal: number | null; daysAgo: number | null; fresh: boolean }

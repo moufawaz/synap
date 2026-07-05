@@ -32,6 +32,22 @@ const FLAG_OPTIONS = [
   { key: 'want_less_volume',  en: 'Want less volume',      ar: 'أريد حجم تدريب أقل' },
 ]
 
+const EXPERIENCE_OPTIONS = [
+  { key: 'beginner',     en: 'Under 1 year', ar: 'أقل من سنة' },
+  { key: 'intermediate', en: '1–3 years',    ar: '1-3 سنوات' },
+  { key: 'advanced',     en: '3+ years',     ar: 'أكثر من 3 سنوات' },
+]
+
+/** Normalize whatever the profile holds (including legacy guessed values)
+ *  into one of the three canonical tiers for pre-selection. */
+function normalizeExperience(raw: string | null | undefined): string {
+  const v = String(raw || '').toLowerCase()
+  if (v.includes('adv')) return 'advanced'
+  if (v.includes('inter') || v.includes('med')) return 'intermediate'
+  if (v.includes('begin')) return 'beginner'
+  return 'intermediate' // legacy unknown → middle of the road, user can correct
+}
+
 export function WorkoutRenewalFreshness({
   visible,
   onClose,
@@ -55,6 +71,7 @@ export function WorkoutRenewalFreshness({
   const [liftWeights, setLiftWeights] = useState<Record<string, string>>({})
   const [liftReps, setLiftReps] = useState<Record<string, string>>({})
   const [flags, setFlags] = useState<Set<string>>(new Set())
+  const [experience, setExperience] = useState<string>('intermediate')
 
   useEffect(() => {
     if (!visible) return
@@ -75,6 +92,7 @@ export function WorkoutRenewalFreshness({
         }
         setLiftWeights(w)
         setLiftReps(r)
+        setExperience(normalizeExperience(d.profile?.training_experience))
         setLoading(false)
       })
       .catch(() => { if (alive) setLoading(false) })
@@ -136,7 +154,7 @@ export function WorkoutRenewalFreshness({
         const f = FLAG_OPTIONS.find(o => o.key === k)
         if (f) flagLabels.push(isRtl ? f.ar : f.en)
       }
-      onProceed({ lifts, flags: flagLabels })
+      onProceed({ lifts, flags: flagLabels, training_experience: experience })
     } catch (e) {
       Alert.alert(isRtl ? 'سناب' : 'SYNAP', e instanceof Error ? e.message : 'Could not proceed.')
     } finally {
@@ -288,6 +306,36 @@ export function WorkoutRenewalFreshness({
                     </View>
                   ))
                 )}
+
+                {/* Experience tier — confirm/correct. Older accounts hold a
+                    guessed value ('advanced' was unreachable pre-1.0.3), and
+                    this drives volume, RPE, progression, and deloads. */}
+                <Text style={[styles.smallLabel, { color: color.muted, textAlign: align, marginTop: 18, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }]}>
+                  {isRtl ? 'خبرتك التدريبية (تحدد الحجم والتدرج)' : 'Training experience (sets your volume & progression)'}
+                </Text>
+                <View style={styles.flagsWrap}>
+                  {EXPERIENCE_OPTIONS.map(o => {
+                    const on = experience === o.key
+                    return (
+                      <Pressable
+                        key={o.key}
+                        onPress={() => setExperience(o.key)}
+                        style={[
+                          styles.flagChip,
+                          {
+                            borderColor: on ? color.spark : color.border,
+                            backgroundColor: on ? `${color.spark}26` : color.elevated,
+                          },
+                        ]}
+                      >
+                        {on ? <Feather name="check" size={12} color={color.spark} /> : null}
+                        <Text style={[styles.flagText, { color: on ? color.spark : color.text }]}>
+                          {isRtl ? o.ar : o.en}
+                        </Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
 
                 <Text style={[styles.smallLabel, { color: color.muted, textAlign: align, marginTop: 18, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }]}>
                   {isRtl ? 'هل من شيء يحتاج آيون لتعديله؟' : 'Anything Ion should program around?'}

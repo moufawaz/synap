@@ -49,6 +49,12 @@ export async function getPlanHistory() {
 export type RenewalContext = {
   lifts?: Array<{ name: string; weight_kg: number; reps: number }>
   flags?: string[]
+  /** Confirmed/corrected at the workout renewal gate. Persisted to the
+   *  profile server-side so this and all future renewals use the real tier. */
+  training_experience?: string  // beginner | intermediate | advanced
+  /** Confirmed/corrected at the nutrition renewal gate. Drives the NEAT
+   *  multiplier in the calorie math. */
+  activity_level?: string       // desk | mixed | on_feet
 }
 
 type RenewPreviewResponse = {

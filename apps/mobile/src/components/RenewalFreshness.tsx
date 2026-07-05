@@ -3,8 +3,24 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Tex
 import * as ImagePicker from 'expo-image-picker'
 import Feather from '@expo/vector-icons/Feather'
 import { analyzeInBodyPhoto, createMeasurement, getPlanReadiness, type PlanReadiness } from '@/features/measurements'
+import type { RenewalContext } from '@/features/workout'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+
+const ACTIVITY_OPTIONS = [
+  { key: 'desk',    en: 'Mostly sitting',        ar: 'جالس غالباً' },
+  { key: 'mixed',   en: 'On my feet sometimes',  ar: 'أتحرك أحياناً' },
+  { key: 'on_feet', en: 'On my feet all day',    ar: 'واقف طوال اليوم' },
+]
+
+/** Normalize whatever the profile holds (including legacy 'active'/'sedentary'
+ *  guessed from currently_training) into the canonical set for pre-selection. */
+function normalizeActivity(raw: string | null | undefined): string {
+  const v = String(raw || '').toLowerCase()
+  if (v === 'desk' || v === 'mixed' || v === 'on_feet') return v
+  if (v === 'active') return 'mixed'
+  return 'desk' // 'sedentary' and unknown legacy values
+}
 
 /**
  * Renewal freshness gate. Shown when the user taps "Renew with Ion" so Ion can
@@ -27,7 +43,9 @@ export function RenewalFreshness({
 }: {
   visible: boolean
   onClose: () => void
-  onProceed: () => void
+  /** Context is forwarded to /api/renew-plan; activity_level is persisted to
+   *  the profile server-side so the calorie math uses the real NEAT tier. */
+  onProceed: (context: RenewalContext) => void
 }) {
   const { color } = useTheme()
   const { isRtl } = useLanguage()
@@ -42,6 +60,7 @@ export function RenewalFreshness({
 
   // Quick-update fields
   const [weight, setWeight] = useState('')
+  const [activity, setActivity] = useState('desk')
   const [waist, setWaist] = useState('')
   const [chest, setChest] = useState('')
   const [hips, setHips] = useState('')
@@ -57,7 +76,12 @@ export function RenewalFreshness({
     setPhase('gate')
     setLoading(true)
     getPlanReadiness()
-      .then(d => { if (alive) { setData(d); setLoading(false) } })
+      .then(d => {
+        if (!alive) return
+        setData(d)
+        setActivity(normalizeActivity(d.profile?.activity_level))
+        setLoading(false)
+      })
       .catch(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [visible])
@@ -109,7 +133,7 @@ export function RenewalFreshness({
         ...fields,
         notes: 'Pre-renewal update',
       } as any)
-      onProceed()
+      onProceed({ activity_level: activity })
     } catch (e) {
       Alert.alert(isRtl ? 'لم يُحفظ' : "Couldn't save", e instanceof Error ? e.message : (isRtl ? 'حاول مرة أخرى.' : 'Please try again.'))
     } finally {
@@ -206,7 +230,7 @@ export function RenewalFreshness({
                   <Feather name="edit-3" size={16} color="#fff" />
                   <Text style={styles.primaryText}>{isRtl ? 'تحديث سريع' : 'Quick update'}</Text>
                 </Pressable>
-                <Pressable onPress={onProceed} style={[styles.ghost, { borderColor: color.border }]}>
+                <Pressable onPress={() => onProceed({})} style={[styles.ghost, { borderColor: color.border }]}>
                   <Text style={[styles.ghostText, { color: color.muted }]}>
                     {isRtl ? 'تابع بالبيانات الحالية' : 'Renew with current data'}
                   </Text>
@@ -249,6 +273,35 @@ export function RenewalFreshness({
                     <NumField value={thighR} onChangeText={setThighR} placeholder="58" color={color} />
                   </View>
                 ) : null}
+
+                {/* Daily activity — confirm/correct. Drives the NEAT multiplier
+                    in the calorie math; legacy accounts hold a guessed value. */}
+                <Label color={color} align={align}>
+                  {isRtl ? 'نشاطك اليومي (خارج التمرين)' : 'Daily activity (outside training)'}
+                </Label>
+                <View style={styles.activityWrap}>
+                  {ACTIVITY_OPTIONS.map(o => {
+                    const on = activity === o.key
+                    return (
+                      <Pressable
+                        key={o.key}
+                        onPress={() => setActivity(o.key)}
+                        style={[
+                          styles.activityChip,
+                          {
+                            borderColor: on ? color.spark : color.border,
+                            backgroundColor: on ? `${color.spark}26` : color.elevated,
+                          },
+                        ]}
+                      >
+                        {on ? <Feather name="check" size={12} color={color.spark} /> : null}
+                        <Text style={[styles.activityText, { color: on ? color.spark : color.text }]}>
+                          {isRtl ? o.ar : o.en}
+                        </Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
 
                 {/* InBody scan */}
                 <Pressable
@@ -332,5 +385,8 @@ const styles = StyleSheet.create({
   moreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 4, marginBottom: 4 },
   moreText: { fontSize: 13, fontWeight: '800' },
   scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderRadius: 14, borderWidth: 1.5, marginTop: 14 },
+  activityWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+  activityChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
+  activityText: { fontSize: 12, fontWeight: '800' },
   scanText: { fontSize: 13, fontWeight: '900' },
 })

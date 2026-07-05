@@ -78,23 +78,39 @@ export async function POST(req: Request) {
     }
 
     // Optional pre-renewal feedback the user supplied via the freshness gate.
-    // For workout renewals: { lifts: [{name, weight_kg, reps}], flags: [...] }.
-    // Saved into profile.strength_levels so future renewals also benefit, and
-    // injected into the prompt so this rebuild starts at the right loads.
-    const renewalContext: { lifts?: Array<{ name: string; weight_kg: number; reps: number }>; flags?: string[] } = body.context || {}
-    if (planType === 'workout' && renewalContext.lifts?.length) {
-      try {
+    // Workout gate: { lifts, flags, training_experience }. Nutrition gate:
+    // { activity_level }. Everything here is persisted to the profile BEFORE
+    // the profile load below, so this renewal AND all future ones (plus the
+    // ongoing chat context) use the corrected values. This is also how legacy
+    // accounts (whose experience/activity were guessed pre-1.0.3) get healed
+    // over time — each renewal confirms or corrects them.
+    const renewalContext: {
+      lifts?: Array<{ name: string; weight_kg: number; reps: number }>
+      flags?: string[]
+      training_experience?: string
+      activity_level?: string
+    } = body.context || {}
+    try {
+      const profilePatch: Record<string, any> = {}
+      if (planType === 'workout' && renewalContext.lifts?.length) {
         const updated: Record<string, string> = {}
         for (const l of renewalContext.lifts) {
           if (l?.name && Number.isFinite(l.weight_kg) && l.weight_kg > 0) {
             updated[l.name] = `${l.weight_kg}kg x ${Number.isFinite(l.reps) ? l.reps : 0}`
           }
         }
-        if (Object.keys(updated).length) {
-          await admin.from('profiles').update({ strength_levels: JSON.stringify(updated) }).eq('user_id', user.id)
-        }
-      } catch { /* non-fatal */ }
-    }
+        if (Object.keys(updated).length) profilePatch.strength_levels = JSON.stringify(updated)
+      }
+      if (['beginner', 'intermediate', 'advanced'].includes(renewalContext.training_experience || '')) {
+        profilePatch.training_experience = renewalContext.training_experience
+      }
+      if (['desk', 'mixed', 'on_feet'].includes(renewalContext.activity_level || '')) {
+        profilePatch.activity_level = renewalContext.activity_level
+      }
+      if (Object.keys(profilePatch).length) {
+        await admin.from('profiles').update(profilePatch).eq('user_id', user.id)
+      }
+    } catch { /* non-fatal */ }
 
     // ── Load everything in parallel ───────────────────────────────────
     const [profileRes, userLangRes, latestMeasRes, measureHistRes, oldPlanRes, subRes] = await Promise.all([
