@@ -2484,3 +2484,177 @@ every iteration from 1119 onward. Same submission listing copy
 locales). Updated "What's New in This Version" covers renewal
 reliability + friendly empty states + iOS 26 link fix + Cancel
 button (bilingual EN/AR, fits well under the 4000-char cap).
+
+**Approved and released as 1.0.2 (build 1125).** Train closed; next
+work went under 1.0.3.
+
+## 1.0.3 — retention & personalization (builds 1126–1134)
+
+The biggest feature train yet. Theme: make plans truly personal
+(experience/activity/age were silently guessed before), make progress
+FEEL rewarding (PRs, streaks, photos), and remove in-gym friction
+(exercise swap). Everything below is on TestFlight build **1134**.
+
+### Post-release debug pass (after 1.0.2 shipped)
+Full audit: typechecks, expo-doctor 18/18, prod build, endpoint auth,
+cron guards, telemetry, costs. Three fixes shipped:
+- **Paywall Terms/Privacy links** used raw `Linking.openURL` with a
+  silent catch — the exact call Sentry caught failing on iOS 26 in the
+  More tab. Extracted the WebBrowser helper into shared
+  `src/lib/links.ts` (in-app Safari sheet, Linking fallback,
+  reportError on final failure); adopted in paywall + More tab. Dead
+  legal links next to the subscribe button are an App Review
+  rejection risk — this closes it.
+- **Renewal preview expiry now enforced**: apply returns 410 for
+  previews older than 24h (previously `expires_at` was stamped but
+  never checked — a weeks-old preview built from stale measurements
+  could be applied).
+- **Repo cleanup**: deleted stray root app.json ({"expo":{}} CLI
+  artifact), gitignored local design assets + one-off founder scripts.
+
+### App Store ratings prompt (build 1128)
+`expo-store-review` (~9.0.9). Native rating card requested at the 3rd
+and 20th completed workout, fired from the "Workout saved" alert's OK
+button so it never fights the Alert for presentation. Permission-safe,
+Expo Go-safe, milestone-tracked in AsyncStorage. TestFlight shows the
+card but never submits real ratings — that only works in App Store
+builds.
+
+### Sentry source maps (build 1129)
+Crash stacks now symbolicate to file:line instead of
+main.jsbundle:1:23456:
+- `@sentry/react-native/expo` config plugin registered in app.json
+  (org synap-x9 / project react-native). CI prebuilds fresh each run,
+  so the plugin injects the upload phase automatically.
+- metro.config.js switched to `getSentryExpoConfig` (debug IDs +
+  correctly-serialized maps).
+- CI guards: SENTRY_DISABLE_AUTO_UPLOAD when the token secret is
+  missing; SENTRY_ALLOW_FAILURE=true so a Sentry outage can never
+  block a TestFlight build.
+
+### Onboarding overhaul (builds 1130–1132)
+Audit of what the plan engine CONSUMES vs what onboarding ASKS
+exposed three silent defaults degrading every plan:
+
+1. **Age defaulted to '25'** — field existed but was pre-filled, so
+   most users never touched it; age drives BMR, recovery, and
+   intensity. Now starts empty, required, validated 13–90, with a
+   hint explaining what it controls.
+2. **training_experience was never asked** — server guessed it from
+   currently_training, making 'advanced' UNREACHABLE. It drives
+   sets/muscle (16-22 vs 12-16), RPE, progression model, deloads,
+   intensity techniques. New required question on the Training step.
+3. **activity_level was guessed the same way** while the calorie math
+   used a crude work-schedule multiplier. New required question on
+   the Lifestyle step (desk / mixed / on_feet → NEAT 1.35/1.45/1.55).
+   Legacy profile values keep the old multiplier so existing users'
+   targets don't shift silently.
+
+Plus: FULL Arabic localization of onboarding (~90 strings — it was
+the only unlocalized screen in the app), per-step context lines
+("This shapes your calories, volume, and pace."), and both new fields
+flow into generate + renew prompts.
+
+**Renewal gates heal legacy profiles**: the workout gate's quick
+update now confirms/corrects training experience; the nutrition gate
+confirms daily activity. Values persist to the profile BEFORE the
+prompt-build load, so the current renewal + all future ones + Ion
+chat use corrected data. The "Renew with current data" escape passes
+nothing — it never silently overwrites with a normalized guess.
+plan-readiness returns profile.training_experience/activity_level
+for pre-selection.
+
+### Dashboard teaching card + 24h onboarding reminder (build 1131)
+- No-plan CTA upgraded to a value card: three check-marked bullets
+  (6-week plan for your level/schedule/equipment · meals from foods
+  you love · Ion 24/7) + "Takes about 3 minutes" chip.
+- New `src/lib/onboardingReminder.ts`: one-shot LOCAL notification 24h
+  after first seeing a signed-in user without a plan, deep-links to
+  /onboarding. Permission-gated but never permission-prompting;
+  idempotent via AsyncStorage; cancelled the moment a plan exists
+  (dashboard effect — covers web-created plans too) or onboarding
+  completes. Complements the existing server cron (email + chat at
+  24h/7d) with an actual device notification.
+
+### PR celebrations (build 1133/1134)
+- Server (log-workout POST): scores each completed exercise's best
+  working set with Epley est-1RM — weight × (1 + min(reps,15)/30),
+  rep credit capped so 20-rep pump sets don't beat strength work —
+  against the best prior score across the last 120 logs. History is
+  fetched BEFORE inserting today's log (a set can't compete with
+  itself). First-time exercises are baselines, not PRs.
+- Response returns `prs`; the workout-saved alert leads with 🏆 lines
+  and upgrades its title; Ion drops a bilingual celebration into chat
+  (metadata.pr_celebration). Ratings prompt fires on this alert's OK
+  — peak-goodwill timing.
+
+### One-tap exercise swap (build 1133/1134)
+- New `/api/swap-exercise`: Haiku suggests 3 same-muscle alternatives
+  respecting equipment/injuries/hated list (~2-3s, ~$0.001, ai_usage
+  feature 'exercise_swap'). Arabic output when user language is ar.
+- Train tab: per-exercise swap button (hidden once done/browsing) →
+  bottom sheet with 3 options + "why" → picking one overrides the
+  exercise FOR TODAY ONLY (name/sets/reps/rest, video cleared) with a
+  "Today's swap for X" row + Undo. Plan untouched — permanent swaps
+  stay in Ion chat. Overrides persist in the AsyncStorage session and
+  flow into the completion log + PR detection under the new name.
+
+### Renewal rate-limit (server, live for all versions)
+Max 3 fresh previews per plan type per rolling 7 days (counted from
+renewal_preview rows in chat_messages). Each workout preview is a
+~$0.25 4-phase Opus chain — this caps trial-user abuse at ~$1.50/wk.
+Friendly bilingual 429 pointing at chat tweaks. Phase-2+ merges and
+apply/rollback are exempt.
+
+### Weekly streaks (build 1134)
+- New `/api/me/streak`: SUNDAY-start weeks (regional working week +
+  plan day order). A week qualifies when distinct logged workout
+  dates >= planned training days (capped 6). The in-progress week can
+  only EXTEND the streak once it qualifies — never break it. Walks
+  back up to 26 weeks.
+- Dashboard card (plan required): 🔥 N-week streak, "This week: X of
+  Y sessions", one dot per planned session filling as workouts log.
+  Taps to Train. Weekly model on purpose: rest days must never break
+  a lifter's streak.
+
+### Progress photos (build 1134)
+- New `/api/progress-photos` + private Supabase Storage bucket
+  'progress-photos' (lazily created server-side — no Studio step).
+  Objects under {userId}/{date}_{ts}.jpg; access only via authed
+  routes with 1h signed URLs; strict no-slash name validation on
+  delete; 60 photos/user, 8MB/image.
+- Progress tab section: camera-first Add (library fallback, quality
+  0.4, EXIF stripped), dated 3-per-row grid, full-screen viewer with
+  delete, and Compare (earliest vs latest side by side). Empty state
+  sells photo #1. Bilingual.
+
+### Parked (decided, not built)
+- **Android**: strategic priority for MENA (~70-80% Android in
+  Egypt); parked until the founder creates Play Console ($25,
+  identity verification 1-3 days), Firebase project (FCM), and adds
+  the Play Store app in RevenueCat. Expo codebase is already
+  cross-platform — remaining work is config, Google billing, QA.
+- **Sparks loyalty points** (planned in detail, not started):
+  behavior-based points (workouts/meals/streak weeks/PRs/fresh
+  renewals — never kg lost), redeemable for free Elite days
+  (DB-entitlement, no Apple involvement) in V1 and App Store Offer
+  Codes for active subscribers in V2. Needs a `loyalty_points`
+  ledger + `loyalty_redemptions` migration, earning hooks in 4
+  existing endpoints + streak cron, `bonus_elite_until` handling in
+  effectivePlan(), dashboard chip + More-tab rewards screen.
+  Apple constraint driving the design: subscription prices can't be
+  discounted programmatically — only free days (own backend), Offer
+  Codes, or Promotional Offers.
+- 1.0.4 candidates: home-screen widget (@bacons/apple-targets already
+  configured), finish Live Activity (branch, needs widget App ID),
+  write workouts to Apple Health (read exists; write permission
+  string already declared), App Store win-back offers (pure ASC
+  config).
+
+### Build trail
+1126-1127 (debug fixes; 1.0.2 train closed → bumped 1.0.3) → 1128
+(ratings prompt) → 1129 (Sentry source maps) → 1130-1132 (onboarding
+overhaul + teaching card + reminder + renewal gates) → 1133
+(superseded) → **1134 (current TestFlight build: PR celebrations,
+exercise swap, rate-limit, streaks, progress photos — the 1.0.3
+submission candidate)**.
