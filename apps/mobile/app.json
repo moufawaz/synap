@@ -55,7 +55,15 @@
         }
       ],
       "@bacons/apple-targets",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "synap-x9",
+          "project": "react-native",
+          "url": "https://sentry.io/"
+        }
+      ]
     ],
     "splash": {
       "image": "./assets/splash.png",

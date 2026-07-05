@@ -43,6 +43,13 @@ jobs:
       # When the DSN is missing the SDK no-ops, so we don't fail the build on it.
       EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      # Source-map upload guards (@sentry/react-native/expo plugin injects an
+      # upload phase into the Xcode build via prebuild):
+      #  - Token missing → skip the upload entirely instead of failing.
+      #  - Sentry API down / token bad → log the error but NEVER block a
+      #    TestFlight build on it. Symbolication matters; shipping matters more.
+      SENTRY_DISABLE_AUTO_UPLOAD: ${{ secrets.SENTRY_AUTH_TOKEN == '' && 'true' || 'false' }}
+      SENTRY_ALLOW_FAILURE: 'true'
 
     steps:
       - name: Checkout
