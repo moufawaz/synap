@@ -68,3 +68,33 @@ export async function analyzeInBodyPhoto(image: string, mimeType = 'image/jpeg')
     body: JSON.stringify({ image, mimeType }),
   })
 }
+
+// ── Progress photos (private, per-user Supabase Storage) ─────────────────────
+
+export type ProgressPhoto = { name: string; date: string; url: string }
+
+export async function listProgressPhotos() {
+  return apiFetch<{ photos: ProgressPhoto[] }>('/api/progress-photos')
+}
+
+export async function uploadProgressPhoto(image: string, mimeType = 'image/jpeg') {
+  return apiFetch<{ photo: ProgressPhoto }>('/api/progress-photos', {
+    method: 'POST',
+    body: JSON.stringify({ image, mimeType }),
+    timeoutMs: 60_000, // photo uploads on gym wifi can crawl
+  })
+}
+
+export async function deleteProgressPhoto(name: string) {
+  return apiFetch<{ ok: boolean }>(`/api/progress-photos?name=${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  })
+}
+
+// ── Weekly streak ─────────────────────────────────────────────────────────────
+
+export type StreakInfo = { streakWeeks: number; thisWeek: { done: number; target: number } }
+
+export async function getStreak() {
+  return apiFetch<StreakInfo>('/api/me/streak')
+}

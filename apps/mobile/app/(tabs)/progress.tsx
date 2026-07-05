@@ -7,6 +7,7 @@ import { useFocusEffect } from 'expo-router'
 import { Card } from '@/components/Card'
 import { DataError } from '@/components/DataError'
 import { IonPageHeader } from '@/components/IonPageHeader'
+import { ProgressPhotos } from '@/components/ProgressPhotos'
 import { Screen } from '@/components/Screen'
 import { analyzeInBodyPhoto, createMeasurement, getMeasurements } from '@/features/measurements'
 import { apiFetch } from '@/lib/api'
@@ -262,6 +263,9 @@ export default function ProgressScreen() {
           <Pressable onPress={shareProgressCard} style={[styles.secondaryFull, { borderColor: color.border, backgroundColor: color.elevated, marginTop: 10 }]}>
             <Text style={[styles.secondaryText, { color: color.text }]}>{text.shareProgressCard}</Text>
           </Pressable>
+
+          {/* ─── Progress photos (private before/after) ────── */}
+          <ProgressPhotos />
 
           {/* ─── 5-Metric chart selector ─────────────────── */}
           <Card style={styles.section}>

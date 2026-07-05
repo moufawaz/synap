@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getChatHistory } from '@/features/chat'
 import { loadConnectedHealthSummary } from '@/features/health'
 import { getMealLogs } from '@/features/nutrition'
+import { getStreak } from '@/features/measurements'
 import { getProfile } from '@/features/profile'
 import { getSubscriptionStatus } from '@/features/subscription'
 import { runAdaptationCheck } from '@/features/tools'
@@ -36,6 +37,7 @@ export default function DashboardScreen() {
   const profile      = useAsyncData(getProfile,           [], { cacheKey: 'profile', cacheTtlMs: 10 * 60 * 1000 })
   const chat         = useAsyncData(() => getChatHistory(10), [], { cacheKey: 'chat-last10' })
   const health       = useAsyncData(loadConnectedHealthSummary, [], { cacheKey: 'health-summary', cacheTtlMs: 5 * 60 * 1000 })
+  const streak       = useAsyncData(getStreak, [], { cacheKey: 'streak', cacheTtlMs: 10 * 60 * 1000 })
 
   useFocusEffect(
     useCallback(() => {
@@ -44,6 +46,7 @@ export default function DashboardScreen() {
       plan.silentRefresh()
       chat.silentRefresh()
       health.silentRefresh()
+      streak.silentRefresh()
       // Run adaptation check at most once per day — fires smart push notifications
       // (plateau alerts, streak milestones, plan renewal warnings, Ion messages)
       AsyncStorage.getItem('@sdc:adaptation-last').then(last => {
@@ -147,6 +150,44 @@ export default function DashboardScreen() {
         <StatChip icon="activity"    label={isRtl ? 'هذا الأسبوع' : 'TRAINING'} value={trainingDays || '-'}               color={color.sparkLight} bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
         <StatChip icon="trending-up" label={isRtl ? 'الوزن' : 'WEIGHT'}    value={latestWeight ? `${Math.round(latestWeight * 10) / 10} kg` : '-'} color={color.pulse}  bg={color.surface} border={color.border} labelColor={color.muted} valueColor={color.text} />
       </View>
+
+      {/* Weekly streak + consistency ring — only meaningful once a plan
+          exists. Dots = planned sessions this week, filled = logged. The
+          streak counts consecutive weeks that hit the planned target. */}
+      {hasPlan && streak.data ? (
+        <Pressable onPress={() => router.push('/(tabs)/train')} style={styles.bigCardWrap}>
+          <Card>
+            <View style={[styles.streakRow, { flexDirection: rowDir }]}>
+              <View style={[styles.streakFlame, { backgroundColor: 'rgba(249,115,22,0.12)', borderColor: 'rgba(249,115,22,0.3)' }]}>
+                <Text style={styles.streakFlameEmoji}>🔥</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.streakTitle, { color: color.text, textAlign: align }]}>
+                  {streak.data.streakWeeks > 0
+                    ? (isRtl ? `سلسلة ${streak.data.streakWeeks} ${streak.data.streakWeeks === 1 ? 'أسبوع' : 'أسابيع'}` : `${streak.data.streakWeeks}-week streak`)
+                    : (isRtl ? 'ابدأ سلسلتك هذا الأسبوع' : 'Start your streak this week')}
+                </Text>
+                <Text style={[styles.streakSub, { color: color.muted, textAlign: align }]}>
+                  {isRtl
+                    ? `هذا الأسبوع: ${streak.data.thisWeek.done} من ${streak.data.thisWeek.target} جلسات`
+                    : `This week: ${streak.data.thisWeek.done} of ${streak.data.thisWeek.target} sessions`}
+                </Text>
+              </View>
+              <View style={[styles.streakDots, { flexDirection: rowDir }]}>
+                {Array.from({ length: streak.data.thisWeek.target }).map((_, i) => (
+                  <View
+                    key={i}
+                    style={[styles.streakDot, {
+                      backgroundColor: i < streak.data!.thisWeek.done ? color.pulse : color.elevated,
+                      borderColor: i < streak.data!.thisWeek.done ? color.pulse : color.border,
+                    }]}
+                  />
+                ))}
+              </View>
+            </View>
+          </Card>
+        </Pressable>
+      ) : null}
 
       {/* No-plan teaching card — shows what onboarding unlocks, how long it
           takes, and one tap to start. Replaces the old two-line CTA so new
@@ -419,6 +460,13 @@ const styles = StyleSheet.create({
   noPlanBulletText: { flex: 1, color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: '600', lineHeight: 16 },
   noPlanTimeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.16)' },
   noPlanTimeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  streakRow: { alignItems: 'center', gap: 12 },
+  streakFlame: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  streakFlameEmoji: { fontSize: 18 },
+  streakTitle: { fontSize: 15, fontWeight: '900' },
+  streakSub: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  streakDots: { gap: 5, alignItems: 'center' },
+  streakDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1 },
   cardHeader: { alignItems: 'center', gap: 12, marginBottom: 4 },
   iconBadge: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   cardHeaderText: { flex: 1 },
