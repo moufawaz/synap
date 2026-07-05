@@ -15,7 +15,11 @@ import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
 const initialProfile: MobileProfileInput = {
-  name: '', age: '25', gender: 'male', ion_gender: 'male', language: 'en',
+  // Age intentionally starts EMPTY. It used to default to '25', which meant
+  // most users never changed it and every plan was built for a 25-year-old —
+  // age drives recovery, volume, and intensity in calculateWorkoutParams and
+  // both plan prompts, so it must be real. Step 0 validates it.
+  name: '', age: '', gender: 'male', ion_gender: 'male', language: 'en',
   weight_kg: '', height_cm: '',
   goal: 'lose_fat', goal_speed: 'moderate', goal_target: '', goal_date: '',
   work_schedule: 'work', work_hours: '', wake_time: '7:30', sleep_time: '23:00',
@@ -28,12 +32,33 @@ const initialProfile: MobileProfileInput = {
   injuries: '', medical_conditions: '', supplements: '',
 }
 
-const STRENGTH_LIFTS: Array<[string, string]> = [
-  ['squat', 'Squat'], ['bench', 'Bench press'], ['deadlift', 'Deadlift'],
-  ['ohp', 'Overhead press'], ['row', 'Barbell row'],
+const STRENGTH_LIFTS: Array<[string, string, string]> = [
+  ['squat', 'Squat', 'سكوات'], ['bench', 'Bench press', 'بنش برس'], ['deadlift', 'Deadlift', 'ديدلفت'],
+  ['ohp', 'Overhead press', 'ضغط عسكري'], ['row', 'Barbell row', 'تجديف بار'],
 ]
 
-const STEPS = ['You', 'Goal', 'Lifestyle', 'Training', 'Nutrition', 'Body', 'Health'] as const
+// Step ids stay English internally; display names are bilingual.
+const STEPS: Array<{ en: string; ar: string }> = [
+  { en: 'You', ar: 'أنت' },
+  { en: 'Goal', ar: 'الهدف' },
+  { en: 'Lifestyle', ar: 'نمط الحياة' },
+  { en: 'Training', ar: 'التمرين' },
+  { en: 'Nutrition', ar: 'التغذية' },
+  { en: 'Body', ar: 'الجسم' },
+  { en: 'Health', ar: 'الصحة' },
+]
+
+// One-line context per step so users know WHY Ion asks — makes the form feel
+// like a coach interview instead of paperwork.
+const STEP_INTROS: Array<{ en: string; ar: string }> = [
+  { en: 'The basics Ion builds everything on.', ar: 'الأساسيات التي يبني عليها آيون كل شيء.' },
+  { en: 'This shapes your calories, volume, and pace.', ar: 'هذا يحدد سعراتك وحجم تمرينك وسرعة تقدمك.' },
+  { en: 'Your plan fits your real day — not the other way round.', ar: 'خطتك تناسب يومك الحقيقي — وليس العكس.' },
+  { en: 'How, where, and when you train.', ar: 'كيف وأين ومتى تتمرن.' },
+  { en: 'Meals are built from foods you actually enjoy.', ar: 'وجباتك تُبنى من أطعمة تحبها فعلاً.' },
+  { en: 'A baseline today makes progress visible later.', ar: 'قياس اليوم يجعل تقدمك مرئياً لاحقاً.' },
+  { en: 'Ion programs around injuries and conditions safely.', ar: 'آيون يبرمج تمارينك بأمان حول الإصابات والحالات الصحية.' },
+]
 
 // Body measurements collected at onboarding. Weight + key circumferences match
 // the web flow so a baseline exists from day one. All optional except weight
@@ -130,6 +155,11 @@ export default function OnboardingScreen() {
   const [profile, setProfile] = useState<MobileProfileInput>({ ...initialProfile, language })
   const [step, setStep] = useState(0)
 
+  // Bilingual helper — every user-facing string goes through this so Arabic
+  // users onboard fully in Arabic (previously onboarding was English-only,
+  // the one screen in the app that wasn't localized).
+  const t = (en: string, ar: string) => (language === 'ar' ? ar : en)
+
   // Pre-fill the name from the signed-in account (Sign in with Apple / Google
   // provide it via the auth framework) so we never re-ask for info the user
   // already supplied — App Store Guideline 4 / Sign in with Apple.
@@ -162,10 +192,21 @@ export default function OnboardingScreen() {
 
   function validateStep(): string | null {
     if (step === 0) {
-      if (!profile.name.trim()) return 'Please enter your name.'
-      if (!profile.weight_kg.trim() || !profile.height_cm.trim()) return 'Weight and height are required.'
+      if (!profile.name.trim()) return t('Please enter your name.', 'الرجاء إدخال اسمك.')
+      const age = parseInt(profile.age, 10)
+      if (!profile.age.trim() || !Number.isFinite(age)) {
+        return t('Please enter your age — Ion uses it to set recovery and intensity.', 'الرجاء إدخال عمرك — يستخدمه آيون لضبط التعافي وشدة التمرين.')
+      }
+      if (age < 13 || age > 90) {
+        return t('Please enter an age between 13 and 90.', 'الرجاء إدخال عمر بين 13 و90.')
+      }
+      if (!profile.weight_kg.trim() || !profile.height_cm.trim()) {
+        return t('Weight and height are required.', 'الوزن والطول مطلوبان.')
+      }
     }
-    if (step === 4 && !profile.foods_loved.trim()) return 'Tell Ion at least a few foods you enjoy.'
+    if (step === 4 && !profile.foods_loved.trim()) {
+      return t('Tell Ion at least a few foods you enjoy.', 'أخبر آيون ببعض الأطعمة التي تحبها على الأقل.')
+    }
     return null
   }
 
@@ -191,16 +232,19 @@ export default function OnboardingScreen() {
         if (lib.canceled) { setScanningInbody(false); return }
         asset = lib.assets[0]
       }
-      if (!asset?.base64) { Alert.alert('SYNAP', 'Could not read the image.'); return }
+      if (!asset?.base64) { Alert.alert('SYNAP', t('Could not read the image.', 'تعذّرت قراءة الصورة.')); return }
       const res = await analyzeInBodyPhoto(asset.base64, asset.mimeType || 'image/jpeg')
       if (res.success) {
         setInbodyDone(true)
-        Alert.alert('InBody scan added ✓', 'Ion will use your measured body composition to fine-tune your plan.')
+        Alert.alert(
+          t('InBody scan added ✓', 'تمت إضافة فحص InBody ✓'),
+          t('Ion will use your measured body composition to fine-tune your plan.', 'سيستخدم آيون تكوين جسمك المقاس لضبط خطتك بدقة.'),
+        )
       } else {
-        Alert.alert('SYNAP', 'Could not read that scan — you can add it later in Measurements.')
+        Alert.alert('SYNAP', t('Could not read that scan — you can add it later in Measurements.', 'تعذّرت قراءة الفحص — يمكنك إضافته لاحقاً من القياسات.'))
       }
     } catch (e) {
-      Alert.alert('InBody', e instanceof Error ? e.message : 'Could not analyze the scan.')
+      Alert.alert('InBody', e instanceof Error ? e.message : t('Could not analyze the scan.', 'تعذّر تحليل الفحص.'))
     } finally {
       setScanningInbody(false)
     }
@@ -275,9 +319,12 @@ export default function OnboardingScreen() {
   return (
     <Screen>
       <IonPageHeader
-        eyebrow={`STEP ${step + 1} OF ${STEPS.length} · ${STEPS[step].toUpperCase()}`}
-        title="Build your plan"
-        subtitle="The more Ion knows, the more personal your plan."
+        eyebrow={t(
+          `STEP ${step + 1} OF ${STEPS.length} · ${STEPS[step].en.toUpperCase()}`,
+          `الخطوة ${step + 1} من ${STEPS.length} · ${STEPS[step].ar}`,
+        )}
+        title={t('Build your plan', 'ابنِ خطتك')}
+        subtitle={t('The more Ion knows, the more personal your plan.', 'كلما عرف آيون أكثر، كانت خطتك أكثر تخصيصاً.')}
       />
 
       <View style={styles.progressRow}>
@@ -286,92 +333,102 @@ export default function OnboardingScreen() {
         ))}
       </View>
 
+      {/* Per-step context line — why Ion is asking */}
+      <Text style={[styles.stepIntro, { color: color.dim, textAlign: align }]}>
+        {t(STEP_INTROS[step].en, STEP_INTROS[step].ar)}
+      </Text>
+
       <Card>
         {step === 0 ? (
           <>
-            <Field label="Name" value={profile.name} onChangeText={v => update('name', v)} color={color} isRtl={isRtl} />
+            <Field label={t('Name', 'الاسم')} value={profile.name} onChangeText={v => update('name', v)} color={color} isRtl={isRtl} />
             <View style={styles.row}>
-              <Field label="Age" value={profile.age} keyboardType="number-pad" onChangeText={v => update('age', v)} color={color} isRtl={isRtl} />
-              <Field label="Weight (kg)" value={profile.weight_kg} keyboardType="decimal-pad" onChangeText={v => update('weight_kg', v)} color={color} isRtl={isRtl} />
+              <Field label={t('Age', 'العمر')} value={profile.age} keyboardType="number-pad" placeholder={t('e.g. 27', 'مثال: 27')} onChangeText={v => update('age', v)} color={color} isRtl={isRtl} />
+              <Field label={t('Weight (kg)', 'الوزن (كجم)')} value={profile.weight_kg} keyboardType="decimal-pad" placeholder="75" onChangeText={v => update('weight_kg', v)} color={color} isRtl={isRtl} />
             </View>
-            <Field label="Height (cm)" value={profile.height_cm} keyboardType="decimal-pad" onChangeText={v => update('height_cm', v)} color={color} isRtl={isRtl} />
-            <Segment label="Gender" value={profile.gender} options={[['male', 'Male'], ['female', 'Female']]} onChange={v => update('gender', v as MobileProfileInput['gender'])} color={color} isRtl={isRtl} />
-            <Segment label="Ion avatar" value={profile.ion_gender} options={[['male', 'Male'], ['female', 'Female']]} onChange={v => update('ion_gender', v as MobileProfileInput['ion_gender'])} color={color} isRtl={isRtl} />
+            <Field label={t('Height (cm)', 'الطول (سم)')} value={profile.height_cm} keyboardType="decimal-pad" placeholder="175" onChangeText={v => update('height_cm', v)} color={color} isRtl={isRtl} />
+            <Text style={[styles.hint, { color: color.dim, textAlign: align, marginTop: -6, marginBottom: 12 }]}>
+              {t('Age, weight, and height set your calories, recovery, and training intensity.', 'العمر والوزن والطول تحدد سعراتك وتعافيك وشدة تمرينك.')}
+            </Text>
+            <Segment label={t('Gender', 'الجنس')} value={profile.gender} options={[['male', t('Male', 'ذكر')], ['female', t('Female', 'أنثى')]]} onChange={v => update('gender', v as MobileProfileInput['gender'])} color={color} isRtl={isRtl} />
+            <Segment label={t('Ion avatar', 'شكل آيون')} value={profile.ion_gender} options={[['male', t('Male', 'ذكر')], ['female', t('Female', 'أنثى')]]} onChange={v => update('ion_gender', v as MobileProfileInput['ion_gender'])} color={color} isRtl={isRtl} />
           </>
         ) : null}
 
         {step === 1 ? (
           <>
-            <Segment label="Main goal" value={profile.goal} wrap color={color} isRtl={isRtl}
-              options={[['lose_fat', 'Lose fat'], ['build_muscle', 'Build muscle'], ['recomposition', 'Recomp'], ['improve_fitness', 'Fitness'], ['be_healthier', 'Be healthier']]}
+            <Segment label={t('Main goal', 'هدفك الرئيسي')} value={profile.goal} wrap color={color} isRtl={isRtl}
+              options={[['lose_fat', t('Lose fat', 'خسارة دهون')], ['build_muscle', t('Build muscle', 'بناء عضل')], ['recomposition', t('Recomp', 'إعادة تشكيل')], ['improve_fitness', t('Fitness', 'لياقة')], ['be_healthier', t('Be healthier', 'صحة أفضل')]]}
               onChange={v => update('goal', v)} />
-            <Segment label="How aggressive?" value={profile.goal_speed} color={color} isRtl={isRtl}
-              options={[['slow', 'Slow & steady'], ['moderate', 'Moderate'], ['aggressive', 'Aggressive']]}
+            <Segment label={t('How aggressive?', 'ما مدى السرعة؟')} value={profile.goal_speed} color={color} isRtl={isRtl}
+              options={[['slow', t('Slow & steady', 'بطيء وثابت')], ['moderate', t('Moderate', 'متوسط')], ['aggressive', t('Aggressive', 'سريع')]]}
               onChange={v => update('goal_speed', v)} />
-            <Field label="Specific target (optional)" value={profile.goal_target} onChangeText={v => update('goal_target', v)} placeholder="e.g. reach 80kg, fit into a suit" color={color} isRtl={isRtl} />
-            <Field label="Timeframe (optional)" value={profile.goal_date} onChangeText={v => update('goal_date', v)} placeholder="e.g. 3 months, by summer" color={color} isRtl={isRtl} />
+            <Field label={t('Specific target (optional)', 'هدف محدد (اختياري)')} value={profile.goal_target} onChangeText={v => update('goal_target', v)} placeholder={t('e.g. reach 80kg, fit into a suit', 'مثال: الوصول إلى 80 كجم')} color={color} isRtl={isRtl} />
+            <Field label={t('Timeframe (optional)', 'الإطار الزمني (اختياري)')} value={profile.goal_date} onChangeText={v => update('goal_date', v)} placeholder={t('e.g. 3 months, by summer', 'مثال: 3 أشهر، قبل الصيف')} color={color} isRtl={isRtl} />
           </>
         ) : null}
 
         {step === 2 ? (
           <>
-            <Segment label="Work / study" value={profile.work_schedule} wrap color={color} isRtl={isRtl}
-              options={[['work', 'Work'], ['study', 'Study'], ['both', 'Both'], ['neither', 'Neither']]}
+            <Segment label={t('Work / study', 'عمل / دراسة')} value={profile.work_schedule} wrap color={color} isRtl={isRtl}
+              options={[['work', t('Work', 'عمل')], ['study', t('Study', 'دراسة')], ['both', t('Both', 'كلاهما')], ['neither', t('Neither', 'لا شيء')]]}
               onChange={v => update('work_schedule', v)} />
             {profile.work_schedule !== 'neither' ? (
-              <Field label="Your hours (optional)" value={profile.work_hours} onChangeText={v => update('work_hours', v)} placeholder="e.g. 9–5, rotating shifts" color={color} isRtl={isRtl} />
+              <Field label={t('Your hours (optional)', 'ساعاتك (اختياري)')} value={profile.work_hours} onChangeText={v => update('work_hours', v)} placeholder={t('e.g. 9–5, rotating shifts', 'مثال: 9-5، ورديات')} color={color} isRtl={isRtl} />
             ) : null}
-            <Segment label="Wake up" value={profile.wake_time} wrap color={color} isRtl={isRtl}
-              options={[['5:30', '5–6 AM'], ['6:30', '6–7 AM'], ['7:30', '7–8 AM'], ['8:30', '8–9 AM'], ['9:30', '9 AM+']]}
+            <Segment label={t('Wake up', 'الاستيقاظ')} value={profile.wake_time} wrap color={color} isRtl={isRtl}
+              options={[['5:30', t('5–6 AM', '5-6 ص')], ['6:30', t('6–7 AM', '6-7 ص')], ['7:30', t('7–8 AM', '7-8 ص')], ['8:30', t('8–9 AM', '8-9 ص')], ['9:30', t('9 AM+', 'بعد 9 ص')]]}
               onChange={v => update('wake_time', v)} />
-            <Segment label="Sleep" value={profile.sleep_time} wrap color={color} isRtl={isRtl}
-              options={[['22:00', 'Before 10 PM'], ['22:30', '10–11 PM'], ['23:30', '11 PM–12'], ['01:00', 'After 12']]}
+            <Segment label={t('Sleep', 'النوم')} value={profile.sleep_time} wrap color={color} isRtl={isRtl}
+              options={[['22:00', t('Before 10 PM', 'قبل 10 م')], ['22:30', t('10–11 PM', '10-11 م')], ['23:30', t('11 PM–12', '11-12 م')], ['01:00', t('After 12', 'بعد 12')]]}
               onChange={v => update('sleep_time', v)} />
-            <Segment label="Stress level" value={profile.stress_level} color={color} isRtl={isRtl}
-              options={[['low', 'Calm'], ['moderate', 'Moderate'], ['high', 'High']]}
+            <Segment label={t('Stress level', 'مستوى التوتر')} value={profile.stress_level} color={color} isRtl={isRtl}
+              options={[['low', t('Calm', 'هادئ')], ['moderate', t('Moderate', 'متوسط')], ['high', t('High', 'مرتفع')]]}
               onChange={v => update('stress_level', v)} />
-            <Segment label="Sleep quality" value={profile.sleep_quality} color={color} isRtl={isRtl}
-              options={[['solid', 'Sleep well'], ['average', 'Hit or miss'], ['struggling', 'Struggle']]}
+            <Segment label={t('Sleep quality', 'جودة النوم')} value={profile.sleep_quality} color={color} isRtl={isRtl}
+              options={[['solid', t('Sleep well', 'أنام جيداً')], ['average', t('Hit or miss', 'متقلب')], ['struggling', t('Struggle', 'أعاني')]]}
               onChange={v => update('sleep_quality', v)} />
           </>
         ) : null}
 
         {step === 3 ? (
           <>
-            <Segment label="Currently training?" value={profile.currently_training} color={color} isRtl={isRtl}
-              options={[['already', 'Already training'], ['fresh', 'Starting fresh']]}
+            <Segment label={t('Currently training?', 'هل تتمرن حالياً؟')} value={profile.currently_training} color={color} isRtl={isRtl}
+              options={[['already', t('Already training', 'أتمرن بالفعل')], ['fresh', t('Starting fresh', 'أبدأ من جديد')]]}
               onChange={v => update('currently_training', v)} />
             {profile.currently_training === 'already' ? (
-              <Field label="Your current routine" value={profile.current_training_desc} onChangeText={v => update('current_training_desc', v)} placeholder="gym, home, sports, cardio…" color={color} isRtl={isRtl} />
+              <Field label={t('Your current routine', 'روتينك الحالي')} value={profile.current_training_desc} onChangeText={v => update('current_training_desc', v)} placeholder={t('gym, home, sports, cardio…', 'جيم، منزل، رياضات، كارديو…')} color={color} isRtl={isRtl} />
             ) : null}
-            <Segment label="Where?" value={profile.gym_access} options={[['gym', 'Gym'], ['home', 'Home']]} onChange={v => update('gym_access', v as MobileProfileInput['gym_access'])} color={color} isRtl={isRtl} />
+            <Segment label={t('Where?', 'أين؟')} value={profile.gym_access} options={[['gym', t('Gym', 'جيم')], ['home', t('Home', 'المنزل')]]} onChange={v => update('gym_access', v as MobileProfileInput['gym_access'])} color={color} isRtl={isRtl} />
             {profile.gym_access === 'home' ? (
-              <MultiSelect label="Equipment" selected={profile.equipment} onToggle={v => toggleCsv('equipment', v)} color={color} isRtl={isRtl}
-                options={[['bodyweight', 'Bodyweight'], ['bands', 'Bands'], ['dumbbells', 'Dumbbells'], ['pullup_bar', 'Pull-up bar'], ['mixed', 'Mixed']]} />
+              <MultiSelect label={t('Equipment', 'المعدات')} selected={profile.equipment} onToggle={v => toggleCsv('equipment', v)} color={color} isRtl={isRtl}
+                options={[['bodyweight', t('Bodyweight', 'وزن الجسم')], ['bands', t('Bands', 'أحزمة مقاومة')], ['dumbbells', t('Dumbbells', 'دمبلات')], ['pullup_bar', t('Pull-up bar', 'عقلة')], ['mixed', t('Mixed', 'متنوعة')]]} />
             ) : (
-              <Segment label="Training style" value={profile.training_style} wrap color={color} isRtl={isRtl}
-                options={[['heavy_compound', 'Heavy compound'], ['machines', 'Machines'], ['cables', 'Cables'], ['mix', 'Mix']]}
+              <Segment label={t('Training style', 'أسلوب التمرين')} value={profile.training_style} wrap color={color} isRtl={isRtl}
+                options={[['heavy_compound', t('Heavy compound', 'مركب ثقيل')], ['machines', t('Machines', 'أجهزة')], ['cables', t('Cables', 'كيبلات')], ['mix', t('Mix', 'مزيج')]]}
                 onChange={v => update('training_style', v)} />
             )}
-            <Segment label="Days / week" value={profile.training_days} wrap color={color} isRtl={isRtl}
+            <Segment label={t('Days / week', 'أيام / أسبوع')} value={profile.training_days} wrap color={color} isRtl={isRtl}
               options={[['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6']]} onChange={v => update('training_days', v)} />
-            <Segment label="Session length" value={profile.session_duration} wrap color={color} isRtl={isRtl}
-              options={[['30', '30 min'], ['45', '45 min'], ['60', '1 hour'], ['90', '90 min']]} onChange={v => update('session_duration', v)} />
-            <Segment label="Train when?" value={profile.training_time} wrap color={color} isRtl={isRtl}
-              options={[['morning', 'Morning'], ['afternoon', 'Afternoon'], ['evening', 'Evening'], ['late_night', 'Late night']]}
+            <Segment label={t('Session length', 'مدة الجلسة')} value={profile.session_duration} wrap color={color} isRtl={isRtl}
+              options={[['30', t('30 min', '30 د')], ['45', t('45 min', '45 د')], ['60', t('1 hour', 'ساعة')], ['90', t('90 min', '90 د')]]} onChange={v => update('session_duration', v)} />
+            <Segment label={t('Train when?', 'متى تتمرن؟')} value={profile.training_time} wrap color={color} isRtl={isRtl}
+              options={[['morning', t('Morning', 'صباحاً')], ['afternoon', t('Afternoon', 'ظهراً')], ['evening', t('Evening', 'مساءً')], ['late_night', t('Late night', 'ليلاً متأخراً')]]}
               onChange={v => update('training_time', v)} />
-            <Field label="Exercises to avoid (optional)" value={profile.exercises_hated} onChangeText={v => update('exercises_hated', v)} placeholder="anything painful or disliked" color={color} isRtl={isRtl} />
+            <Field label={t('Exercises to avoid (optional)', 'تمارين تتجنبها (اختياري)')} value={profile.exercises_hated} onChangeText={v => update('exercises_hated', v)} placeholder={t('anything painful or disliked', 'أي تمرين مؤلم أو غير محبب')} color={color} isRtl={isRtl} />
             {showStrength ? (
               <View style={styles.field}>
-                <Text style={[styles.label, { color: color.muted, textAlign: align }]}>Current strength (optional, kg for ~5 reps)</Text>
-                {STRENGTH_LIFTS.map(([key, lbl]) => (
+                <Text style={[styles.label, { color: color.muted, textAlign: align }]}>
+                  {t('Current strength (optional, kg for ~5 reps)', 'قوتك الحالية (اختياري، كجم لـ~5 تكرارات)')}
+                </Text>
+                {STRENGTH_LIFTS.map(([key, en, ar]) => (
                   <View key={key} style={[styles.row, { alignItems: 'center', marginBottom: 8 }]}>
-                    <Text style={[styles.strengthLabel, { color: color.text }]}>{lbl}</Text>
+                    <Text style={[styles.strengthLabel, { color: color.text, textAlign: align }]}>{t(en, ar)}</Text>
                     <TextInput
                       value={strength[key] || ''}
                       onChangeText={v => setStrength(s => ({ ...s, [key]: v }))}
                       keyboardType="decimal-pad"
-                      placeholder="kg"
+                      placeholder={t('kg', 'كجم')}
                       placeholderTextColor={color.dim}
                       style={[styles.input, { flex: 1, backgroundColor: color.elevated, borderColor: color.border, color: color.text, textAlign: align }]}
                     />
@@ -384,31 +441,32 @@ export default function OnboardingScreen() {
 
         {step === 4 ? (
           <>
-            <Field label="Foods you love" value={profile.foods_loved} onChangeText={v => update('foods_loved', v)} placeholder="be specific — these go in your meals" color={color} isRtl={isRtl} />
-            <Field label="Foods to avoid (optional)" value={profile.foods_hated} onChangeText={v => update('foods_hated', v)} color={color} isRtl={isRtl} />
-            <MultiSelect label="Dietary rules" selected={profile.dietary_preference} onToggle={v => toggleCsv('dietary_preference', v)} color={color} isRtl={isRtl}
-              options={[['none', 'None'], ['halal', 'Halal'], ['no_pork', 'No pork'], ['vegetarian', 'Vegetarian'], ['vegan', 'Vegan'], ['lactose_free', 'Lactose-free'], ['gluten_free', 'Gluten-free']]} />
-            <Field label="Allergies (optional)" value={profile.allergies} onChangeText={v => update('allergies', v)} color={color} isRtl={isRtl} />
-            <Segment label="Meals / day" value={profile.meals_per_day} wrap color={color} isRtl={isRtl}
+            <Field label={t('Foods you love', 'أطعمة تحبها')} value={profile.foods_loved} onChangeText={v => update('foods_loved', v)} placeholder={t('be specific — these go in your meals', 'كن محدداً — ستدخل في وجباتك')} color={color} isRtl={isRtl} />
+            <Field label={t('Foods to avoid (optional)', 'أطعمة تتجنبها (اختياري)')} value={profile.foods_hated} onChangeText={v => update('foods_hated', v)} color={color} isRtl={isRtl} />
+            <MultiSelect label={t('Dietary rules', 'قواعد غذائية')} selected={profile.dietary_preference} onToggle={v => toggleCsv('dietary_preference', v)} color={color} isRtl={isRtl}
+              options={[['none', t('None', 'لا شيء')], ['halal', t('Halal', 'حلال')], ['no_pork', t('No pork', 'بدون خنزير')], ['vegetarian', t('Vegetarian', 'نباتي')], ['vegan', t('Vegan', 'نباتي صرف')], ['lactose_free', t('Lactose-free', 'بدون لاكتوز')], ['gluten_free', t('Gluten-free', 'بدون غلوتين')]]} />
+            <Field label={t('Allergies (optional)', 'حساسية (اختياري)')} value={profile.allergies} onChangeText={v => update('allergies', v)} color={color} isRtl={isRtl} />
+            <Segment label={t('Meals / day', 'وجبات / يوم')} value={profile.meals_per_day} wrap color={color} isRtl={isRtl}
               options={[['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6']]} onChange={v => update('meals_per_day', v)} />
-            <Segment label="Cooking" value={profile.cooking_ability} wrap color={color} isRtl={isRtl}
-              options={[['cook', 'I cook'], ['quick', 'Quick & simple'], ['eat_out', 'Eat out']]} onChange={v => update('cooking_ability', v)} />
-            <Segment label="Food budget" value={profile.food_budget} color={color} isRtl={isRtl}
-              options={[['tight', 'Tight'], ['moderate', 'Moderate'], ['flexible', 'Flexible']]} onChange={v => update('food_budget', v)} />
+            <Segment label={t('Cooking', 'الطبخ')} value={profile.cooking_ability} wrap color={color} isRtl={isRtl}
+              options={[['cook', t('I cook', 'أطبخ')], ['quick', t('Quick & simple', 'سريع وبسيط')], ['eat_out', t('Eat out', 'آكل خارجاً')]]} onChange={v => update('cooking_ability', v)} />
+            <Segment label={t('Food budget', 'ميزانية الطعام')} value={profile.food_budget} color={color} isRtl={isRtl}
+              options={[['tight', t('Tight', 'محدودة')], ['moderate', t('Moderate', 'متوسطة')], ['flexible', t('Flexible', 'مرنة')]]} onChange={v => update('food_budget', v)} />
           </>
         ) : null}
 
         {step === 5 ? (
           <>
             <Text style={[styles.label, { color: color.muted, textAlign: align, marginBottom: 10 }]}>
-              {isRtl
-                ? 'قياسات الجسم (اختيارية). كل قياس تضيفه اليوم يصبح قاعدة لعرض التقدم لاحقاً.'
-                : 'Body measurements (all optional). Every value you add today becomes a baseline so Ion can show progress over time.'}
+              {t(
+                'Body measurements (all optional). Every value you add today becomes a baseline so Ion can show progress over time.',
+                'قياسات الجسم (اختيارية). كل قياس تضيفه اليوم يصبح قاعدة لعرض التقدم لاحقاً.',
+              )}
             </Text>
             {MEASUREMENT_FIELDS.map(([key, en, ar]) => (
               <Field
                 key={key}
-                label={isRtl ? ar : en}
+                label={t(en, ar)}
                 value={measurements[key] || ''}
                 onChangeText={v => setMeasurements(m => ({ ...m, [key]: v }))}
                 keyboardType="decimal-pad"
@@ -417,34 +475,40 @@ export default function OnboardingScreen() {
               />
             ))}
             <Text style={[styles.hint, { color: color.dim, textAlign: align }]}>
-              {isRtl
-                ? 'لست متأكداً من قياس؟ اتركه فارغاً — يمكنك إضافته لاحقاً من القياسات.'
-                : 'Unsure about one? Leave it blank — you can fill it in later from Measurements.'}
+              {t(
+                'Unsure about one? Leave it blank — you can fill it in later from Measurements.',
+                'لست متأكداً من قياس؟ اتركه فارغاً — يمكنك إضافته لاحقاً من القياسات.',
+              )}
             </Text>
           </>
         ) : null}
 
         {step === 6 ? (
           <>
-            <Field label="Injuries / limitations (optional)" value={profile.injuries} onChangeText={v => update('injuries', v)} color={color} isRtl={isRtl} />
-            <Field label="Medical conditions (optional)" value={profile.medical_conditions} onChangeText={v => update('medical_conditions', v)} placeholder="diabetes, blood pressure, etc." color={color} isRtl={isRtl} />
-            <MultiSelect label="Supplements" selected={profile.supplements} onToggle={v => toggleCsv('supplements', v)} color={color} isRtl={isRtl}
-              options={[['none', 'None'], ['protein', 'Protein'], ['creatine', 'Creatine'], ['vitamins', 'Vitamins'], ['multiple', 'Multiple']]} />
+            <Field label={t('Injuries / limitations (optional)', 'إصابات / قيود (اختياري)')} value={profile.injuries} onChangeText={v => update('injuries', v)} color={color} isRtl={isRtl} />
+            <Field label={t('Medical conditions (optional)', 'حالات طبية (اختياري)')} value={profile.medical_conditions} onChangeText={v => update('medical_conditions', v)} placeholder={t('diabetes, blood pressure, etc.', 'سكري، ضغط دم، إلخ')} color={color} isRtl={isRtl} />
+            <MultiSelect label={t('Supplements', 'المكملات')} selected={profile.supplements} onToggle={v => toggleCsv('supplements', v)} color={color} isRtl={isRtl}
+              options={[['none', t('None', 'لا شيء')], ['protein', t('Protein', 'بروتين')], ['creatine', t('Creatine', 'كرياتين')], ['vitamins', t('Vitamins', 'فيتامينات')], ['multiple', t('Multiple', 'متعددة')]]} />
             <View style={styles.field}>
-              <Text style={[styles.label, { color: color.muted, textAlign: align }]}>InBody scan (optional)</Text>
+              <Text style={[styles.label, { color: color.muted, textAlign: align }]}>{t('InBody scan (optional)', 'فحص InBody (اختياري)')}</Text>
               <Pressable disabled={scanningInbody} onPress={scanInBody}
                 style={[styles.inbodyBtn, { borderColor: inbodyDone ? color.pulse : color.spark, backgroundColor: color.elevated }]}>
                 {scanningInbody ? <ActivityIndicator color={color.spark} /> : (
                   <>
                     <Feather name={inbodyDone ? 'check-circle' : 'camera'} size={16} color={inbodyDone ? color.pulse : color.spark} />
                     <Text style={[styles.inbodyText, { color: inbodyDone ? color.pulse : color.spark }]}>
-                      {inbodyDone ? 'InBody added — exact body composition' : 'Scan InBody for precise targets'}
+                      {inbodyDone
+                        ? t('InBody added — exact body composition', 'تمت إضافة InBody — تكوين الجسم بدقة')
+                        : t('Scan InBody for precise targets', 'امسح فحص InBody لأهداف دقيقة')}
                     </Text>
                   </>
                 )}
               </Pressable>
               <Text style={[styles.hint, { color: color.dim, textAlign: align }]}>
-                Gives Ion your real muscle/fat for more accurate calories. You can also add it later in Measurements.
+                {t(
+                  'Gives Ion your real muscle/fat for more accurate calories. You can also add it later in Measurements.',
+                  'يعطي آيون نسب العضل والدهون الحقيقية لسعرات أدق. يمكنك إضافته لاحقاً من القياسات.',
+                )}
               </Text>
             </View>
           </>
@@ -454,12 +518,14 @@ export default function OnboardingScreen() {
       <View style={[styles.navRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
         {step > 0 ? (
           <Pressable disabled={loading} onPress={back} style={[styles.backBtn, { borderColor: color.border, backgroundColor: color.elevated }]}>
-            <Text style={[styles.backText, { color: color.text }]}>Back</Text>
+            <Text style={[styles.backText, { color: color.text }]}>{t('Back', 'رجوع')}</Text>
           </Pressable>
         ) : null}
         <Pressable disabled={loading} onPress={next} style={[styles.nextBtn, { backgroundColor: color.spark }]}>
           {loading ? <ActivityIndicator color="#FFFFFF" /> : (
-            <Text style={styles.nextText}>{step === STEPS.length - 1 ? 'Generate my plan' : 'Continue'}</Text>
+            <Text style={styles.nextText}>
+              {step === STEPS.length - 1 ? t('Generate my plan', 'ولّد خطتي') : t('Continue', 'متابعة')}
+            </Text>
           )}
         </Pressable>
       </View>
@@ -468,8 +534,9 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  progressRow: { flexDirection: 'row', gap: 6, marginBottom: 12, paddingHorizontal: 4 },
+  progressRow: { flexDirection: 'row', gap: 6, marginBottom: 10, paddingHorizontal: 4 },
   progressDot: { flex: 1, height: 4, borderRadius: 999 },
+  stepIntro: { fontSize: 13, lineHeight: 18, marginBottom: 12, paddingHorizontal: 4, fontWeight: '600' },
   row: { flexDirection: 'row', gap: 10 },
   field: { flex: 1, marginBottom: 14 },
   label: { fontSize: 12, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 },
