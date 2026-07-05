@@ -12,6 +12,7 @@ import { VideoModal } from '@/components/VideoModal'
 import { getPlanHistory, logWorkout, TodayWorkout } from '@/features/workout'
 import { notifyError, notifySuccess, tapLight, tapMedium } from '@/lib/haptics'
 import { endWorkoutActivity, startWorkoutActivity, updateWorkoutActivity } from '@/lib/liveActivity'
+import { recordWorkoutCompletedAndMaybeAskForReview } from '@/lib/storeReview'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -344,7 +345,14 @@ export default function TrainScreen() {
         isRtl ? '🏁 تم حفظ التمرين' : '🏁 Workout saved',
         isRtl
           ? `تمارين مكتملة: ${completed.length}/${totalExercises}  ·  المدة: ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
-          : `${completed.length}/${totalExercises} exercises  ·  ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
+          : `${completed.length}/${totalExercises} exercises  ·  ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`,
+        [{
+          text: isRtl ? 'حسناً' : 'OK',
+          // Ask for an App Store rating at the 3rd/20th completed workout —
+          // a positive moment, and after the alert is dismissed so the native
+          // review card never competes with it for presentation.
+          onPress: () => { recordWorkoutCompletedAndMaybeAskForReview() },
+        }]
       )
     } catch (error) {
       notifyError()
