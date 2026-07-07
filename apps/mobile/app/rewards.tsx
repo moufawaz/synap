@@ -121,6 +121,46 @@ export default function RewardsScreen() {
             ) : null}
           </Card>
 
+          {/* How it works — the full loop in 4 lines so nobody has to guess.
+              The banking rule especially must be visible BEFORE the redeem
+              dialog, not only inside it. */}
+          <Card style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>
+              {isRtl ? 'كيف تعمل الشرارات؟' : 'How Sparks work'}
+            </Text>
+            {([
+              {
+                icon: 'zap',
+                en: 'Train, log meals, and track progress — Sparks are added automatically. No claiming, no codes.',
+                ar: 'تمرّن وسجّل وجباتك وتابع تقدمك — الشرارات تُضاف تلقائياً. بدون خطوات إضافية أو أكواد.',
+              },
+              {
+                icon: 'gift',
+                en: 'Redeem Sparks below for free Elite days — the full toolkit: unlimited Ion, form check, supplements, everything.',
+                ar: 'استبدل شراراتك بالأسفل بأيام Elite مجانية — كل الميزات: آيون بلا حدود، تحليل الأداء، المكملات، كل شيء.',
+              },
+              {
+                icon: 'clock',
+                en: 'Free days activate instantly. Already subscribed? They bank and start after your paid period ends — never wasted.',
+                ar: 'الأيام المجانية تُفعَّل فوراً. مشترك بالفعل؟ تُحفَظ وتبدأ بعد نهاية فترتك المدفوعة — لا تضيع أبداً.',
+              },
+              {
+                icon: 'shield',
+                en: "Sparks never expire, and they're earned by consistency — not by weight on the scale.",
+                ar: 'الشرارات لا تنتهي صلاحيتها أبداً، وتُكسَب بالالتزام — لا بوزنك على الميزان.',
+              },
+            ] as const).map((row, i) => (
+              <View key={i} style={[styles.howRow, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
+                <View style={[styles.earnIcon, { backgroundColor: color.elevated }]}>
+                  <Feather name={row.icon as any} size={14} color={color.spark} />
+                </View>
+                <Text style={[styles.howText, { color: color.muted, textAlign: align }]}>
+                  {isRtl ? row.ar : row.en}
+                </Text>
+              </View>
+            ))}
+          </Card>
+
           {/* Redeem */}
           <Card style={styles.section}>
             <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>
@@ -217,6 +257,8 @@ const styles = StyleSheet.create({
   rewardCost: { fontSize: 12, fontWeight: '700', marginTop: 2 },
   redeemBtn: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12, borderWidth: 1, minWidth: 86, alignItems: 'center' },
   redeemText: { fontSize: 13, fontWeight: '900' },
+  howRow: { alignItems: 'flex-start', gap: 10, paddingVertical: 7 },
+  howText: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 19 },
   earnRow: { alignItems: 'center', gap: 10, paddingVertical: 7 },
   earnIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   earnLabel: { flex: 1, fontSize: 13, fontWeight: '600' },
