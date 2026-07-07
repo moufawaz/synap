@@ -1,5 +1,6 @@
 import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { awardSparks, awardSparksCapped, sundayWeekStart } from '@/lib/sparks'
 
 /**
  * PR (personal record) detection. Each logged exercise may carry a
@@ -139,9 +140,42 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // ── Sparks: workout completed (1/day via date ref) ──────────────────
+  let sparksEarned = 0
+  sparksEarned += await awardSparks(admin, user.id, 'workout_completed', payload.date)
+
+  // ── Sparks: streak week completed ───────────────────────────────────
+  // If this log just brought the current Sunday-start week up to the
+  // planned training-days target, award the weekly streak bonus (ref =
+  // week start → once per week, idempotent forever).
+  try {
+    const weekStart = sundayWeekStart(new Date(`${payload.date}T00:00:00Z`))
+    const { data: profileRow } = await admin.from('profiles').select('training_days').eq('user_id', user.id).maybeSingle()
+    const target = Math.min(6, Math.max(1, parseInt(String(profileRow?.training_days ?? '3'), 10) || 3))
+    let { data: weekLogs, error: weekErr } = await admin
+      .from('workout_log').select('date')
+      .eq('user_id', user.id).gte('date', weekStart)
+    if (weekErr) {
+      const fb = await admin.from('workout_logs').select('date').eq('user_id', user.id).gte('date', weekStart)
+      weekLogs = fb.data
+    }
+    const distinctDays = new Set((weekLogs || []).map(r => String(r.date).slice(0, 10)))
+    if (distinctDays.size >= target) {
+      sparksEarned += await awardSparks(admin, user.id, 'streak_week', weekStart)
+    }
+  } catch { /* sparks never break the log */ }
+
   // ── PR detection + Ion celebration ─────────────────────────────────
   const prs = detectPrs(todayExercises, priorLogs)
   if (prs.length) {
+    // Sparks: PRs, capped at 2/week regardless of how many were hit today.
+    for (const pr of prs) {
+      sparksEarned += await awardSparksCapped(
+        admin, user.id, 'pr',
+        `${payload.date}:${pr.exercise.toLowerCase()}`,
+        2, 7 * 86400000,
+      )
+    }
     try {
       const { data: langRow } = await admin.from('users').select('language').eq('id', user.id).maybeSingle()
       const ar = langRow?.language === 'ar'
@@ -161,5 +195,5 @@ export async function POST(req: Request) {
     } catch { /* celebration is best-effort — never fail the log for it */ }
   }
 
-  return NextResponse.json({ log: data, prs })
+  return NextResponse.json({ log: data, prs, sparksEarned })
 }

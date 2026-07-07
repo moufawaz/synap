@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
+import { awardSparks } from '@/lib/sparks'
 
 /**
  * Progress photos — private per-user storage in Supabase Storage.
@@ -90,7 +91,11 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(`${user.id}/${name}`, 3600)
-  return NextResponse.json({ photo: { name, date, url: signed?.signedUrl || null } })
+
+  // Sparks: progress photo, once per calendar month (ref = YYYY-MM).
+  const sparksEarned = await awardSparks(admin, user.id, 'progress_photo', date.slice(0, 7))
+
+  return NextResponse.json({ photo: { name, date, url: signed?.signedUrl || null }, sparksEarned })
 }
 
 export async function DELETE(req: Request) {

@@ -1,5 +1,6 @@
 import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { awardSparksCapped } from '@/lib/sparks'
 
 // Use admin client for all reads/writes so RLS never silently drops rows.
 // Auth accepts either web Supabase cookies or native mobile bearer tokens.
@@ -43,7 +44,14 @@ export async function POST(req: Request) {
   }).select().maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ log: data })
+
+  // Sparks: meal logged, max 3/day. Ref = the meal log id (each row unique);
+  // the cap comes from the rolling-24h count so deleting+relogging can't farm.
+  const sparksEarned = data?.id
+    ? await awardSparksCapped(admin, user.id, 'meal_logged', String(data.id), 3, 24 * 3600 * 1000)
+    : 0
+
+  return NextResponse.json({ log: data, sparksEarned })
 }
 
 export async function DELETE(req: Request) {

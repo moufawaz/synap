@@ -27,6 +27,7 @@ const NAV_ROWS: NavRow[] = [
   { label: 'Grocery list',     labelAr: 'قائمة التسوق',  href: '/grocery',           icon: 'shopping-bag'  },
   { label: 'Eating out',       labelAr: 'الأكل خارجاً', href: '/eating-out',        icon: 'map-pin'       },
   { label: 'Form check',       labelAr: 'تحقق الشكل',   href: '/form-check',        icon: 'camera'        },
+  { label: 'Rewards',          labelAr: 'المكافآت ⚡',   href: '/rewards',           icon: 'gift'          },
   { label: 'Supplements',      labelAr: 'المكملات',      href: '/supplements',       icon: 'package'       },
   { label: 'Macro adjustment', labelAr: 'تعديل الماكرو', href: '/macro-adjustment',  icon: 'sliders'       },
   { label: 'Subscription & Billing', labelAr: 'الاشتراك والفوترة', href: '/billing',     icon: 'credit-card'   },

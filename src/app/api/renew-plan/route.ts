@@ -14,6 +14,7 @@ import { regionalFoodIntelligence } from '@/lib/regional-foods'
 import { ramadanBlock } from '@/lib/ramadan'
 import { normalizeWorkoutPlanDays } from '@/lib/workout-days'
 import { recordAppEvent } from '@/lib/app-events'
+import { awardSparks } from '@/lib/sparks'
 
 // Renewal regenerates a full plan, same as generate-plan. 60 is the Vercel
 // Hobby maximum. (On Vercel Pro you can raise this to 300.)
@@ -317,6 +318,16 @@ export async function POST(req: Request) {
           ? nextPhaseStatusAfter(1, profile)
           : 'complete',
         expected_training_days: planType === 'workout' ? Math.max(1, parseInt(profile.training_days || '4') || 4) : undefined,
+        // The freshness gate's quick-update path supplied real data (lifts,
+        // flags, experience, or activity). Applying THIS preview earns the
+        // renewal_fresh Sparks bonus — renewing on fresh data is exactly the
+        // behavior we want to reward.
+        fresh_context: !!(
+          renewalContext.lifts?.length ||
+          renewalContext.flags?.length ||
+          renewalContext.training_experience ||
+          renewalContext.activity_level
+        ),
       },
     }).select('id').single()
 
@@ -726,6 +737,12 @@ async function applyRenewalPreview({
     message_type: 'text',
     metadata: { renewal_applied: true, plan_type: planType, plan_id: insertedPlan?.id },
   })
+
+  // Sparks: applied a renewal that was generated WITH fresh gate data.
+  // Ref = the preview id → once per preview, forever.
+  if (previewRow.metadata?.fresh_context) {
+    await awardSparks(admin, userId, 'renewal_fresh', String(previewId))
+  }
 
   const { error: markAppliedError } = await admin.from('chat_messages').update({
     metadata: {

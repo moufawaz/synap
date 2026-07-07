@@ -23,15 +23,30 @@ export async function getUserSubscription(userId: string) {
   const admin = createAdminClient()
   const [subRes, profileRes] = await Promise.all([
     admin.from('subscriptions').select('*').eq('user_id', userId).maybeSingle(),
-    admin.from('profiles').select('trial_ends_at').eq('user_id', userId).maybeSingle(),
+    admin.from('profiles').select('trial_ends_at, bonus_elite_until').eq('user_id', userId).maybeSingle(),
   ])
 
   const sub = subRes.data
   const trialEndsAt = profileRes.data?.trial_ends_at
+  const bonusUntil = profileRes.data?.bonus_elite_until
 
   // Active paid plan or paid LS trial — return as-is
   if (sub?.status === 'active') return sub
   if (sub?.status === 'trial') return sub
+
+  // Sparks-redeemed Elite days. After paid subs (a paying user's redemption
+  // is banked to start after their period ends — see the sparks redeem
+  // route) and before the free trial so an expired trial can't shadow it.
+  if (bonusUntil && new Date(bonusUntil) > new Date()) {
+    return {
+      ...(sub || {}),
+      user_id: userId,
+      status: 'sparks_bonus' as const,
+      plan_type: 'elite',
+      bonus_elite_until: bonusUntil,
+      _is_sparks_bonus: true,
+    }
+  }
 
   // No paid plan — check free signup trial
   if (trialEndsAt && new Date(trialEndsAt) > new Date()) {
@@ -51,6 +66,13 @@ export async function getUserSubscription(userId: string) {
 export function effectivePlan(sub: any): 'starter' | 'trial' | 'pro' | 'elite' {
   if (isLaunchMode()) return 'elite'
   if (!sub) return 'starter'
+
+  // Sparks-redeemed Elite days (synthesized by getUserSubscription)
+  if (sub.status === 'sparks_bonus') {
+    const until = sub.bonus_elite_until ? new Date(sub.bonus_elite_until) : null
+    if (until && until > new Date()) return 'elite'
+    return 'starter'
+  }
 
   // Free signup trial (synthesized by getUserSubscription)
   if (sub.status === 'free_trial') {

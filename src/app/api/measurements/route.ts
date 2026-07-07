@@ -1,5 +1,6 @@
 import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { awardSparks, sundayWeekStart } from '@/lib/sparks'
 
 export async function GET(req: Request) {
   const admin = createAdminClient()
@@ -42,5 +43,12 @@ export async function POST(req: Request) {
   const { data, error } = await admin.from('measurements').insert(insert).select().maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ measurement: data })
+
+  // Sparks: measurement logged, once per Sunday-start week (ref = week key).
+  const sparksEarned = await awardSparks(
+    admin, user.id, 'measurement_logged',
+    sundayWeekStart(new Date(String(insert.date || new Date().toISOString().slice(0, 10)) + 'T00:00:00Z')),
+  )
+
+  return NextResponse.json({ measurement: data, sparksEarned })
 }

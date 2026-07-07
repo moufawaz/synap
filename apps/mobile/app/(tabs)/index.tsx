@@ -14,6 +14,7 @@ import { loadConnectedHealthSummary } from '@/features/health'
 import { getMealLogs } from '@/features/nutrition'
 import { getStreak } from '@/features/measurements'
 import { getProfile } from '@/features/profile'
+import { getSparks } from '@/features/sparks'
 import { getSubscriptionStatus } from '@/features/subscription'
 import { runAdaptationCheck } from '@/features/tools'
 import { getPlanHistory } from '@/features/workout'
@@ -38,6 +39,7 @@ export default function DashboardScreen() {
   const chat         = useAsyncData(() => getChatHistory(10), [], { cacheKey: 'chat-last10' })
   const health       = useAsyncData(loadConnectedHealthSummary, [], { cacheKey: 'health-summary', cacheTtlMs: 5 * 60 * 1000 })
   const streak       = useAsyncData(getStreak, [], { cacheKey: 'streak', cacheTtlMs: 10 * 60 * 1000 })
+  const sparks       = useAsyncData(getSparks, [], { cacheKey: 'sparks', cacheTtlMs: 10 * 60 * 1000 })
 
   useFocusEffect(
     useCallback(() => {
@@ -47,6 +49,7 @@ export default function DashboardScreen() {
       chat.silentRefresh()
       health.silentRefresh()
       streak.silentRefresh()
+      sparks.silentRefresh()
       // Run adaptation check at most once per day — fires smart push notifications
       // (plateau alerts, streak milestones, plan renewal warnings, Ion messages)
       AsyncStorage.getItem('@sdc:adaptation-last').then(last => {
@@ -186,6 +189,19 @@ export default function DashboardScreen() {
               </View>
             </View>
           </Card>
+        </Pressable>
+      ) : null}
+
+      {/* ⚡ Sparks pill — balance + link to the rewards screen. Advertises the
+          loyalty loop even at 0 so new users learn workouts earn something. */}
+      {hasPlan && sparks.data ? (
+        <Pressable onPress={() => router.push('/rewards')} style={[styles.sparksPill, { backgroundColor: color.sparkSoft, borderColor: 'rgba(187,92,246,0.25)', flexDirection: rowDir }]}>
+          <Text style={[styles.sparksPillText, { color: color.sparkLight, textAlign: align }]}>
+            {sparks.data.balance > 0
+              ? (isRtl ? `⚡ ${sparks.data.balance} شرارة — استبدلها بأيام Elite` : `⚡ ${sparks.data.balance} Sparks — redeem for Elite days`)
+              : (isRtl ? '⚡ اكسب شرارات مع كل تمرين — المكافآت' : '⚡ Earn Sparks with every workout — Rewards')}
+          </Text>
+          <Feather name={isRtl ? 'chevron-left' : 'chevron-right'} size={14} color={color.sparkLight} />
         </Pressable>
       ) : null}
 
@@ -467,6 +483,8 @@ const styles = StyleSheet.create({
   streakSub: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   streakDots: { gap: 5, alignItems: 'center' },
   streakDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1 },
+  sparksPill: { alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14, borderWidth: 1, marginBottom: 12 },
+  sparksPillText: { flex: 1, fontSize: 12, fontWeight: '800' },
   cardHeader: { alignItems: 'center', gap: 12, marginBottom: 4 },
   iconBadge: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   cardHeaderText: { flex: 1 },

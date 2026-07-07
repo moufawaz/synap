@@ -427,9 +427,12 @@ export default function TrainScreen() {
       // (Epley est-1RM) and returns any records. Lead the alert with them:
       // this is the single best feel-good moment the app has.
       const prs = logRes.prs || []
-      const summaryLine = isRtl
+      const sparksLine = (logRes.sparksEarned ?? 0) > 0
+        ? (isRtl ? `\n+${logRes.sparksEarned} ⚡ شرارة` : `\n+${logRes.sparksEarned} ⚡ Sparks earned`)
+        : ''
+      const summaryLine = (isRtl
         ? `تمارين مكتملة: ${completed.length}/${totalExercises}  ·  المدة: ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
-        : `${completed.length}/${totalExercises} exercises  ·  ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`
+        : `${completed.length}/${totalExercises} exercises  ·  ${formatTime(elapsed > 0 ? elapsed : (workout.duration_min ?? 0) * 60)}`) + sparksLine
       const prLines = prs.map(pr => isRtl
         ? `🏆 ${pr.exercise}: ${pr.weight_kg} كغ × ${pr.reps} (سابقاً ${pr.prev_weight_kg} كغ)`
         : `🏆 ${pr.exercise}: ${pr.weight_kg}kg × ${pr.reps} (was ${pr.prev_weight_kg}kg)`)

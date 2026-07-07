@@ -169,7 +169,7 @@ export async function logWorkout(payload: {
   exercisePerformance?: Record<string, unknown>
   notes?: string | null
 }) {
-  return apiFetch<{ log: unknown; prs?: WorkoutPr[] }>('/api/log-workout', {
+  return apiFetch<{ log: unknown; prs?: WorkoutPr[]; sparksEarned?: number }>('/api/log-workout', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
