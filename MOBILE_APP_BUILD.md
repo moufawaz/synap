@@ -2628,23 +2628,80 @@ apply/rollback are exempt.
   delete, and Compare (earliest vs latest side by side). Empty state
   sells photo #1. Bilingual.
 
+### ⚡ Sparks loyalty points (builds 1135-1136)
+Behavior-based points redeemable for free Elite days. Design premise:
+reward the BEHAVIORS that cause progress, never outcomes (kg lost is
+gameable and a health-risk incentive). Apple constraint that shaped
+it: subscription prices can't be discounted programmatically — but
+granting free access from our own backend is fully allowed (same
+mechanism as the signup trial). Offer Codes for paying subscribers
+who want a real price discount = V2.
+
+Economy (server-owned catalogs — rebalancing needs no app build):
+  earn:  workout 10 (1/day) · meal 2 (up to 3/day) · streak week 30 ·
+         PR 15 (2/wk) · fresh-data renewal 20 · photo 10 (1/mo) ·
+         measurements 5 (1/wk)  → engaged user ≈ 200-300/month
+  spend: 3d Elite = 150 · 7d = 300 · 30d = 1000
+
+Data — migration `supabase/migrations/20260709_loyalty_sparks.sql`
+(FOUNDER MUST RUN IN STUDIO; until then every award/redeem call
+no-ops gracefully):
+- `loyalty_points`: append-only ledger; balance = SUM(points);
+  redemptions are negative rows. unique(user_id, event_type, ref_id)
+  is the idempotency backbone — hooks pick ref_id so caps fall out
+  naturally (workout ref = date → once/day). RLS on, zero policies:
+  only service-role API routes touch it.
+- `loyalty_redemptions`: audit trail.
+- `profiles.bonus_elite_until`: the granted entitlement.
+
+Server:
+- `src/lib/sparks.ts`: awardSparks (idempotent, never throws),
+  awardSparksCapped (rolling-window caps), getSparksBalance, catalogs.
+- Earning hooks ride existing endpoints: log-workout (workout +
+  streak-week + PRs), log-meal, measurements, progress-photos,
+  renew-plan apply (only when the preview carried fresh gate data —
+  new `fresh_context` flag in preview metadata). All return
+  `sparksEarned` for client toasts.
+- GET /api/me/sparks; POST /api/me/sparks/redeem with a
+  deduct-then-recheck concurrency guard (rolls back own row on
+  overdraw) and BANKING: bonus window starts at max(now, existing
+  bonus, paid period end) so a paying subscriber's redemption lands
+  AFTER their paid period — never wasted, doubles as a churn
+  safety-net. Refund on grant failure. Ion confirms in chat.
+- effectivePlan()/getUserSubscription() honor bonus_elite_until as a
+  synthesized 'sparks_bonus' status → 'elite' (after paid subs,
+  before the free trial).
+
+Mobile:
+- New /rewards screen (More tab, gift icon): balance hero, bilingual
+  "How Sparks work" explainer (auto-earning, what Elite unlocks,
+  instant vs banked activation, no expiry, consistency-not-scale),
+  redeem list with affordability states, how-to-earn list, activity
+  history.
+- Dashboard ⚡ pill under the streak card (balance + link, or an
+  "earn Sparks with every workout" teaser at 0).
+- Workout-saved alert appends "+N ⚡ Sparks earned".
+
+### Incident: expired Apple agreement blocked uploads (build 1136)
+upload_to_testflight failed with "A required agreement is missing or
+has expired" — Apple updated the Developer Program License Agreement
+and froze uploads until the Account Holder accepted it in App Store
+Connect. NOT a code issue (the IPA built and signed clean). Founder
+accepted the agreement; re-ran the same workflow run (rerun-failed-
+jobs keeps the run number → same build number 1136) and it uploaded
+clean. Lesson: this same symptom (upload step dies with no altool
+version error) = check ASC agreements first, especially the Paid
+Applications Agreement since expired agreements can also pull the
+live app from sale.
+
 ### Parked (decided, not built)
 - **Android**: strategic priority for MENA (~70-80% Android in
   Egypt); parked until the founder creates Play Console ($25,
   identity verification 1-3 days), Firebase project (FCM), and adds
   the Play Store app in RevenueCat. Expo codebase is already
   cross-platform — remaining work is config, Google billing, QA.
-- **Sparks loyalty points** (planned in detail, not started):
-  behavior-based points (workouts/meals/streak weeks/PRs/fresh
-  renewals — never kg lost), redeemable for free Elite days
-  (DB-entitlement, no Apple involvement) in V1 and App Store Offer
-  Codes for active subscribers in V2. Needs a `loyalty_points`
-  ledger + `loyalty_redemptions` migration, earning hooks in 4
-  existing endpoints + streak cron, `bonus_elite_until` handling in
-  effectivePlan(), dashboard chip + More-tab rewards screen.
-  Apple constraint driving the design: subscription prices can't be
-  discounted programmatically — only free days (own backend), Offer
-  Codes, or Promotional Offers.
+- **Sparks V2**: App Store Offer Codes so paying subscribers can
+  redeem for real price discounts (needs ASC batch generation).
 - 1.0.4 candidates: home-screen widget (@bacons/apple-targets already
   configured), finish Live Activity (branch, needs widget App ID),
   write workouts to Apple Health (read exists; write permission
@@ -2655,6 +2712,20 @@ apply/rollback are exempt.
 1126-1127 (debug fixes; 1.0.2 train closed → bumped 1.0.3) → 1128
 (ratings prompt) → 1129 (Sentry source maps) → 1130-1132 (onboarding
 overhaul + teaching card + reminder + renewal gates) → 1133
-(superseded) → **1134 (current TestFlight build: PR celebrations,
-exercise swap, rate-limit, streaks, progress photos — the 1.0.3
-submission candidate)**.
+(superseded) → 1134 (PR celebrations, exercise swap, rate-limit,
+streaks, progress photos) → 1135 (superseded) → **1136 (Sparks +
+rewards explainer — the 1.0.3 SUBMISSION BUILD; first upload attempt
+blocked by the expired Apple agreement, re-run succeeded)**.
+
+### 1.0.3 submission
+Submitted with build **1136**. What's New (EN/AR) leads with Sparks,
+PR celebrations, streaks, progress photos, and exercise swap; the
+"also" list covers onboarding personalization + Arabic, smarter
+renewals, the setup reminder, and readable crash reports. Promotional
+text rotated to the Sparks hook in both locales. Review notes explain
+the loyalty program explicitly (points earned only through engagement,
+not purchasable, no cash value, redemption grants free access via our
+backend and never touches App Store pricing/billing) plus that camera
+use rides the existing permission. Release NOTE: run the Sparks
+migration in Supabase BEFORE releasing to users — the update
+advertises the feature.
