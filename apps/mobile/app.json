@@ -36,10 +36,16 @@
     },
     "android": {
       "package": "app.synap.fit",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "CAMERA",
         "POST_NOTIFICATIONS"
-      ]
+      ],
+      "icon": "./assets/icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#050507"
+      }
     },
     "plugins": [
       "expo-router",
