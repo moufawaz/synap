@@ -80,16 +80,22 @@ export default function DashboardScreen() {
   const trainingDays = plan.data?.timing?.workout?.label ?? ''
 
   const hasPlan = !plan.loading && !!plan.data?.activeWorkoutPlan
+  // Onboarding's phased generation (workout → workout2 → diet) can fail partway
+  // through and still leave an active-but-incomplete workout plan (missing
+  // training days, or no diet plan at all) if the user hits Continue/Cancel on
+  // an error instead of Try Again. Gate the reminder on BOTH existing so those
+  // users keep getting nudged instead of looking "done" forever.
+  const hasCompletePlan = hasPlan && !!plan.data?.activeDietPlan
 
   // Onboarding reminder: schedule a 24h local notification the first time we
-  // see this user without a plan; cancel it as soon as a plan exists (covers
-  // onboarding completed here, on another device, or via web). Both calls are
-  // idempotent and permission-gated inside the helper.
+  // see this user without a complete plan; cancel it once both plans exist
+  // (covers onboarding completed here, on another device, or via web). Both
+  // calls are idempotent and permission-gated inside the helper.
   useEffect(() => {
     if (plan.loading) return
-    if (hasPlan) cancelOnboardingReminder()
+    if (hasCompletePlan) cancelOnboardingReminder()
     else scheduleOnboardingReminder(language)
-  }, [hasPlan, plan.loading, language])
+  }, [hasCompletePlan, plan.loading, language])
   const profileMeasurements: Array<{ weight_kg?: number }> = (profile.data as any)?.measurements ?? []
   // Weight priority must be ACCOUNT-specific first: this account's measurement,
   // then this account's onboarding weight. Apple Health weight is device-level

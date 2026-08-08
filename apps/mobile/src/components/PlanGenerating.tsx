@@ -36,11 +36,17 @@ export function PlanGenerating({
   name,
   task,
   onComplete,
+  onExit,
 }: {
   lang: 'en' | 'ar'
   name: string
   task: () => Promise<void>
   onComplete: () => void
+  /** User backed out via Continue/Cancel after task() never resolved — plan
+   *  may be partial. Defaults to onComplete so callers that don't care about
+   *  the distinction (e.g. renewal, which applies atomically) keep working
+   *  unchanged. */
+  onExit?: () => void
 }) {
   const { color } = useTheme()
   const isRtl = lang === 'ar'
@@ -134,7 +140,7 @@ export function PlanGenerating({
               <Pressable onPress={run} style={[styles.retryBtn, { backgroundColor: color.sparkSoft, borderColor: color.spark }]}>
                 <Text style={[styles.retryText, { color: color.spark }]}>{isRtl ? 'إعادة المحاولة' : 'Try Again'}</Text>
               </Pressable>
-              <Pressable onPress={onComplete} style={[styles.continueBtn, { borderColor: color.border }]}>
+              <Pressable onPress={onExit ?? onComplete} style={[styles.continueBtn, { borderColor: color.border }]}>
                 <Text style={[styles.continueText, { color: color.muted }]}>{isRtl ? 'متابعة' : 'Continue'}</Text>
               </Pressable>
             </View>
@@ -149,7 +155,7 @@ export function PlanGenerating({
                 cancel a Vercel function mid-flight), but the user is
                 returned to the Plan page immediately. */}
             <Pressable
-              onPress={onComplete}
+              onPress={onExit ?? onComplete}
               style={[styles.cancelBtn, { borderColor: color.border }]}
               hitSlop={8}
             >

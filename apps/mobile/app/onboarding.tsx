@@ -325,6 +325,15 @@ export default function OnboardingScreen() {
           syncSynapReminders(true).catch(() => {})
           router.replace('/(tabs)')
         }}
+        onExit={() => {
+          // User backed out (Continue/Cancel) after a phase failed — plan may
+          // be partial (e.g. workout saved but diet never generated). Do NOT
+          // cancel the onboarding reminder or schedule the full reminder set
+          // here; the dashboard re-schedules the reminder itself whenever the
+          // workout+diet pair isn't both present, so this just navigates and
+          // lets that recovery path do its job.
+          router.replace('/(tabs)')
+        }}
       />
     )
   }
