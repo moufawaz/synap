@@ -210,7 +210,7 @@ export default function MoreScreen() {
 
       {/* App version — user-facing only (build number + dev tag removed). */}
       <Text style={{ color: color.dim, fontSize: 11, fontWeight: '700', textAlign: 'center', marginTop: 8, marginBottom: 4 }}>
-        SYNAP v{Constants.expoConfig?.version ?? '1.0.3'}
+        SYNAP v{Constants.expoConfig?.version ?? '1.0.4'}
       </Text>
     </Screen>
   )
