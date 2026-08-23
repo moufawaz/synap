@@ -212,6 +212,14 @@ export async function POST(req: Request) {
           pending_plan_type: planEdit.pendingPlanType,
           total_estimated_cost_usd: planEdit.usage.estimated_cost_usd,
         }
+      } else if (planEdit.reason === 'split_preference_saved') {
+        // Not a failure — a positive confirmation, so it shouldn't render as
+        // an alert. Distinct branch (rather than the 'applied' workout_card
+        // path) since chat didn't touch the live plan, just saved a
+        // preference for the next Renew.
+        reply = buildPlanEditFailureReply(profile, planEdit.reason, planEdit.splitLabel)
+        messageType = 'text'
+        metadata = { split_preference_saved: planEdit.splitLabel, total_estimated_cost_usd: 0 }
       } else {
         // Error/failure
         reply = buildPlanEditFailureReply(profile, planEdit.reason)
@@ -388,7 +396,7 @@ type UsageMeta = { model: string; input_tokens: number; output_tokens: number; e
 
 type PlanEditResult =
   | { applied: false; proposed: false; shouldStop: false; reason: string }
-  | { applied: false; proposed: false; shouldStop: true;  reason: string }
+  | { applied: false; proposed: false; shouldStop: true;  reason: string; splitLabel?: string }
   | { applied: false; proposed: true;  shouldStop: true;  proposalText: string; pendingPlanJson: any; pendingPlanType: 'workout' | 'diet'; usage: UsageMeta }
   | { applied: true;  proposed: false; shouldStop: true;  type: 'workout' | 'diet'; summary: string; usage: UsageMeta }
 
@@ -396,6 +404,37 @@ type PlanEditIntent = 'workout' | 'diet' | 'rest_today'
 type TodayWorkoutTarget = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full_body'
 type WorkoutDayMove = { sourceDay: string; targetDay: string }
 type WorkoutDaySwap = { firstDay: string; secondDay: string }
+
+// Named splits Ion can recognize a user asking to switch to. Free-text
+// beyond this list is deliberately NOT auto-matched (a generic "<word> split"
+// regex risked false-positives on exercise names like "Bulgarian split
+// squat"), so an unlisted split still falls through to the normal
+// "open Plan → Renew" chat guidance without silently mislabeling anything.
+const SPLIT_LABELS: Array<{ re: RegExp; label: string }> = [
+  { re: /\barnold\s*split\b/i, label: 'Arnold split' },
+  { re: /\b(push\s*\/?\s*pull\s*\/?\s*legs|ppl)\b/i, label: 'Push/Pull/Legs' },
+  { re: /\bupper\s*\/?\s*lower\b/i, label: 'Upper/Lower' },
+  { re: /\bbro\s*split\b/i, label: 'Bro split' },
+  { re: /\bfull\s*body\b/i, label: 'Full body' },
+  { re: /\bphul\b/i, label: 'PHUL' },
+  { re: /\bphat\b/i, label: 'PHAT' },
+  { re: /\b(5\s*x\s*5|starting strength)\b/i, label: '5x5 / Starting Strength' },
+  { re: /\btexas method\b/i, label: 'Texas Method' },
+]
+
+/** A request to change the overall training SPLIT (e.g. "switch me to Arnold
+ *  split") — distinct from a targeted exercise/day edit chat can apply to
+ *  the live plan_json. Returns the recognized split label, or null. */
+function detectSplitPreferenceRequest(message: string): string | null {
+  const text = message.trim()
+  if (!text) return null
+  const wantsChange = /\b(switch|change|move|set|use|want|try|make it|make this|go with|start)\b|أريد|عايز|عاوز|غير|بدل|حول/i.test(text)
+  if (!wantsChange) return null
+  for (const { re, label } of SPLIT_LABELS) {
+    if (re.test(text)) return label
+  }
+  return null
+}
 
 function isExplanationQuestion(message: string): boolean {
   const text = message.trim().toLowerCase()
@@ -557,6 +596,26 @@ async function maybeApplyPlanEdit({
   if (isExplanationQuestion(message)) {
     return { applied: false, proposed: false, shouldStop: false, reason: 'question_not_plan_edit' }
   }
+
+  // A full split change isn't a targeted edit chat can apply to the live
+  // plan_json — it needs a real regeneration. Persist the preference
+  // immediately so the NEXT renewal actually builds it. Previously this was
+  // purely conversational: Ion could "agree" to a split change in chat but
+  // nothing durable recorded the request, so calculateWorkoutParams() just
+  // recomputed the old algorithmic split again on the next Renew, silently
+  // discarding what the user asked for.
+  const splitRequest = detectSplitPreferenceRequest(message)
+  if (splitRequest && workoutPlanRow?.plan_json) {
+    try {
+      const { error } = await supabase.from('profiles').update({ preferred_split: splitRequest }).eq('user_id', userId)
+      if (error) throw error
+      return { applied: false, proposed: false, shouldStop: true, reason: 'split_preference_saved', splitLabel: splitRequest }
+    } catch (err) {
+      console.error('Save split preference failed:', err)
+      return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
+    }
+  }
+
   const daySwap = detectWorkoutDaySwap(message, recentContext)
   if (daySwap && workoutPlanRow?.plan_json) {
     try {
@@ -818,8 +877,13 @@ function buildDeterministicPlanProposal(profile: any, summary: string) {
     : `I'm proposing this change before saving:\n\n${summary}\n\nConfirm and I'll apply it to your plan.`
 }
 
-function buildPlanEditFailureReply(profile: any, reason: string) {
+function buildPlanEditFailureReply(profile: any, reason: string, splitLabel?: string) {
   const ar = profile?.language === 'ar'
+  if (reason === 'split_preference_saved') {
+    return ar
+      ? `تم. حفظت "${splitLabel}" كتقسيمك المفضل — افتح: الخطة ← تجديد بآيون وسأبني خطة تمرينك الجديدة بهذا التقسيم. لا يمكنني إعادة بناء التقسيم بالكامل هنا في المحادثة، لكن التفضيل محفوظ الآن لأي عملية تجديد.`
+      : `Saved — "${splitLabel}" is now your preferred split. Open Plan → Renew with Ion and I'll build your next workout plan around it. I can't rebuild a whole split structure here in chat, but the preference is now saved for your next renewal.`
+  }
   if (reason === 'requires_renew_button') {
     return ar
       ? 'إعادة بناء الخطة بالكامل تحتاج إلى الإنشاء الكامل في خلفية النظام (وليس تعديلاً سريعاً). افتح: الخطة ← تجديد بآيون، وسأعيد بناء خطتك التغذوية كاملة بناءً على آخر بياناتك. التعديلات الصغيرة (تبديل وجبة، تغيير سعرات يوم) تتم هنا بشكل فوري.'

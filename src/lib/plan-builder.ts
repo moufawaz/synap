@@ -68,8 +68,15 @@ export function calculateWorkoutParams(p: any): WorkoutParams {
   const exercisesPerSession = duration <= 45 ? 5 : duration <= 60 ? 7 : duration <= 75 ? 8 : 10
 
   // ── Split recommendation ──────────────────────────────────────────
+  // A split the user explicitly requested (e.g. via chat — "switch me to
+  // Arnold split") and Ion agreed to wins over the algorithmic default.
+  // Without this override, generate-plan and renew-plan both silently
+  // discarded any conversational split request on every regeneration,
+  // since this function only ever looked at training_days + goal.
+  const preferredSplit = String(p.preferred_split || '').trim()
   let splitType: string
-  if      (days <= 2)  splitType = 'full_body'
+  if      (preferredSplit)  splitType = preferredSplit
+  else if (days <= 2)  splitType = 'full_body'
   else if (days === 3) splitType = goal === 'build_muscle' ? 'push_pull_legs' : 'full_body_x3'
   else if (days === 4) splitType = 'upper_lower'
   else if (days === 5) splitType = goal === 'build_muscle' ? 'push_pull_legs_x2_upper' : 'push_pull_legs_cardio'
