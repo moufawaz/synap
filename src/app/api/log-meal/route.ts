@@ -29,9 +29,14 @@ export async function POST(req: Request) {
 
   const body = await req.json()
   const admin = createAdminClient()
+  // Clients send their local date; the server's UTC date is wrong for users far
+  // from UTC (late-night meals landed on the previous/next day).
+  const date = typeof body.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
+    ? body.date
+    : new Date().toISOString().split('T')[0]
   const { data, error } = await admin.from('meals_log').insert({
     user_id: user.id,
-    date: new Date().toISOString().split('T')[0],
+    date,
     logged_at: new Date().toISOString(),
     description: body.meal_name ?? body.description ?? null,
     meal_time: body.meal_time ?? null,

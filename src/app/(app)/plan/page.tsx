@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -64,7 +64,7 @@ export default function PlanPage() {
       supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('profiles').select('gender').eq('user_id', user.id).maybeSingle(),
       fetch('/api/me/subscription').then(r => r.json()).catch(() => ({ tier: 'starter' })),
-      fetch('/api/plan-history', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/plan-history?dow=${new Date().getDay()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
     ])
 
     setDietPlan(dietRes.data?.plan_json || null)

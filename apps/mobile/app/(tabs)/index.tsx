@@ -22,6 +22,7 @@ import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { cancelOnboardingReminder, scheduleOnboardingReminder } from '@/lib/onboardingReminder'
 import { useTheme } from '@/theme/ThemeProvider'
+import { localDateKey } from '@/lib/date'
 
 function timeGreeting(isRtl: boolean) {
   const h = new Date().getHours()
@@ -53,7 +54,7 @@ export default function DashboardScreen() {
       // Run adaptation check at most once per day — fires smart push notifications
       // (plateau alerts, streak milestones, plan renewal warnings, Ion messages)
       AsyncStorage.getItem('@sdc:adaptation-last').then(last => {
-        const today = new Date().toISOString().slice(0, 10)
+        const today = localDateKey()
         if (last !== today) {
           runAdaptationCheck()
             .then(() => AsyncStorage.setItem('@sdc:adaptation-last', today))

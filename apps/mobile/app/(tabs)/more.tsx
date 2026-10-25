@@ -14,6 +14,7 @@ import { createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { openExternalLink } from '@/lib/links'
 import { useTheme } from '@/theme/ThemeProvider'
+import { localDateKey } from '@/lib/date'
 
 
 type NavRow = { label: string; labelAr?: string; href: Href; icon: string; color?: string }
@@ -61,7 +62,7 @@ export default function MoreScreen() {
         if (summary.latestWeightKg) {
           try {
             await createMeasurement({
-              date: new Date().toISOString().slice(0, 10),
+              date: localDateKey(),
               weight_kg: summary.latestWeightKg,
             })
           } catch { /* non-fatal — maybe already logged today */ }

@@ -38,6 +38,7 @@ import { getPlanHistory } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+import { localDateKey } from '@/lib/date'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -85,8 +86,7 @@ function safeIngredient(ing: unknown): string {
 }
 
 function todayKey() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return localDateKey()
 }
 
 function numberOrNull(value: string) {
