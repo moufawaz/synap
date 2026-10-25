@@ -283,9 +283,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `Failed to save workout plan: ${wpError.message}` }, { status: 500 })
       }
       workoutPlanId = workoutPlan!.id
-      // Atomic swap: deactivate prior workout plans, then activate the new one.
-      await supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id).neq('id', workoutPlanId)
-      await supabase.from('workout_plans').update({ active: true }).eq('id', workoutPlanId)
+      // Swap: activate the new plan first, then deactivate the others. Both
+      // writes are checked — ignoring them could leave two active plans.
+      const { error: activateErr } = await supabase.from('workout_plans').update({ active: true }).eq('id', workoutPlanId)
+      if (activateErr) {
+        console.error('Workout plan activate error:', activateErr)
+        return NextResponse.json({ error: `Failed to activate workout plan: ${activateErr.message}` }, { status: 500 })
+      }
+      const { error: deactivateErr } = await supabase.from('workout_plans').update({ active: false }).eq('user_id', user.id).neq('id', workoutPlanId)
+      if (deactivateErr) console.error('Workout plan deactivate error:', deactivateErr)
     }
 
     // ── Diet plan (diet / all phases) ─────────────────────────────────────────
@@ -310,8 +316,13 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `Failed to save diet plan: ${dpError.message}` }, { status: 500 })
       }
       dietPlanId = dietPlan!.id
-      await supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id).neq('id', dietPlanId)
-      await supabase.from('diet_plans').update({ active: true }).eq('id', dietPlanId)
+      const { error: dietActivateErr } = await supabase.from('diet_plans').update({ active: true }).eq('id', dietPlanId)
+      if (dietActivateErr) {
+        console.error('Diet plan activate error:', dietActivateErr)
+        return NextResponse.json({ error: `Failed to activate diet plan: ${dietActivateErr.message}` }, { status: 500 })
+      }
+      const { error: dietDeactivateErr } = await supabase.from('diet_plans').update({ active: false }).eq('user_id', user.id).neq('id', dietPlanId)
+      if (dietDeactivateErr) console.error('Diet plan deactivate error:', dietDeactivateErr)
 
       // Supplement + vitamin recommendations need the diet plan (Elite only, non-blocking)
       generateSupplementRecsIfElite(

@@ -45,7 +45,9 @@ export default function PlanScreen() {
   // forwarded into the renewal call so Ion uses fresh numbers + constraints.
   const [renewContext, setRenewContext] = useState<RenewalContext | null>(null)
   const [recipeLoading, setRecipeLoading] = useState<number | null>(null)
-  const { language } = useLanguage()
+  const { language, isRtl } = useLanguage()
+  const align = isRtl ? 'right' : 'left'
+  const rowDir = isRtl ? 'row-reverse' : 'row'
   const diet = plan.data?.activeDietPlan?.plan_json
   const workout = plan.data?.activeWorkoutPlan?.plan_json
   const meals = Array.isArray(diet?.meals) ? diet.meals : []
@@ -58,16 +60,16 @@ export default function PlanScreen() {
     setRecipeLoading(index)
     try {
       const res = await generateMealRecipe(meal)
-      const title = res.recipe?.title || meal.name || 'Recipe'
+      const title = res.recipe?.title || meal.name || (isRtl ? 'طريقة التحضير' : 'Recipe')
       const steps: string[] = Array.isArray(res.recipe?.steps) ? res.recipe.steps : []
       const ingredients: string[] = Array.isArray(res.recipe?.ingredients) ? res.recipe.ingredients : []
       const body = [
-        ingredients.length ? `Ingredients:\n${ingredients.join('\n')}` : '',
-        steps.length ? `\nSteps:\n${steps.join('\n')}` : '',
-      ].filter(Boolean).join('\n') || 'Recipe not available.'
+        ingredients.length ? `${isRtl ? 'المكوّنات' : 'Ingredients'}:\n${ingredients.join('\n')}` : '',
+        steps.length ? `\n${isRtl ? 'الخطوات' : 'Steps'}:\n${steps.join('\n')}` : '',
+      ].filter(Boolean).join('\n') || (isRtl ? 'طريقة التحضير غير متاحة.' : 'Recipe not available.')
       Alert.alert(title, body)
     } catch (error) {
-      Alert.alert('Recipe', error instanceof Error ? error.message : 'Could not generate recipe.')
+      Alert.alert(isRtl ? 'طريقة التحضير' : 'Recipe', error instanceof Error ? error.message : (isRtl ? 'تعذّر إنشاء طريقة التحضير.' : 'Could not generate recipe.'))
     } finally {
       setRecipeLoading(null)
     }
@@ -83,20 +85,20 @@ export default function PlanScreen() {
   async function runRenewal(planType: Tab) {
     const res = await renewPlan(planType, renewContext || undefined)
     setRenewContext(null)
-    const message = res.preview?.message || 'Ion prepared a renewed plan preview.'
+    const message = res.preview?.message || (isRtl ? 'جهّز آيون معاينة للخطة المجددة.' : 'Ion prepared a renewed plan preview.')
     setRenewType(null)
-    Alert.alert('Renewal preview', message, [
-      { text: 'Not now', style: 'cancel' },
+    Alert.alert(isRtl ? 'معاينة التجديد' : 'Renewal preview', message, [
+      { text: isRtl ? 'ليس الآن' : 'Not now', style: 'cancel' },
       {
-        text: 'Apply new plan',
+        text: isRtl ? 'تطبيق الخطة الجديدة' : 'Apply new plan',
         onPress: async () => {
           setBusy(`apply-${planType}`)
           try {
             await applyRenewalPreview(res.previewId)
             await plan.reload()
-            Alert.alert('Plan renewed', 'Your new cycle is now active.')
+            Alert.alert(isRtl ? 'تم تجديد الخطة' : 'Plan renewed', isRtl ? 'دورتك الجديدة مفعّلة الآن.' : 'Your new cycle is now active.')
           } catch (error) {
-            Alert.alert('Renewal', error instanceof Error ? error.message : 'Could not apply renewal.')
+            Alert.alert(isRtl ? 'التجديد' : 'Renewal', error instanceof Error ? error.message : (isRtl ? 'تعذّر تطبيق التجديد.' : 'Could not apply renewal.'))
           } finally {
             setBusy(null)
           }
@@ -106,20 +108,20 @@ export default function PlanScreen() {
   }
 
   async function restorePrevious(planType: Tab) {
-    if (!previousPlan?.id) return Alert.alert('Rollback', 'No previous cycle was found.')
-    Alert.alert('Restore previous plan?', 'This will make the previous cycle active again.', [
-      { text: 'Cancel', style: 'cancel' },
+    if (!previousPlan?.id) return Alert.alert(isRtl ? 'الاستعادة' : 'Rollback', isRtl ? 'لم يتم العثور على دورة سابقة.' : 'No previous cycle was found.')
+    Alert.alert(isRtl ? 'استعادة الخطة السابقة؟' : 'Restore previous plan?', isRtl ? 'سيؤدي هذا إلى تفعيل الدورة السابقة مرة أخرى.' : 'This will make the previous cycle active again.', [
+      { text: isRtl ? 'إلغاء' : 'Cancel', style: 'cancel' },
       {
-        text: 'Restore',
+        text: isRtl ? 'استعادة' : 'Restore',
         style: 'destructive',
         onPress: async () => {
           setBusy(`rollback-${planType}`)
           try {
             await rollbackPlan(planType, previousPlan.id)
             await plan.reload()
-            Alert.alert('Restored', 'The previous cycle is active again.')
+            Alert.alert(isRtl ? 'تمت الاستعادة ✓' : 'Restored', isRtl ? 'الدورة السابقة مفعّلة مرة أخرى.' : 'The previous cycle is active again.')
           } catch (error) {
-            Alert.alert('Rollback', error instanceof Error ? error.message : 'Could not restore previous plan.')
+            Alert.alert(isRtl ? 'الاستعادة' : 'Rollback', error instanceof Error ? error.message : (isRtl ? 'تعذّرت استعادة الخطة السابقة.' : 'Could not restore previous plan.'))
           } finally {
             setBusy(null)
           }
@@ -144,7 +146,7 @@ export default function PlanScreen() {
   return (
     <Screen>
       <BackButton />
-      <IonPageHeader eyebrow="PLAN" title="Current Plan" subtitle={activeTiming?.label || 'Diet and workout cycles with history and rollback.'} />
+      <IonPageHeader eyebrow={isRtl ? 'الخطة' : 'PLAN'} title={isRtl ? 'الخطة الحالية' : 'Current Plan'} subtitle={activeTiming?.label || (isRtl ? 'دورات التغذية والتمرين مع السجل وإمكانية الاستعادة.' : 'Diet and workout cycles with history and rollback.')} />
 
       {/* Freshness gates (different content per planType so Ion uses up-to-date
           data when rebuilding). Diet gate asks for body data; workout gate asks
@@ -168,79 +170,79 @@ export default function PlanScreen() {
         }}
       />
       {plan.loading ? <ActivityIndicator color={color.spark} /> : null}
-      <DataError error={plan.error} status={plan.errorStatus} isRtl={language === 'ar'} />
+      <DataError error={plan.error} status={plan.errorStatus} isRtl={isRtl} />
 
-      <View style={styles.tabs}>
+      <View style={[styles.tabs, { flexDirection: rowDir }]}>
         {(['diet', 'workout'] as const).map(item => (
           <Pressable key={item} onPress={() => setTab(item)} style={[styles.tab, { borderColor: tab === item ? color.spark : color.border, backgroundColor: tab === item ? color.sparkSoft : color.surface }]}>
-            <Text style={[styles.tabText, { color: tab === item ? color.spark : color.text }]}>{item === 'diet' ? 'Diet' : 'Workout'}</Text>
+            <Text style={[styles.tabText, { color: tab === item ? color.spark : color.text }]}>{item === 'diet' ? (isRtl ? 'التغذية' : 'Diet') : (isRtl ? 'التمرين' : 'Workout')}</Text>
           </Pressable>
         ))}
       </View>
 
       <Card>
-        <Text style={[styles.title, { color: color.text }]}>{tab === 'diet' ? planName(diet, 'Nutrition cycle') : planName(workout, 'Workout cycle')}</Text>
-        <Text style={[styles.body, { color: color.muted }]}>{activeTiming?.label || 'Active cycle'}</Text>
-        <View style={styles.actionRow}>
+        <Text style={[styles.title, { color: color.text, textAlign: align }]}>{tab === 'diet' ? planName(diet, isRtl ? 'دورة التغذية' : 'Nutrition cycle') : planName(workout, isRtl ? 'دورة التمرين' : 'Workout cycle')}</Text>
+        <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{activeTiming?.label || (isRtl ? 'الدورة النشطة' : 'Active cycle')}</Text>
+        <View style={[styles.actionRow, { flexDirection: rowDir }]}>
           <Pressable disabled={Boolean(busy)} onPress={() => previewRenewal(tab)} style={[styles.actionButton, { borderColor: color.spark }]}>
-            <Text style={[styles.actionText, { color: color.spark }]}>{busy?.startsWith('renew') ? 'Preparing...' : 'Renew with Ion'}</Text>
+            <Text style={[styles.actionText, { color: color.spark }]}>{busy?.startsWith('renew') ? (isRtl ? 'جارٍ التحضير...' : 'Preparing...') : (isRtl ? 'جدّد مع آيون' : 'Renew with Ion')}</Text>
           </Pressable>
           <Pressable disabled={Boolean(busy)} onPress={() => restorePrevious(tab)} style={[styles.actionButton, { borderColor: previousPlan ? color.flame : color.border }]}>
-            <Text style={[styles.actionText, { color: previousPlan ? color.flame : color.dim }]}>Restore previous</Text>
+            <Text style={[styles.actionText, { color: previousPlan ? color.flame : color.dim }]}>{isRtl ? 'استعادة السابقة' : 'Restore previous'}</Text>
           </Pressable>
         </View>
       </Card>
 
       {tab === 'diet' ? (
         <Card style={styles.cardGap}>
-          <Text style={[styles.sectionTitle, { color: color.text }]}>Nutrition</Text>
-          <Text style={[styles.body, { color: color.muted }]}>
-            {diet?.daily_calories ?? diet?.calories_per_day ?? '-'} kcal - P:{diet?.macros?.protein_g ?? diet?.protein_g ?? '-'} C:{diet?.macros?.carbs_g ?? diet?.carbs_g ?? '-'} F:{diet?.macros?.fat_g ?? diet?.fat_g ?? diet?.fats_g ?? '-'}
+          <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{isRtl ? 'التغذية' : 'Nutrition'}</Text>
+          <Text style={[styles.body, { color: color.muted, textAlign: align }]}>
+            {diet?.daily_calories ?? diet?.calories_per_day ?? '-'} {isRtl ? 'سعرة' : 'kcal'} - {isRtl ? 'ب' : 'P'}:{diet?.macros?.protein_g ?? diet?.protein_g ?? '-'} {isRtl ? 'ك' : 'C'}:{diet?.macros?.carbs_g ?? diet?.carbs_g ?? '-'} {isRtl ? 'د' : 'F'}:{diet?.macros?.fat_g ?? diet?.fat_g ?? diet?.fats_g ?? '-'}
           </Text>
-          {diet?.pre_workout ? <Text style={[styles.body, { color: color.text }]}>Pre-workout: {diet.pre_workout}</Text> : null}
-          {diet?.post_workout ? <Text style={[styles.body, { color: color.text }]}>Post-workout: {diet.post_workout}</Text> : null}
+          {diet?.pre_workout ? <Text style={[styles.body, { color: color.text, textAlign: align }]}>{isRtl ? 'قبل التمرين' : 'Pre-workout'}: {diet.pre_workout}</Text> : null}
+          {diet?.post_workout ? <Text style={[styles.body, { color: color.text, textAlign: align }]}>{isRtl ? 'بعد التمرين' : 'Post-workout'}: {diet.post_workout}</Text> : null}
           {meals.map((meal: any, index: number) => (
             <View key={`${meal.name}-${index}`} style={[styles.block, { borderColor: color.border }]}>
-              <Text style={[styles.itemTitle, { color: color.text }]}>{meal.name || meal.meal_name || `Meal ${index + 1}`}</Text>
-              <Text style={[styles.body, { color: color.muted }]}>{meal.time || meal.meal_time || ''} {meal.calories ? `- ${meal.calories} kcal` : ''}</Text>
-              {mealFoods(meal).map((food: string, foodIndex: number) => <Text key={foodIndex} style={[styles.body, { color: color.text }]}>• {food}</Text>)}
+              <Text style={[styles.itemTitle, { color: color.text, textAlign: align }]}>{meal.name || meal.meal_name || (isRtl ? `الوجبة ${index + 1}` : `Meal ${index + 1}`)}</Text>
+              <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{meal.time || meal.meal_time || ''} {meal.calories ? `- ${meal.calories} ${isRtl ? 'سعرة' : 'kcal'}` : ''}</Text>
+              {mealFoods(meal).map((food: string, foodIndex: number) => <Text key={foodIndex} style={[styles.body, { color: color.text, textAlign: align }]}>• {food}</Text>)}
               <Pressable
                 disabled={recipeLoading !== null}
                 onPress={() => recipe(meal, index)}
-                style={[styles.smallButton, { borderColor: color.flame, opacity: recipeLoading !== null && recipeLoading !== index ? 0.4 : 1 }]}
+                style={[styles.smallButton, { alignSelf: isRtl ? 'flex-end' : 'flex-start', borderColor: color.flame, opacity: recipeLoading !== null && recipeLoading !== index ? 0.4 : 1 }]}
               >
                 {recipeLoading === index
                   ? <ActivityIndicator size="small" color={color.flame} />
-                  : <Text style={[styles.smallButtonText, { color: color.flame }]}>Recipe</Text>}
+                  : <Text style={[styles.smallButtonText, { color: color.flame }]}>{isRtl ? 'طريقة التحضير' : 'Recipe'}</Text>}
               </Pressable>
             </View>
           ))}
         </Card>
       ) : (
         <Card style={styles.cardGap}>
-          <Text style={[styles.sectionTitle, { color: color.text }]}>Workout</Text>
-          <Text style={[styles.body, { color: color.muted }]}>{workout?.split_type || workout?.training_split || workout?.schedule || 'Workout cycle'}</Text>
+          <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{isRtl ? 'التمرين' : 'Workout'}</Text>
+          <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{workout?.split_type || workout?.training_split || workout?.schedule || (isRtl ? 'دورة التمرين' : 'Workout cycle')}</Text>
           {days.map((day: any, index: number) => (
             <View key={`${day.day || day.day_name}-${index}`} style={[styles.block, { borderColor: color.border }]}>
-              <Text style={[styles.itemTitle, { color: color.text }]}>{day.day_name || day.day || `Day ${index + 1}`}</Text>
-              <Text style={[styles.body, { color: color.muted }]}>{day.muscle_focus || day.focus || day.session_goal || ''}</Text>
+              <Text style={[styles.itemTitle, { color: color.text, textAlign: align }]}>{day.day_name || day.day || (isRtl ? `اليوم ${index + 1}` : `Day ${index + 1}`)}</Text>
+              <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{day.muscle_focus || day.focus || day.session_goal || ''}</Text>
               {(day.exercises || []).length ? (day.exercises || []).map((exercise: any, exIndex: number) => (
-                <Text key={exIndex} style={[styles.body, { color: color.text }]}>
+                <Text key={exIndex} style={[styles.body, { color: color.text, textAlign: align }]}>
                   • {exercise.name || exercise.title} - {exercise.sets ?? '-'} x {exercise.reps ?? '-'}
                 </Text>
-              )) : <Text style={[styles.body, { color: color.muted }]}>Rest day</Text>}
+              )) : <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{isRtl ? 'يوم راحة' : 'Rest day'}</Text>}
             </View>
           ))}
         </Card>
       )}
 
       <Card style={styles.cardGap}>
-        <Text style={[styles.sectionTitle, { color: color.text }]}>Plan history</Text>
+        <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{isRtl ? 'سجل الخطط' : 'Plan history'}</Text>
         {history.map((item: any, index: number) => (
           <View key={item.id || index} style={[styles.historyRow, { borderColor: color.border }]}>
-            <Text style={[styles.body, { color: item.active ? color.pulse : color.text }]}>{item.active ? 'Current Plan' : `Previous Cycle ${index}`}</Text>
-            <Text style={[styles.body, { color: color.muted }]}>{item.start_date || item.created_at?.slice(0, 10)} → {item.end_date || '-'}</Text>
-            <Text style={[styles.body, { color: color.muted }]}>{item.summary?.name || item.summary?.split || 'Cycle'}</Text>
+            <Text style={[styles.body, { color: item.active ? color.pulse : color.text, textAlign: align }]}>{item.active ? (isRtl ? 'الخطة الحالية' : 'Current Plan') : (isRtl ? `الدورة السابقة ${index}` : `Previous Cycle ${index}`)}</Text>
+            <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{item.start_date || item.created_at?.slice(0, 10)} → {item.end_date || '-'}</Text>
+            <Text style={[styles.body, { color: color.muted, textAlign: align }]}>{item.summary?.name || item.summary?.split || (isRtl ? 'دورة' : 'Cycle')}</Text>
           </View>
         ))}
       </Card>

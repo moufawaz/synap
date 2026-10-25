@@ -156,7 +156,7 @@ export async function POST(req: Request) {
         .order('date', { ascending: false })
         .limit(5),
       admin.from(planType === 'diet' ? 'diet_plans' : 'workout_plans')
-        .select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
+        .select('*').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       getUserSubscription(user.id),
     ])
 

@@ -154,6 +154,10 @@ npx @capacitor/assets generate --android
 | `ADMIN_EMAIL` | Grants admin panel access |
 | `LAUNCH_MODE` | `"true"` disables subscription gating site-wide |
 | `NEXT_PUBLIC_LAUNCH_MODE` | Client-side launch mode flag |
+| `CRON_SECRET` | Vercel sends it as `Authorization: Bearer …` to every cron route; if unset, all crons 401 silently |
+| `ANTHROPIC_PLAN_MODEL` | Plan generation/renewal model (`claude-opus-5-5`); overrides the code default |
+| `ANTHROPIC_ION_CHAT_MODEL` | Optional Ion chat override (default `claude-sonnet-5-5`) |
+| `ANTHROPIC_CHAT_MODEL` / `ANTHROPIC_CRON_MODEL` | Shared model for other AI routes / cron jobs |
 
 ### GitHub Secrets (iOS CI)
 

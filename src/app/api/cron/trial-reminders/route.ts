@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendEmail } from '@/lib/resend'
 
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   // Find trials ending in exactly 2 days (day 5 reminder)
   const { data: day5Trials } = await supabase
     .from('subscriptions')
-    .select('user_id, plan_name, billing_period, trial_ends_at')
+    .select('user_id, plan_name, plan_type, billing_period, trial_ends_at')
     .eq('status', 'trial')
     .gte('trial_ends_at', day5Start.toISOString())
     .lt('trial_ends_at', day5End.toISOString())
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
   // Find trials ending in exactly 1 day (day 6 reminder)
   const { data: day6Trials } = await supabase
     .from('subscriptions')
-    .select('user_id, plan_name, billing_period, trial_ends_at')
+    .select('user_id, plan_name, plan_type, billing_period, trial_ends_at')
     .eq('status', 'trial')
     .gte('trial_ends_at', day6Start.toISOString())
     .lt('trial_ends_at', day6End.toISOString())
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', sub.user_id).maybeSingle()
     const name = profile?.name || 'Athlete'
     const email = authUser?.user?.email
-    const planLabel = sub.plan_name === 'unlimited' ? 'Pro+Unlimited' : 'Pro'
+    const planLabel = `${sub.plan_type || ''} ${sub.plan_name || ''}`.toLowerCase().includes('elite') ? 'Elite' : 'Pro'
     const renewsOn = new Date(sub.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
 
     // Ion chat message

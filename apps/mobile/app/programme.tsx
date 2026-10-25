@@ -8,10 +8,13 @@ import { BackButton } from '@/components/BackButton'
 import { VideoModal } from '@/components/VideoModal'
 import { getPlanHistory } from '@/features/workout'
 import { useAsyncData } from '@/hooks/useAsyncData'
+import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
 export default function ProgrammeScreen() {
   const { color } = useTheme()
+  const { isRtl } = useLanguage()
+  const align = isRtl ? 'right' : 'left'
   const plan = useAsyncData(getPlanHistory, [])
   const workout = plan.data?.activeWorkoutPlan?.plan_json
   const weeks = Array.isArray(workout?.weeks)
@@ -26,33 +29,33 @@ export default function ProgrammeScreen() {
       <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
 
       <IonPageHeader
-        eyebrow="PROGRAMME"
-        title={workout?.program_name || workout?.name || 'Programme'}
-        subtitle={plan.data?.timing?.workout?.label || 'Full workout browser'}
+        eyebrow={isRtl ? 'البرنامج' : 'PROGRAMME'}
+        title={workout?.program_name || workout?.name || (isRtl ? 'البرنامج' : 'Programme')}
+        subtitle={plan.data?.timing?.workout?.label || (isRtl ? 'تصفّح برنامج التمرين كاملاً' : 'Full workout browser')}
       />
 
       {plan.loading ? <ActivityIndicator color={color.spark} /> : null}
 
       {weeks.map((week: any, weekIndex: number) => (
         <Card key={weekIndex} style={styles.cardGap}>
-          <Text style={[styles.title, { color: color.text }]}>
-            Week {week.week ?? weekIndex + 1}
+          <Text style={[styles.title, { color: color.text, textAlign: align }]}>
+            {isRtl ? 'الأسبوع' : 'Week'} {week.week ?? weekIndex + 1}
           </Text>
 
           {(week.days || []).map((day: any, dayIndex: number) => (
             <View key={dayIndex} style={[styles.day, { borderColor: color.border }]}>
-              <Text style={[styles.dayTitle, { color: color.text }]}>
-                {day.day_name || day.day || `Day ${dayIndex + 1}`}
+              <Text style={[styles.dayTitle, { color: color.text, textAlign: align }]}>
+                {day.day_name || day.day || (isRtl ? `اليوم ${dayIndex + 1}` : `Day ${dayIndex + 1}`)}
               </Text>
-              <Text style={[styles.body, { color: color.muted }]}>
-                {day.muscle_focus || day.focus || 'Training day'}
+              <Text style={[styles.body, { color: color.muted, textAlign: align }]}>
+                {day.muscle_focus || day.focus || (isRtl ? 'يوم تمرين' : 'Training day')}
               </Text>
 
               {(day.exercises || []).length
                 ? (day.exercises || []).map((ex: any, exIndex: number) => (
                   <View key={exIndex} style={[styles.exercise, { borderColor: color.border }]}>
-                    <View style={styles.exHeader}>
-                      <Text style={[styles.exName, { color: color.text }]}>
+                    <View style={[styles.exHeader, { flexDirection: isRtl ? 'row-reverse' : 'row' }]}>
+                      <Text style={[styles.exName, { color: color.text, textAlign: align }]}>
                         {ex.name || ex.title}
                       </Text>
                       {ex.video_id ? (
@@ -61,25 +64,29 @@ export default function ProgrammeScreen() {
                           style={[styles.videoChip, { backgroundColor: '#FF00001A', borderColor: '#FF000033' }]}
                         >
                           <Feather name="youtube" size={12} color="#FF4444" />
-                          <Text style={styles.videoChipText}>Video</Text>
+                          <Text style={styles.videoChipText}>{isRtl ? 'فيديو' : 'Video'}</Text>
                         </Pressable>
                       ) : null}
                     </View>
-                    <Text style={[styles.body, { color: color.muted }]}>
-                      {ex.sets ?? '-'} sets × {ex.reps ?? '-'}
-                      {ex.rest_seconds ?? ex.rest_sec ? `  ·  ${ex.rest_seconds ?? ex.rest_sec}s rest` : ''}
+                    <Text style={[styles.body, { color: color.muted, textAlign: align }]}>
+                      {ex.sets ?? '-'} {isRtl ? 'مجموعات' : 'sets'} × {ex.reps ?? '-'}
+                      {ex.rest_seconds ?? ex.rest_sec
+                        ? (isRtl
+                          ? `  ·  راحة ${ex.rest_seconds ?? ex.rest_sec} ث`
+                          : `  ·  ${ex.rest_seconds ?? ex.rest_sec}s rest`)
+                        : ''}
                     </Text>
                     {ex.muscle_group ? (
-                      <Text style={[styles.tag, { color: color.dim }]}>{ex.muscle_group}</Text>
+                      <Text style={[styles.tag, { color: color.dim, textAlign: align }]}>{ex.muscle_group}</Text>
                     ) : null}
                     {ex.form_tip ? (
-                      <Text style={[styles.tip, { color: color.muted }]} numberOfLines={2}>
+                      <Text style={[styles.tip, { color: color.muted, textAlign: align }]} numberOfLines={2}>
                         💡 {ex.form_tip}
                       </Text>
                     ) : null}
                   </View>
                 ))
-                : <Text style={[styles.body, { color: color.muted, marginTop: 6 }]}>Rest day</Text>}
+                : <Text style={[styles.body, { color: color.muted, marginTop: 6, textAlign: align }]}>{isRtl ? 'يوم راحة' : 'Rest day'}</Text>}
             </View>
           ))}
         </Card>

@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { router, useFocusEffect } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import { Card } from '@/components/Card'
+import { DataError } from '@/components/DataError'
 import { IonAvatar } from '@/components/IonAvatar'
 import { Screen } from '@/components/Screen'
 import { Skeleton } from '@/components/Skeleton'
@@ -12,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getChatHistory } from '@/features/chat'
 import { loadConnectedHealthSummary } from '@/features/health'
 import { getMealLogs } from '@/features/nutrition'
-import { getStreak } from '@/features/measurements'
+import { getMeasurements, getStreak } from '@/features/measurements'
 import { getProfile } from '@/features/profile'
 import { getSparks } from '@/features/sparks'
 import { getSubscriptionStatus } from '@/features/subscription'
@@ -41,6 +42,7 @@ export default function DashboardScreen() {
   const health       = useAsyncData(loadConnectedHealthSummary, [], { cacheKey: 'health-summary', cacheTtlMs: 5 * 60 * 1000 })
   const streak       = useAsyncData(getStreak, [], { cacheKey: 'streak', cacheTtlMs: 10 * 60 * 1000 })
   const sparks       = useAsyncData(getSparks, [], { cacheKey: 'sparks', cacheTtlMs: 10 * 60 * 1000 })
+  const measurements = useAsyncData(getMeasurements, [], { cacheKey: 'measurements', cacheTtlMs: 10 * 60 * 1000 })
 
   useFocusEffect(
     useCallback(() => {
@@ -51,6 +53,10 @@ export default function DashboardScreen() {
       health.silentRefresh()
       streak.silentRefresh()
       sparks.silentRefresh()
+      measurements.silentRefresh()
+      // Refresh the tier too: after an in-app purchase the paywall routes back
+      // here, and the cached "Starter" status otherwise sticks until restart.
+      subscription.silentRefresh()
       // Run adaptation check at most once per day — fires smart push notifications
       // (plateau alerts, streak milestones, plan renewal warnings, Ion messages)
       AsyncStorage.getItem('@sdc:adaptation-last').then(last => {
@@ -78,9 +84,19 @@ export default function DashboardScreen() {
     // Guard: an empty meal name would startsWith('')-match every log.
     return !!key && mealLogs.some(log => (log.meal_name || '').toLowerCase().startsWith(key))
   }).length
-  const trainingDays = plan.data?.timing?.workout?.label ?? ''
+  // The server label is English-only ("12 days left"); build it from daysLeft.
+  const workoutTiming = plan.data?.timing?.workout
+  const trainingDays = workoutTiming
+    ? (workoutTiming.daysLeft > 0
+        ? (isRtl ? `${workoutTiming.daysLeft} يوم متبقٍ` : `${workoutTiming.daysLeft} days left`)
+        : (isRtl ? 'جاهزة للتجديد' : 'Ready to renew'))
+    : ''
 
-  const hasPlan = !plan.loading && !!plan.data?.activeWorkoutPlan
+  // Only trust "no plan" when the plan request actually succeeded. A failed
+  // load (offline, timeout) must not tell an existing user to build a plan,
+  // and must not schedule the onboarding reminder.
+  const planLoaded = !plan.loading && !!plan.data
+  const hasPlan = planLoaded && !!plan.data?.activeWorkoutPlan
   // Onboarding's phased generation (workout → workout2 → diet) can fail partway
   // through and still leave an active-but-incomplete workout plan (missing
   // training days, or no diet plan at all) if the user hits Continue/Cancel on
@@ -93,11 +109,15 @@ export default function DashboardScreen() {
   // (covers onboarding completed here, on another device, or via web). Both
   // calls are idempotent and permission-gated inside the helper.
   useEffect(() => {
-    if (plan.loading) return
+    if (!planLoaded) return
     if (hasCompletePlan) cancelOnboardingReminder()
     else scheduleOnboardingReminder(language)
-  }, [hasCompletePlan, plan.loading, language])
-  const profileMeasurements: Array<{ weight_kg?: number }> = (profile.data as any)?.measurements ?? []
+  }, [hasCompletePlan, planLoaded, language])
+  // Logged weigh-ins, newest first (the profile endpoint doesn't return them).
+  const profileMeasurements = [...(measurements.data?.measurements ?? [])]
+    .filter(m => m.weight_kg != null && Number.isFinite(Number(m.weight_kg)))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .map(m => ({ weight_kg: Number(m.weight_kg) }))
   // Weight priority must be ACCOUNT-specific first: this account's measurement,
   // then this account's onboarding weight. Apple Health weight is device-level
   // (shared across every account signed in on this phone), so it comes LAST —
@@ -215,7 +235,11 @@ export default function DashboardScreen() {
       {/* No-plan teaching card — shows what onboarding unlocks, how long it
           takes, and one tap to start. Replaces the old two-line CTA so new
           users understand the value before committing 3 minutes. */}
-      {!hasPlan && !plan.loading ? (
+      {!plan.loading && !plan.data ? (
+        <DataError error={plan.error} status={plan.errorStatus} isRtl={isRtl} />
+      ) : null}
+
+      {planLoaded && !hasPlan ? (
         <Pressable onPress={() => router.push('/onboarding')} style={styles.bigCardWrap}>
           <LinearGradient
             colors={[color.spark, '#7B2FFF']}

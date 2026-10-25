@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -87,6 +87,13 @@ function safeIngredient(ing: unknown): string {
 
 function todayKey() {
   return localDateKey()
+}
+
+/** One water tap = one 250 ml glass. */
+const GLASS_LITERS = 0.25
+
+function formatLiters(liters: number) {
+  return String(Math.round(liters * 100) / 100)
 }
 
 function numberOrNull(value: string) {
@@ -333,30 +340,56 @@ export default function NutritionScreen() {
     }
   }
 
+  // Meal keys with a toggle in flight — a quick double tap used to log twice.
+  const mealToggling = useRef(new Set<string>())
+
   async function logPlannedMeal(meal: any) {
     const mealKey = String(meal.name || meal.meal_name || '').toLowerCase()
-    const existing = mealKey ? allLogs.find(log => (log.meal_name || '').toLowerCase().startsWith(mealKey)) : null
-    if (existing) {
-      await deleteMealLog(existing.id)
+    const lockKey = mealKey || 'planned-meal'
+    if (mealToggling.current.has(lockKey)) return
+    mealToggling.current.add(lockKey)
+    try {
+      const existing = mealKey ? allLogs.find(log => (log.meal_name || '').toLowerCase().startsWith(mealKey)) : null
+      if (existing) {
+        await deleteMealLog(existing.id)
+      } else {
+        await createMealLog({
+          meal_name: meal.name || meal.meal_name || 'Planned meal',
+          meal_time: meal.time || meal.meal_time,
+          calories_estimated: meal.calories,
+          protein_g: meal.protein_g,
+          carbs_g: meal.carbs_g,
+          fats_g: meal.fat_g ?? meal.fats_g,
+          source: 'mobile_plan_meal',
+        })
+      }
       await logs.reload()
-      return
+    } catch (error) {
+      Alert.alert(isRtl ? 'تعذّر الحفظ' : 'Could not save', error instanceof Error ? error.message : (isRtl ? 'حاول مرة أخرى.' : 'Try again.'))
+    } finally {
+      mealToggling.current.delete(lockKey)
     }
-    await createMealLog({
-      meal_name: meal.name || meal.meal_name || 'Planned meal',
-      meal_time: meal.time || meal.meal_time,
-      calories_estimated: meal.calories,
-      protein_g: meal.protein_g,
-      carbs_g: meal.carbs_g,
-      fats_g: meal.fat_g ?? meal.fats_g,
-      source: 'mobile_plan_meal',
-    })
-    await logs.reload()
   }
 
-  async function addWater(delta: number) {
+  // Water taps are applied optimistically and saved in order, so fast taps
+  // each count (they used to read the same stale total and add one glass).
+  const waterSave = useRef<Promise<unknown>>(Promise.resolve())
+
+  function addWater(delta: number) {
     const current = hydration.data?.hydration?.glasses ?? 0
-    await saveHydration({ glasses: Math.max(0, current + delta), target_liters: targets.water })
-    await hydration.reload()
+    const next = Math.max(0, current + delta)
+    if (next === current) return
+    hydration.setData(prev => ({
+      ...(prev ?? {}),
+      hydration: { ...(prev?.hydration ?? { date: localDateKey() }), glasses: next, liters: next * GLASS_LITERS },
+    }) as any)
+    waterSave.current = waterSave.current
+      .catch(() => {})
+      .then(() => saveHydration({ glasses: next, liters: next * GLASS_LITERS, target_liters: targets.water }))
+      .catch(error => {
+        Alert.alert(isRtl ? 'تعذّر حفظ الماء' : 'Could not save water', error instanceof Error ? error.message : (isRtl ? 'حاول مرة أخرى.' : 'Try again.'))
+        hydration.reload()
+      })
   }
 
   async function lookupBarcode() {
@@ -456,7 +489,7 @@ export default function NutritionScreen() {
           <View style={{ flexDirection: isRtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
             <Feather name="droplet" size={13} color="#3B82F6" />
             <Text style={[styles.body, { color: color.text }]}>{isRtl ? 'ماء' : 'Water'}</Text>
-            <Text style={[styles.body, { color: color.muted }]}>{glasses} / {targets.water}L</Text>
+            <Text style={[styles.body, { color: color.muted }]}>{formatLiters(glasses * GLASS_LITERS)} / {targets.water}L</Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             <Pressable onPress={() => addWater(1)} style={[styles.waterBtn, { backgroundColor: '#3B82F61A', borderColor: '#3B82F633' }]}>

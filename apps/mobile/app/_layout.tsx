@@ -15,6 +15,7 @@ import { registerDeviceToken } from '@/features/tools'
 import { syncSynapReminders } from '@/features/notifications'
 import { configurePurchases, identifyPurchaser, resetPurchaser } from '@/features/purchases'
 import { identifySentryUser, initSentry, reportError } from '@/lib/sentry'
+import { clearDashboardCache } from '@/hooks/useAsyncData'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 
@@ -140,6 +141,7 @@ function RootNavigator() {
       pushRegistered.current = false
       resetPurchaser()
       identifySentryUser(null)
+      clearDashboardCache()
       router.replace('/(auth)/login')
     }
     // Auto-register push token once per session when user is authenticated
