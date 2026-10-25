@@ -433,6 +433,11 @@ is logged with the URL, error code, and retry count.
 The `notifications.ts` schedule array is typed `any[]` intentionally to avoid
 Capacitor's conditional types failing Vercel's TypeScript check.
 
+### Mobile app gets 401 on an API route that works on web
+**Cause**: route authenticates with `createServerClient()` + `auth.getUser()`, which only reads cookies. The Expo app sends `Authorization: Bearer <token>` and no cookies.  
+**Fix**: use `getAuthenticatedUser(req)` (and `createRouteClient(req)` for RLS queries) from `@/lib/supabase-server`, which accept both.  
+Shows up in Sentry as `apiFetch 401 persisted after refresh: <path>`.
+
 ### `Build input file cannot be found` (Xcode)
 **Cause**: `sourceTree = "<group>"` in pbxproj resolves relative to group, not project root.  
 **Fix**: Use `sourceTree = SOURCE_ROOT; path = App/FileName.swift`.
