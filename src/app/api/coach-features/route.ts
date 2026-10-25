@@ -1,4 +1,4 @@
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
 type Measurement = Record<string, any>
@@ -339,9 +339,8 @@ function buildPlateau(measurements: Measurement[], lang: Lang) {
   }
 }
 
-export async function GET() {
-  const server = await createServerClient()
-  const { data: { user } } = await server.auth.getUser()
+export async function GET(req: Request) {
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
@@ -379,8 +378,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const server = await createServerClient()
-  const { data: { user } } = await server.auth.getUser()
+  const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))

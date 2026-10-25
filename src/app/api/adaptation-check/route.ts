@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from 'next/server'
-import { createAdminClient, createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { pushToUser } from '@/lib/push'
 import { sendEmail } from '@/lib/resend'
@@ -33,8 +33,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
     }
     const client = new Anthropic()
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // Native app authenticates with a Bearer token (no cookies); web uses cookies.
+    const { user } = await getAuthenticatedUser(req)
+    const supabase = await createRouteClient(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const checks: string[] = []
