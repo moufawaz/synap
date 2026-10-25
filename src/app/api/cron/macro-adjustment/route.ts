@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { messageText } from '@/lib/anthropic'
+import { dailyIntakeAverages, sanitizeAdjustment } from '@/lib/macro-adjust'
 
 // GET /api/cron/macro-adjustment — runs every Monday 7AM via Vercel Cron
 // Generates weekly macro micro-adjustments for all active Elite users
@@ -31,10 +33,10 @@ export async function GET(req: Request) {
     try {
       const [profileRes, dietPlanRes, measurementsRes, workoutLogsRes, mealLogsRes] = await Promise.all([
         admin.from('profiles').select('name, goal, language').eq('user_id', user_id).maybeSingle(),
-        admin.from('diet_plans').select('id, plan_json').eq('user_id', user_id).eq('active', true).maybeSingle(),
+        admin.from('diet_plans').select('id, plan_json').eq('user_id', user_id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         admin.from('measurements').select('date, weight_kg').eq('user_id', user_id).order('date', { ascending: false }).limit(4),
         admin.from('workout_log').select('completion_pct').eq('user_id', user_id).gte('date', sevenDaysAgo),
-        admin.from('meals_log').select('calories_estimated, protein_g, carbs_g, fats_g').eq('user_id', user_id).gte('date', sevenDaysAgo),
+        admin.from('meals_log').select('date, calories_estimated, protein_g, carbs_g, fats_g').eq('user_id', user_id).gte('date', sevenDaysAgo),
       ])
 
       const profile = profileRes.data
@@ -57,29 +59,29 @@ export async function GET(req: Request) {
         : 'unknown'
       const avgCompletion = workoutLogs.length > 0
         ? Math.round(workoutLogs.reduce((s: number, l: any) => s + (l.completion_pct || 0), 0) / workoutLogs.length) : 0
-      const avgCalories = mealLogs.length > 0
-        ? Math.round(mealLogs.reduce((s: number, l: any) => s + (l.calories_estimated || 0), 0) / mealLogs.length) : 0
-      const avgProtein = mealLogs.length > 0
-        ? Math.round(mealLogs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0) / mealLogs.length) : 0
+      const intake = dailyIntakeAverages(mealLogs)
+      const avgCalories = intake.calories
+      const avgProtein = intake.protein
 
       const isArabic = profile.language === 'ar'
       const prompt = `Ion AI coach. Weekly macro micro-adjustment for ${profile.name} (goal: ${profile.goal}).
 Current: ${targets.calories}kcal | ${targets.protein}g P | ${targets.carbs}g C | ${targets.fat}g F
-Last 7 days: weight ${weightTrend}kg, workout ${avgCompletion}% complete, avg ${avgCalories}kcal logged, avg ${avgProtein}g protein
+Last 7 days: weight ${weightTrend}kg, workout ${avgCompletion}% complete, avg ${avgCalories}kcal/day and ${avgProtein}g protein/day over ${intake.daysLogged} logged days
 Suggest small conservative adjustments (±50-150kcal, ±5-15g macros). Return JSON only:
 {"adjusted_calories":number,"adjusted_protein_g":number,"adjusted_carbs_g":number,"adjusted_fat_g":number,"rationale":"short reason in ${isArabic ? 'Arabic' : 'English'}"}`
 
       const response = await client.messages.create({
         model: process.env.ANTHROPIC_CRON_MODEL || 'claude-haiku-4-5',
-        max_tokens: 250,
+        max_tokens: 600,
         messages: [{ role: 'user', content: prompt }],
       })
       await recordAiUsage({ userId: user_id, feature: 'macro_adjustment_cron', model: response.model, usage: response.usage })
 
-      const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
+      const raw = messageText(response) || '{}'
       const jsonMatch = raw.match(/\{[\s\S]*\}/)
       if (!jsonMatch) continue
-      const adj = JSON.parse(jsonMatch[0])
+      const adj = sanitizeAdjustment(JSON.parse(jsonMatch[0]), targets)
+      if (!adj) continue
 
       if (dietPlanRes.data?.id) {
         const updatedPlan = {

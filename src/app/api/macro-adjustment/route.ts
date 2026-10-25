@@ -3,6 +3,8 @@ import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/li
 import Anthropic from '@anthropic-ai/sdk'
 import { getUserSubscription, isEliteUser } from '@/lib/subscription'
 import { recordAiUsage } from '@/lib/ai-usage'
+import { messageText } from '@/lib/anthropic'
+import { dailyIntakeAverages, sanitizeAdjustment } from '@/lib/macro-adjust'
 
 // POST /api/macro-adjustment
 // Generates weekly macro micro-adjustments for Elite users based on
@@ -22,7 +24,7 @@ export async function POST(req: Request) {
 
   const [profileRes, dietPlanRes, measurementsRes, workoutLogsRes, mealLogsRes] = await Promise.all([
     admin.from('profiles').select('name, goal, language').eq('user_id', user.id).maybeSingle(),
-    admin.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+    admin.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     admin.from('measurements').select('date, weight_kg, body_fat_pct').eq('user_id', user.id).order('date', { ascending: false }).limit(4),
     admin.from('workout_log').select('date, completion_pct').eq('user_id', user.id).gte('date', sevenDaysAgo),
     admin.from('meals_log').select('date, calories_estimated, protein_g, carbs_g, fats_g').eq('user_id', user.id).gte('date', sevenDaysAgo),
@@ -51,13 +53,9 @@ export async function POST(req: Request) {
     ? Math.round(workoutLogs.reduce((s: number, l: any) => s + (l.completion_pct || 0), 0) / workoutLogs.length)
     : 0
 
-  const avgCalories = mealLogs.length > 0
-    ? Math.round(mealLogs.reduce((s: number, l: any) => s + (l.calories_estimated || 0), 0) / mealLogs.length)
-    : 0
-
-  const avgProtein = mealLogs.length > 0
-    ? Math.round(mealLogs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0) / mealLogs.length)
-    : 0
+  const intake = dailyIntakeAverages(mealLogs)
+  const avgCalories = intake.calories
+  const avgProtein = intake.protein
 
   const isArabic = profile.language === 'ar'
 
@@ -69,6 +67,7 @@ CURRENT TARGETS: ${currentTargets.calories} kcal | ${currentTargets.protein}g pr
 LAST 7 DAYS DATA:
 - Weight trend: ${weightTrend} kg (recent → older)
 - Avg workout completion: ${avgCompletion}%
+- Days with meals logged: ${intake.daysLogged} of 7 (averages cover those days only; few days = low confidence)
 - Avg daily calories logged: ${avgCalories} kcal (vs target ${currentTargets.calories})
 - Avg daily protein logged: ${avgProtein}g (vs target ${currentTargets.protein}g)
 
@@ -83,20 +82,30 @@ Return a JSON object ONLY with this exact structure:
 }
 If no adjustment is needed, return current values with rationale "On track — no adjustment needed".`
 
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
+  }
   const client = new Anthropic()
-  const response = await client.messages.create({
-    model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
-    max_tokens: 300,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  let response: Anthropic.Message
+  try {
+    response = await client.messages.create({
+      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
+      // Arabic rationales need more room; 300 truncated the JSON.
+      max_tokens: 600,
+      messages: [{ role: 'user', content: prompt }],
+    })
+  } catch (err) {
+    console.error('[macro-adjustment]', err)
+    return NextResponse.json({ error: 'Ion is busy right now. Please try again in a minute.' }, { status: 502 })
+  }
 
   await recordAiUsage({ userId: user.id, feature: 'macro_adjustment', model: response.model, usage: response.usage })
 
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
-  let adjustment: any
+  const raw = messageText(response) || '{}'
+  let adjustment: ReturnType<typeof sanitizeAdjustment>
   try {
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    adjustment = jsonMatch ? JSON.parse(jsonMatch[0]) : null
+    adjustment = jsonMatch ? sanitizeAdjustment(JSON.parse(jsonMatch[0]), currentTargets) : null
   } catch { adjustment = null }
 
   if (!adjustment) return NextResponse.json({ message: 'Could not generate adjustment' })

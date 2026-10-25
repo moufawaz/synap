@@ -6,6 +6,7 @@ import { analyzeInBodyPhoto, createMeasurement, getPlanReadiness, type PlanReadi
 import type { RenewalContext } from '@/features/workout'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+import { localDateKey } from '@/lib/date'
 
 const ACTIVITY_OPTIONS = [
   { key: 'desk',    en: 'Mostly sitting',        ar: 'جالس غالباً' },
@@ -129,7 +130,7 @@ export function RenewalFreshness({
       ]
       for (const [k, v] of pairs) { const n = num(v); if (n != null) fields[k] = n }
       await createMeasurement({
-        date: new Date().toISOString().slice(0, 10),
+        date: localDateKey(),
         ...fields,
         notes: 'Pre-renewal update',
       } as any)

@@ -16,6 +16,7 @@ import { recordWorkoutCompletedAndMaybeAskForReview } from '@/lib/storeReview'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+import { localDateKey } from '@/lib/date'
 
 // Local session helpers — persisted in AsyncStorage, instant, no network needed
 const SESSION_KEY = (date: string) => `@synap:workout-session:${date}`
@@ -148,7 +149,7 @@ function formatTime(secs: number): string {
 
 // ── Misc helpers ──────────────────────────────────────────────────────────────
 
-function todayKey() { return new Date().toISOString().slice(0, 10) }
+function todayKey() { return localDateKey() }
 
 function exerciseMeta(exercise: TodayWorkout['exercises'][number]) {
   const parts = []

@@ -43,7 +43,8 @@ export type WorkoutSession = {
 }
 
 export async function getPlanHistory() {
-  return apiFetch<PlanHistoryResponse>('/api/plan-history')
+  // Pass the local weekday so "today's workout" isn't the server's UTC day.
+  return apiFetch<PlanHistoryResponse>(`/api/plan-history?dow=${new Date().getDay()}`)
 }
 
 export type RenewalContext = {

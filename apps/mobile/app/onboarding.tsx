@@ -14,6 +14,7 @@ import { cancelOnboardingReminder } from '@/lib/onboardingReminder'
 import { analyzeInBodyPhoto, createMeasurement } from '@/features/measurements'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+import { localDateKey } from '@/lib/date'
 
 const initialProfile: MobileProfileInput = {
   // Age intentionally starts EMPTY. It used to default to '25', which meant
@@ -298,7 +299,7 @@ export default function OnboardingScreen() {
           if (Object.keys(cleaned).length) {
             try {
               await createMeasurement({
-                date: new Date().toISOString().slice(0, 10),
+                date: localDateKey(),
                 weight_kg: parseFloat(genPayload.weight_kg) || null,
                 ...cleaned,
                 notes: 'Onboarding baseline',

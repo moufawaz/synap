@@ -14,6 +14,7 @@ import { apiFetch } from '@/lib/api'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
+import { localDateKey } from '@/lib/date'
 
 const METRICS = [
   { key: 'weight_kg', label: 'Weight', labelAr: 'الوزن', unit: 'kg' },
@@ -26,7 +27,7 @@ const METRICS = [
 type MetricKey = typeof METRICS[number]['key']
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10)
+  return localDateKey()
 }
 
 function numberOrNull(value: string) {

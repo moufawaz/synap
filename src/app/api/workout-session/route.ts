@@ -31,9 +31,9 @@ export async function GET(req: Request) {
     .eq('user_id', user.id)
     .eq('role', 'system')
     .eq('message_type', 'text')
-    .contains('metadata', { session_type: SESSION_TYPE })
-    .gte('created_at', `${date}T00:00:00Z`)
-    .lte('created_at', `${date}T23:59:59Z`)
+    // Match on the client's local date stored in metadata; the UTC created_at
+    // day splits a late-night session across two dates for users east of UTC.
+    .contains('metadata', { session_type: SESSION_TYPE, date })
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -58,9 +58,7 @@ export async function PUT(req: Request) {
     .eq('user_id', user.id)
     .eq('role', 'system')
     .eq('message_type', 'text')
-    .contains('metadata', { session_type: SESSION_TYPE })
-    .gte('created_at', `${date}T00:00:00Z`)
-    .lte('created_at', `${date}T23:59:59Z`)
+    .contains('metadata', { session_type: SESSION_TYPE, date })
 
   const { error } = await admin.from('chat_messages').insert({
     user_id:      user.id,
@@ -87,7 +85,7 @@ export async function DELETE(req: Request) {
   const { user } = await getAuthenticatedUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const date = TODAY()
+  // A finished session clears every stored session row for this user.
   await admin
     .from('chat_messages')
     .delete()
@@ -95,8 +93,6 @@ export async function DELETE(req: Request) {
     .eq('role', 'system')
     .eq('message_type', 'text')
     .contains('metadata', { session_type: SESSION_TYPE })
-    .gte('created_at', `${date}T00:00:00Z`)
-    .lte('created_at', `${date}T23:59:59Z`)
 
   return NextResponse.json({ ok: true })
 }

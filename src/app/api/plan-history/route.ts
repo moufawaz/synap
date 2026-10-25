@@ -41,7 +41,7 @@ export async function GET(req: Request) {
       diet: cycleTiming(diet.find(row => row.active), 'diet'),
       workout: cycleTiming(workout.find(row => row.active), 'workout'),
     },
-    todayWorkout: summarizeTodayWorkout(activeWorkoutRow?.plan_json),
+    todayWorkout: summarizeTodayWorkout(activeWorkoutRow?.plan_json, clientWeekday(req)),
   })
 }
 
@@ -82,12 +82,19 @@ function workoutDays(plan: any) {
   return []
 }
 
-function summarizeTodayWorkout(plan: any) {
+// The caller's local weekday (?dow=0-6, 0=Sun). Falls back to the server's
+// UTC weekday, which is wrong around midnight for users far from UTC.
+function clientWeekday(req: Request): number {
+  const raw = new URL(req.url).searchParams.get('dow')
+  const dow = raw === null || raw === '' ? NaN : Number(raw)
+  return Number.isInteger(dow) && dow >= 0 && dow <= 6 ? dow : new Date().getDay()
+}
+
+function summarizeTodayWorkout(plan: any, dayOfWeek: number) {
   const days = workoutDays(plan)
   if (!days.length) return null
 
   const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const dayOfWeek = new Date().getDay() // 0=Sun … 6=Sat
   const today = weekDays[dayOfWeek]
 
   // 1) Try exact name match (plan days named "Monday", "Wednesday - Legs", etc.)

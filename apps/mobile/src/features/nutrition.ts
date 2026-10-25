@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api'
+import { localDateKey } from '@/lib/date'
 
 export type MealLog = {
   id: string
@@ -22,16 +23,17 @@ export type MealLogInput = {
   fats_g?: number
   fiber_g?: number
   source?: string
+  date?: string
 }
 
-export async function getMealLogs(date = new Date().toISOString().split('T')[0]) {
+export async function getMealLogs(date = localDateKey()) {
   return apiFetch<{ logs: MealLog[] }>(`/api/log-meal?date=${date}`)
 }
 
 export async function createMealLog(input: MealLogInput) {
   return apiFetch<{ log: MealLog }>('/api/log-meal', {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({ date: localDateKey(), ...input }),
   })
 }
 
@@ -78,14 +80,14 @@ export async function estimateBarcodeProduct(name: string) {
   })
 }
 
-export async function getHydration(date = new Date().toISOString().split('T')[0]) {
+export async function getHydration(date = localDateKey()) {
   return apiFetch<{ hydration: { date: string; glasses: number; liters?: number | null; target_liters?: number | null } }>(`/api/hydration?date=${date}`)
 }
 
 export async function saveHydration(input: { date?: string; glasses: number; liters?: number | null; target_liters?: number | null }) {
   return apiFetch<{ hydration: { date: string; glasses: number; liters?: number | null; target_liters?: number | null } }>('/api/hydration', {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({ date: localDateKey(), ...input }),
   })
 }
 

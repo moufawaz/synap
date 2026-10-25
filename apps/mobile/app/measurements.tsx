@@ -8,6 +8,7 @@ import { BackButton } from '@/components/BackButton'
 import { analyzeInBodyPhoto, createMeasurement, getMeasurements } from '@/features/measurements'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useTheme } from '@/theme/ThemeProvider'
+import { localDateKey } from '@/lib/date'
 
 const fields = [
   ['weight_kg', 'Weight kg'], ['body_fat_pct', 'Body fat %'], ['muscle_mass_kg', 'Muscle kg'],
@@ -40,7 +41,7 @@ export default function MeasurementsScreen() {
   }, [latest])
 
   async function save() {
-    const payload: Record<string, unknown> = { date: new Date().toISOString().slice(0, 10) }
+    const payload: Record<string, unknown> = { date: localDateKey() }
     fields.forEach(([key]) => {
       const parsed = num(values[key] || '')
       if (parsed !== undefined) payload[key] = parsed
