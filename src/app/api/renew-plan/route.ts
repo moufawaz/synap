@@ -7,7 +7,7 @@ import { resolveExerciseVideo } from '@/lib/youtube-search'
 import { getUserSubscription, effectivePlan } from '@/lib/subscription'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
-import { withAnthropicRetry } from '@/lib/anthropic'
+import { messageText, withAnthropicRetry } from '@/lib/anthropic'
 import { generateSupplementRecsIfElite } from '@/lib/supplement-gen'
 import { calculateMacros, calculateWorkoutParams, equipmentString, machineIntelligenceRule } from '@/lib/plan-builder'
 import { regionalFoodIntelligence } from '@/lib/regional-foods'
@@ -196,15 +196,15 @@ export async function POST(req: Request) {
       ? (
           process.env.ANTHROPIC_RENEW_WORKOUT_MODEL ||
           process.env.ANTHROPIC_RENEW_MODEL ||
-          (workoutPart === 1 ? 'claude-opus-4-5' : 'claude-sonnet-4-6')
+          'claude-opus-5-5'
         )
-      : (process.env.ANTHROPIC_RENEW_DIET_MODEL || process.env.ANTHROPIC_RENEW_MODEL || process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5')
+      : (process.env.ANTHROPIC_RENEW_DIET_MODEL || process.env.ANTHROPIC_RENEW_MODEL || process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-5-5')
     // Per-phase output budget. Workout part 1 emits plan metadata + ceil(N/4)
     // days only, so 3500 is generous; tighter than before because we're now
     // splitting into 4 phases instead of 3.
     const partMaxTokens = planType === 'diet'
       ? 8000
-      : workoutPart === 1 ? 3500 : 9000
+      : workoutPart === 1 ? 4500 : 9000
 
     const systemPrompt = 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.'
 
@@ -213,6 +213,8 @@ export async function POST(req: Request) {
       const msg = await withAnthropicRetry(() => client.messages.create({
         model: planModel,
         max_tokens: partMaxTokens,
+        // Opus 5.5 always thinks; low effort keeps each phase inside 60s.
+        output_config: { effort: 'low' },
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       }))
@@ -229,7 +231,7 @@ export async function POST(req: Request) {
     }
 
     let message = await callOpus(prompt)
-    let raw = message.content[0].type === 'text' ? message.content[0].text : ''
+    let raw = messageText(message)
     let match = raw.match(/\{[\s\S]*\}/)
     if (!match) return NextResponse.json({ error: 'Failed to parse renewed plan' }, { status: 500 })
     let planJson = JSON.parse(match[0])
@@ -247,7 +249,7 @@ export async function POST(req: Request) {
       if (violations.length) {
         console.warn('[renew-plan] phase 1 coherence violations — retrying', JSON.stringify(violations))
         const retryMessage = await callOpus(prompt + buildCoherenceRetryInstruction(violations))
-        const retryRaw = retryMessage.content[0].type === 'text' ? retryMessage.content[0].text : ''
+        const retryRaw = messageText(retryMessage)
         const retryMatch = retryRaw.match(/\{[\s\S]*\}/)
         if (retryMatch) {
           planJson = JSON.parse(retryMatch[0])
@@ -491,13 +493,14 @@ async function generateWorkoutPartMerge({
     const assignedDayNames: string[] = remainingOutline.slice(0, thisPartDays).map((o: any) => String(o.day_name || ''))
 
     const systemPrompt = 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.'
-    const planModel = process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-opus-4-5'
+    const planModel = process.env.ANTHROPIC_RENEW_WORKOUT_MODEL || process.env.ANTHROPIC_RENEW_MODEL || 'claude-opus-5-5'
 
     const callOpus = async (userPrompt: string) => {
       const startedAt = Date.now()
       const msg = await withAnthropicRetry(() => client.messages.create({
         model: planModel,
-        max_tokens: 3000, // ~1-2 days of exercises; Opus needs headroom under 60s
+        max_tokens: 4000, // ~1-2 days of exercises, plus room for Opus 5.5's thinking
+        output_config: { effort: 'low' },
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       }))
@@ -519,7 +522,7 @@ async function generateWorkoutPartMerge({
     messageUsageCost = estimateRenewalCost(message)
 
     const parseDays = (msg: any): any[] | null => {
-      const raw = msg.content[0].type === 'text' ? msg.content[0].text : ''
+      const raw = messageText(msg)
       const matchObj = raw.match(/\{[\s\S]*\}/)
       if (!matchObj) return null
       try {

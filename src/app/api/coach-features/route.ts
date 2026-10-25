@@ -356,7 +356,7 @@ export async function GET(req: Request) {
     admin.from('meals_log').select('id,description,meal_time,calories_estimated,protein_g,carbs_g,fats_g,date,logged_at').eq('user_id', user.id).eq('date', today).order('logged_at', { ascending: true }),
     admin.from('meals_log').select('id,description,calories_estimated,protein_g,carbs_g,fats_g,date,logged_at').eq('user_id', user.id).gte('date', weekStart).order('logged_at', { ascending: false }).limit(60),
     admin.from('workout_log').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(30),
-    admin.from('chat_messages').select('content,role,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
+    admin.from('chat_messages').select('content,role,created_at').eq('user_id', user.id).in('role', ['user', 'assistant', 'ion']).order('created_at', { ascending: false }).limit(5),
   ])
 
   const dietPlan = dietRes.data?.plan_json ?? null

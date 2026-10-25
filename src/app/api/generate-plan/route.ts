@@ -1,9 +1,9 @@
-﻿import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
+import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { sendEmail } from '@/lib/resend'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
-import { withAnthropicRetry } from '@/lib/anthropic'
+import { messageText, withAnthropicRetry } from '@/lib/anthropic'
 import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
@@ -145,8 +145,11 @@ export async function POST(req: Request) {
     const prompt = buildPrompt(profileForPlan, latestMeasurement, measurementHistory, promptFocus, workoutPart)
 
     const message = await withAnthropicRetry(() => client.messages.create({
-      model: process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-4-5',
+      model: process.env.ANTHROPIC_PLAN_MODEL || 'claude-opus-5-5',
       max_tokens: 16000,   // 8000 was too low; full plans with recipes easily exceed it
+      // Opus 5.5 always thinks; low effort keeps thinking short so the plan
+      // JSON fits the token budget and the 60s function limit.
+      output_config: { effort: 'low' },
       system: 'You are Ion, a world-class AI personal trainer and nutritionist. You ALWAYS respond with valid, complete JSON only: no markdown, no explanation, no text before or after the JSON object.',
       messages: [{ role: 'user', content: prompt }],
     }))
@@ -158,7 +161,7 @@ export async function POST(req: Request) {
       console.error('[generate-plan] Response was truncated; increase max_tokens further if this persists')
     }
 
-    const rawContent = message.content[0].type === 'text' ? message.content[0].text : ''
+    const rawContent = messageText(message)
     await recordAiUsage({
       userId: user.id,
       feature: 'generate_plan',

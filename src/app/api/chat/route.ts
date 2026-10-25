@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { canSendMessage, incrementMessageCount, isLaunchMode, getUserSubscription, effectivePlan } from '@/lib/subscription'
 import { resolveExerciseVideo } from '@/lib/youtube-search'
-import { withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
+import { messageText, withAnthropicRetry, anthropicFriendlyError } from '@/lib/anthropic'
 import { estimateAnthropicCostUsd } from '@/lib/token-cost'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction, normalizeAiLanguage } from '@/lib/ai-language'
@@ -15,6 +15,9 @@ import { canonicalDayName, normalizeWorkoutPlanDays } from '@/lib/workout-days'
 // Without this Vercel cuts the connection at the platform default (10-15 s),
 // which causes the client to receive a network error ("Load failed").
 export const maxDuration = 60
+
+// Ion chat has its own override: ANTHROPIC_CHAT_MODEL is shared by other routes.
+const ION_CHAT_MODEL = process.env.ANTHROPIC_ION_CHAT_MODEL || 'claude-sonnet-5-5'
 
 async function fetchRecentWorkoutLogs(supabase: any, userId: string) {
   const primary = await supabase
@@ -133,7 +136,7 @@ export async function POST(req: Request) {
       supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('workout_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      supabase.from('chat_messages').select('role, content').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('chat_messages').select('role, content').eq('user_id', user.id).in('role', ['user', 'assistant', 'ion']).order('created_at', { ascending: false }).limit(20),
       getUserSubscription(user.id),
       // Latest 5 measurements: enough to compute a meaningful trend
       supabase.from('measurements').select('date,weight_kg,body_fat_pct,waist_cm,chest_cm,hips_cm,bicep_left_cm,bicep_right_cm,thigh_left_cm,thigh_right_cm')
@@ -267,7 +270,9 @@ export async function POST(req: Request) {
 
     if (wantsJsonResponse) {
       const finalMessage = await client.messages.create({
-        model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
+        model: ION_CHAT_MODEL,
+        // Sonnet 5.5 defaults to high effort; low keeps chat replies fast.
+        output_config: { effort: 'low' },
         // Headroom for the detailed responses the system prompt permits (Elite
         // supplement protocols, goal projections, multi-pattern callouts) so they
         // don't truncate mid-sentence. Short replies are unaffected — the model
@@ -320,8 +325,9 @@ export async function POST(req: Request) {
     // system is an array so we can attach cache_control — the prompt is re-used across
     // multiple turns in a session and caching it cuts repeated input cost by ~10x
     const stream = client.messages.stream({
-      model: process.env.ANTHROPIC_CHAT_MODEL || 'claude-sonnet-4-5',
+      model: ION_CHAT_MODEL,
       max_tokens: 2048,
+      output_config: { effort: 'low' },
       system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages,
     })
@@ -714,7 +720,7 @@ async function maybeApplyPlanEdit({
       return { applied: false, proposed: false, shouldStop: true, reason: 'plan_edit_failed' }
     }
 
-    const raw = editResponse.content[0].type === 'text' ? editResponse.content[0].text : ''
+    const raw = messageText(editResponse)
     const edit = parseJsonObject(raw)
 
     // Validate: workout expects typed operations; diet expects full updated_plan.

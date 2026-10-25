@@ -12,6 +12,16 @@ export function getAnthropicClient(): Anthropic {
   return _client
 }
 
+// ── Response text ─────────────────────────────────────────────────────────────
+// Opus 5.5 / Sonnet 5.5 always think, so content[0] is usually a thinking
+// block. Join every text block instead of assuming the first one is text.
+export function messageText(message: { content: Array<{ type: string; text?: string }> }): string {
+  return message.content
+    .filter(block => block.type === 'text')
+    .map(block => block.text ?? '')
+    .join('')
+}
+
 // ── Retry wrapper for transient Anthropic errors ──────────────────────────────
 // Retries on: 500 (api_error), 529 (overloaded_error)
 // Does NOT retry on: 4xx client errors, authentication errors

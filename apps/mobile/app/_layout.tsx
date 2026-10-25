@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Platform, Text, View } from 'react-native'
+import { Platform, Pressable, Text, View } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Stack } from 'expo-router'
 import { router } from 'expo-router'
@@ -14,7 +14,7 @@ import { NotificationsRationale } from '@/components/NotificationsRationale'
 import { registerDeviceToken } from '@/features/tools'
 import { syncSynapReminders } from '@/features/notifications'
 import { configurePurchases, identifyPurchaser, resetPurchaser } from '@/features/purchases'
-import { identifySentryUser, initSentry } from '@/lib/sentry'
+import { identifySentryUser, initSentry, reportError } from '@/lib/sentry'
 import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 
@@ -23,12 +23,22 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
   static getDerivedStateFromError(error: Error) {
     return { error: error?.message || 'An unexpected error occurred.' }
   }
+  componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+    // Render crashes are swallowed by the boundary, so report them explicitly.
+    reportError(error, { componentStack: info?.componentStack })
+  }
   render() {
     if (this.state.error) {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#050507' }}>
           <Text style={{ color: '#BB5CF6', fontSize: 16, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 }}>SYNAP</Text>
           <Text style={{ color: '#FFFFFF', fontSize: 15, textAlign: 'center', lineHeight: 22 }}>{this.state.error}</Text>
+          <Pressable
+            onPress={() => this.setState({ error: null })}
+            style={{ marginTop: 24, paddingVertical: 12, paddingHorizontal: 28, borderRadius: 999, backgroundColor: '#BB5CF6' }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>Try again</Text>
+          </Pressable>
         </View>
       )
     }
