@@ -89,6 +89,23 @@ export async function POST(req: Request) {
       ...(profileData.suhoor_time !== undefined ? { suhoor_time: profileData.suhoor_time || null } : {}),
     }
 
+    // Partial saves (the mobile Settings screen sends ~14 fields) must not reset
+    // the rest of an existing profile to defaults (gender → male, equipment → [],
+    // advanced → intermediate…). Keep the stored value for any field not sent.
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (existing) {
+      const sentAs: Record<string, string> = { lunch_break_time: 'lunch_break' }
+      for (const column of Object.keys(profile)) {
+        if (column === 'user_id') continue
+        const sent = (sentAs[column] ?? column) in profileData
+        if (!sent && column in existing) (profile as Record<string, unknown>)[column] = (existing as Record<string, unknown>)[column]
+      }
+    }
+
     const { error: profileError } = await supabase
       .from('profiles')
       .upsert(profile, { onConflict: 'user_id' })

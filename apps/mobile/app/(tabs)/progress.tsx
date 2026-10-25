@@ -30,6 +30,7 @@ function todayKey() {
 }
 
 function numberOrNull(value: string) {
+  if (!value.trim()) return null
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
 }

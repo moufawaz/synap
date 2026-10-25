@@ -56,7 +56,9 @@ async function friendlyErrorFrom(response: Response): Promise<ApiFetchError> {
   if (text) {
     try {
       const parsed = JSON.parse(text)
-      message = parsed?.error || parsed?.message || text
+      // Some routes pair a machine code (error: 'daily_limit_reached') with a
+      // human sentence in `message` — show the sentence when there is one.
+      message = parsed?.message || parsed?.error || text
     } catch { /* not JSON — leave as raw text */ }
   }
   const err = new Error(message || `Request failed: ${response.status}`) as ApiFetchError

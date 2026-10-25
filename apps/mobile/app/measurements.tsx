@@ -18,6 +18,7 @@ const fields = [
 ] as const
 
 function num(value: string) {
+  if (!value.trim()) return undefined
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : undefined
 }

@@ -17,7 +17,7 @@ import {
   sendTestReminder,
   type NotifPrefs,
 } from '@/features/notifications'
-import { apiFetch } from '@/lib/api'
+import { getSubscriptionStatus } from '@/features/subscription'
 import { useAsyncData } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -56,7 +56,18 @@ const NOTIF_LABELS: Record<keyof NotifPrefs, { en: string; ar: string; icon: str
 }
 
 async function getSubscription() {
-  return apiFetch<{ tier: string; status: string; plan_type?: string; renewal_date?: string; trial_ends_at?: string; access: boolean }>('/api/me/subscription')
+  // /api/me/subscription returns { tier, status, planName, isTrial, trialDaysLeft };
+  // derive the fields this screen renders from that shape.
+  const sub = await getSubscriptionStatus()
+  const trialEnds = sub.isTrial && typeof sub.trialDaysLeft === 'number'
+    ? new Date(Date.now() + sub.trialDaysLeft * 86_400_000).toISOString()
+    : undefined
+  return {
+    ...sub,
+    access: sub.tier !== 'starter',
+    renewal_date: undefined as string | undefined,
+    trial_ends_at: trialEnds,
+  }
 }
 
 export default function SettingsScreen() {
@@ -148,8 +159,8 @@ export default function SettingsScreen() {
   }
 
   const sub = subscription.data
-  const tierLabel = sub?.tier === 'elite' ? 'Elite' : sub?.tier === 'pro' ? 'Pro' : sub?.tier === 'launch' ? 'Launch Access' : 'Starter'
-  const tierColor = sub?.tier === 'elite' ? color.flame : sub?.tier === 'pro' ? color.spark : sub?.tier === 'launch' ? color.pulse : color.muted
+  const tierLabel = sub?.tier === 'elite' ? 'Elite' : sub?.tier === 'pro' ? 'Pro' : sub?.tier === 'trial' ? 'Trial' : 'Starter'
+  const tierColor = sub?.tier === 'elite' ? color.flame : sub?.tier === 'pro' ? color.spark : sub?.tier === 'trial' ? color.pulse : color.muted
 
   // Section tabs
   const TABS: { key: Section; label: string; labelAr: string; icon: string }[] = [

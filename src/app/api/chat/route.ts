@@ -133,7 +133,7 @@ export async function POST(req: Request) {
       supabase.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('workout_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('diet_plans').select('id, plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      supabase.from('chat_messages').select('role, content').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('chat_messages').select('role, content').eq('user_id', user.id).in('role', ['user', 'assistant', 'ion']).order('created_at', { ascending: false }).limit(20),
       getUserSubscription(user.id),
       // Latest 5 measurements: enough to compute a meaningful trend
       supabase.from('measurements').select('date,weight_kg,body_fat_pct,waist_cm,chest_cm,hips_cm,bicep_left_cm,bicep_right_cm,thigh_left_cm,thigh_right_cm')
