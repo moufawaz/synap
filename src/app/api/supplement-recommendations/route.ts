@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   const [profileRes, userLangRes, dietRes] = await Promise.all([
     admin.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
     admin.from('users').select('language').eq('id', user.id).maybeSingle(),
-    admin.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).maybeSingle(),
+    admin.from('diet_plans').select('plan_json').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const profile = profileRes.data

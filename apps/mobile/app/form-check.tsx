@@ -6,17 +6,20 @@ import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
 import { BackButton } from '@/components/BackButton'
 import { checkExerciseForm } from '@/features/tools'
+import { useLanguage } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 
 export default function FormCheckScreen() {
   const { color } = useTheme()
+  const { isRtl } = useLanguage()
+  const align = isRtl ? 'right' : 'left'
   const [exercise, setExercise] = useState('Squat')
   const [feedback, setFeedback] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   async function analyze() {
     const permission = await ImagePicker.requestCameraPermissionsAsync()
-    if (!permission.granted) return Alert.alert('Camera permission needed', 'Allow camera access to check form.')
+    if (!permission.granted) return Alert.alert(isRtl ? 'مطلوب إذن الكاميرا' : 'Camera permission needed', isRtl ? 'اسمح للكاميرا لفحص أداء التمرين.' : 'Allow camera access to check form.')
     const result = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.8 })
     if (result.canceled || !result.assets[0]?.base64) return
     setLoading(true)
@@ -24,7 +27,7 @@ export default function FormCheckScreen() {
       const res = await checkExerciseForm({ exercise, image: result.assets[0].base64, mimeType: result.assets[0].mimeType || 'image/jpeg' })
       setFeedback(res.feedback)
     } catch (error) {
-      Alert.alert('Form check', error instanceof Error ? error.message : 'Could not check form.')
+      Alert.alert(isRtl ? 'فحص الأداء' : 'Form check', error instanceof Error ? error.message : (isRtl ? 'تعذّر فحص الأداء.' : 'Could not check form.'))
     } finally {
       setLoading(false)
     }
@@ -33,12 +36,16 @@ export default function FormCheckScreen() {
   return (
     <Screen>
       <BackButton />
-      <PageHeader eyebrow="AI FORM CHECK" title="Form Check" subtitle="Upload one clear frame or photo from a set." />
+      <PageHeader
+        eyebrow={isRtl ? 'فحص الأداء بالذكاء الاصطناعي' : 'AI FORM CHECK'}
+        title={isRtl ? 'فحص الأداء' : 'Form Check'}
+        subtitle={isRtl ? 'التقط صورة واضحة واحدة أثناء المجموعة.' : 'Upload one clear frame or photo from a set.'}
+      />
       <Card>
-        <TextInput value={exercise} onChangeText={setExercise} placeholder="Exercise" placeholderTextColor={color.dim} style={[styles.input, { color: color.text, backgroundColor: color.elevated, borderColor: color.border }]} />
-        <Pressable onPress={analyze} disabled={loading} style={[styles.primary, { backgroundColor: color.spark }]}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Analyze form</Text>}</Pressable>
+        <TextInput value={exercise} onChangeText={setExercise} placeholder={isRtl ? 'التمرين' : 'Exercise'} placeholderTextColor={color.dim} style={[styles.input, { color: color.text, backgroundColor: color.elevated, borderColor: color.border, textAlign: align }]} />
+        <Pressable onPress={analyze} disabled={loading} style={[styles.primary, { backgroundColor: color.spark }]}>{loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{isRtl ? 'حلّل الأداء' : 'Analyze form'}</Text>}</Pressable>
       </Card>
-      {feedback ? <Card style={styles.cardGap}><Text style={[styles.title, { color: color.text }]}>Score {feedback.score}/10</Text><Text style={[styles.body, { color: color.text }]}>{feedback.summary}</Text>{(feedback.fixes || []).map((fix: string, i: number) => <Text key={i} style={[styles.body, { color: color.text }]}>• {fix}</Text>)}<Text style={[styles.body, { color: color.flame }]}>{feedback.safety}</Text><Text style={[styles.body, { color: color.spark }]}>{feedback.next_set_cue}</Text></Card> : null}
+      {feedback ? <Card style={styles.cardGap}><Text style={[styles.title, { color: color.text, textAlign: align }]}>{isRtl ? 'التقييم' : 'Score'} {feedback.score}/10</Text><Text style={[styles.body, { color: color.text, textAlign: align }]}>{feedback.summary}</Text>{(feedback.fixes || []).map((fix: string, i: number) => <Text key={i} style={[styles.body, { color: color.text, textAlign: align }]}>• {fix}</Text>)}<Text style={[styles.body, { color: color.flame, textAlign: align }]}>{feedback.safety}</Text><Text style={[styles.body, { color: color.spark, textAlign: align }]}>{feedback.next_set_cue}</Text></Card> : null}
     </Screen>
   )
 }

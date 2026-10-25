@@ -9,7 +9,7 @@ import { IonPageHeader } from '@/components/IonPageHeader'
 import { Screen } from '@/components/Screen'
 import { MedicalDisclaimer } from '@/components/MedicalDisclaimer'
 import { VideoModal } from '@/components/VideoModal'
-import { getPlanHistory, logWorkout, swapExercise, TodayWorkout, type ExerciseAlternative } from '@/features/workout'
+import { clearWorkoutSession, getPlanHistory, logWorkout, swapExercise, TodayWorkout, type ExerciseAlternative } from '@/features/workout'
 import { notifyError, notifySuccess, tapLight, tapMedium } from '@/lib/haptics'
 import { endWorkoutActivity, startWorkoutActivity, updateWorkoutActivity } from '@/lib/liveActivity'
 import { recordWorkoutCompletedAndMaybeAskForReview } from '@/lib/storeReview'
@@ -20,6 +20,8 @@ import { localDateKey } from '@/lib/date'
 
 // Local session helpers — persisted in AsyncStorage, instant, no network needed
 const SESSION_KEY = (date: string) => `@synap:workout-session:${date}`
+// Set once today's workout is saved, so the finish button can't log it twice.
+const LOGGED_KEY = (date: string) => `@synap:workout-logged:${date}`
 
 /** Today-only exercise replacement chosen via the swap button (machine taken,
  *  joint niggle). Keyed by the exercise's index in the plan day. The PLAN is
@@ -188,6 +190,7 @@ export default function TrainScreen() {
   const [performance, setPerformance] = useState<Record<string, { weight?: string; reps?: string }>>({})
   const [expanded, setExpanded] = useState<Record<number, boolean>>({})
   const [saving, setSaving] = useState(false)
+  const [loggedToday, setLoggedToday] = useState(false)
 
   // ── Video modal ──────────────────────────────────────────
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null)
@@ -213,6 +216,7 @@ export default function TrainScreen() {
   useFocusEffect(
     useCallback(() => {
       plan.silentRefresh()
+      AsyncStorage.getItem(LOGGED_KEY(date)).then(v => setLoggedToday(v === '1')).catch(() => {})
       loadLocalSession(date).then(session => {
         if (session) {
           setCompleted(session.completedExercises ?? [])
@@ -402,8 +406,11 @@ export default function TrainScreen() {
   }
 
   async function finishWorkout() {
-    if (!workout || totalExercises === 0 || selectedDay !== todayCanonical) return
-    if (timerState === 'running') pauseTimer()
+    if (!workout || totalExercises === 0 || selectedDay !== todayCanonical || saving || loggedToday) return
+    // Remember whether it was running: the catch below used to read the stale
+    // timerState from this render and never resumed the timer after a failure.
+    const wasRunning = timerState === 'running'
+    if (wasRunning) pauseTimer()
     setSaving(true)
     try {
       const durationMin = elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : (workout.duration_min ?? 0)
@@ -423,6 +430,15 @@ export default function TrainScreen() {
       })
       resetTimer()
       notifySuccess()
+
+      // The workout is saved: clear the in-progress session (local + synced)
+      // and lock the button for today so a second tap can't log a duplicate.
+      setLoggedToday(true)
+      setCompleted([])
+      setPerformance({})
+      AsyncStorage.setItem(LOGGED_KEY(date), '1').catch(() => {})
+      AsyncStorage.removeItem(SESSION_KEY(date)).catch(() => {})
+      clearWorkoutSession().catch(() => {})
 
       // PR celebration — the server compares today's sets against all history
       // (Epley est-1RM) and returns any records. Lead the alert with them:
@@ -453,7 +469,7 @@ export default function TrainScreen() {
     } catch (error) {
       notifyError()
       Alert.alert(isRtl ? 'تعذر حفظ التمرين' : 'Could not save workout', error instanceof Error ? error.message : 'Try again.')
-      if (timerState === 'paused') resumeTimer()
+      if (wasRunning) resumeTimer()
     } finally {
       setSaving(false)
     }
@@ -825,12 +841,17 @@ export default function TrainScreen() {
                     <Pressable
                       style={[styles.finishButton, {
                         backgroundColor: allDone ? color.pulse : color.spark,
-                        opacity: saving ? 0.7 : 1,
+                        opacity: saving || loggedToday ? 0.7 : 1,
                       }]}
                       onPress={finishWorkout}
-                      disabled={saving}
+                      disabled={saving || loggedToday}
                     >
-                      {saving ? <ActivityIndicator color="#FFFFFF" /> : (
+                      {saving ? <ActivityIndicator color="#FFFFFF" /> : loggedToday ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <Feather name="check" size={18} color="#FFFFFF" />
+                          <Text style={styles.finishText}>{isRtl ? 'تم تسجيل تمرين اليوم' : "Today's workout is logged"}</Text>
+                        </View>
+                      ) : (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                           <Feather name={allDone ? 'award' : 'check-circle'} size={18} color="#FFFFFF" />
                           <View>

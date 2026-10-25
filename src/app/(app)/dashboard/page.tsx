@@ -1,5 +1,7 @@
-﻿import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
+import { TIMEZONE_COOKIE, userLocalNow } from '@/lib/user-time'
 import Link from 'next/link'
 import IonAvatar from '@/components/ui/IonAvatar'
 import CoachFeaturesPanel from '@/components/dashboard/CoachFeaturesPanel'
@@ -65,7 +67,9 @@ export default async function DashboardPage() {
   // legacy compat
   const isFree = isStarter
 
-  const todayName = CANONICAL_DAYS[new Date().getDay()]
+  // The user's local weekday/hour (timezone cookie), not the server's UTC clock.
+  const localNow = userLocalNow((await cookies()).get(TIMEZONE_COOKIE)?.value)
+  const todayName = CANONICAL_DAYS[localNow.weekday]
   const todayWorkout = getWorkoutDay(workoutPlan, todayName)
   const isRestDay = !todayWorkout
 
@@ -79,7 +83,7 @@ export default async function DashboardPage() {
   const totalFat = dietPlan?.macros?.fat_g || dietPlan?.fat_g || 0
   const todayMeals = dietPlan?.meals || []
 
-  const greetingHour = new Date().getHours()
+  const greetingHour = localNow.hour
   const greeting = isRTL
     ? (greetingHour < 12 ? 'صباح الخير' : greetingHour < 17 ? 'مساء الخير' : 'مساء الخير')
     : (greetingHour < 12 ? 'GOOD MORNING' : greetingHour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING')

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { localDateKey } from '@/lib/date'
 
 type HealthKitModule = typeof import('@kingstinct/react-native-healthkit')
 
@@ -29,6 +30,8 @@ export type HealthSummary = {
   stepsToday: number | null
   activeEnergyToday: number | null
   latestWeightKg: number | null
+  /** Local YYYY-MM-DD of the latest weight sample, or null. */
+  latestWeightDate: string | null
   latestBodyFatPct: number | null
   restingHeartRate: number | null
 }
@@ -73,6 +76,18 @@ async function latestQuantity(health: HealthKitModule, identifier: string, unit:
   return sample?.quantity != null ? Number(sample.quantity) : null
 }
 
+/** Latest sample value plus the local date it was recorded. */
+async function latestQuantityWithDate(health: HealthKitModule, identifier: string, unit: string) {
+  const sample: any = await health.getMostRecentQuantitySample(identifier as any, unit as any)
+  if (sample?.quantity == null) return { value: null, date: null }
+  const when = sample.startDate ?? sample.endDate
+  const parsed = when ? new Date(when) : null
+  return {
+    value: Number(sample.quantity),
+    date: parsed && !Number.isNaN(parsed.getTime()) ? localDateKey(parsed) : null,
+  }
+}
+
 export async function requestHealthAccessAndRead(): Promise<HealthSummary> {
   const health = await loadHealthKit()
   if (!health) {
@@ -82,6 +97,7 @@ export async function requestHealthAccessAndRead(): Promise<HealthSummary> {
       stepsToday: null,
       activeEnergyToday: null,
       latestWeightKg: null,
+      latestWeightDate: null,
       latestBodyFatPct: null,
       restingHeartRate: null,
     }
@@ -95,6 +111,7 @@ export async function requestHealthAccessAndRead(): Promise<HealthSummary> {
       stepsToday: null,
       activeEnergyToday: null,
       latestWeightKg: null,
+      latestWeightDate: null,
       latestBodyFatPct: null,
       restingHeartRate: null,
     }
@@ -108,15 +125,16 @@ export async function requestHealthAccessAndRead(): Promise<HealthSummary> {
       stepsToday: null,
       activeEnergyToday: null,
       latestWeightKg: null,
+      latestWeightDate: null,
       latestBodyFatPct: null,
       restingHeartRate: null,
     }
   }
 
-  const [stepsToday, activeEnergyToday, latestWeightKg, latestBodyFatPct, restingHeartRate] = await Promise.all([
+  const [stepsToday, activeEnergyToday, latestWeight, latestBodyFatPct, restingHeartRate] = await Promise.all([
     sumToday(health, 'HKQuantityTypeIdentifierStepCount', 'count').catch(() => null),
     sumToday(health, 'HKQuantityTypeIdentifierActiveEnergyBurned', 'kcal').catch(() => null),
-    latestQuantity(health, 'HKQuantityTypeIdentifierBodyMass', 'kg').catch(() => null),
+    latestQuantityWithDate(health, 'HKQuantityTypeIdentifierBodyMass', 'kg').catch(() => ({ value: null, date: null })),
     latestQuantity(health, 'HKQuantityTypeIdentifierBodyFatPercentage', '%').catch(() => null),
     latestQuantity(health, 'HKQuantityTypeIdentifierRestingHeartRate', 'count/min').catch(() => null),
   ])
@@ -126,7 +144,8 @@ export async function requestHealthAccessAndRead(): Promise<HealthSummary> {
     authorized,
     stepsToday: stepsToday != null ? Math.round(stepsToday) : null,
     activeEnergyToday: activeEnergyToday != null ? Math.round(activeEnergyToday) : null,
-    latestWeightKg,
+    latestWeightKg: latestWeight.value,
+    latestWeightDate: latestWeight.date,
     latestBodyFatPct,
     restingHeartRate,
   }

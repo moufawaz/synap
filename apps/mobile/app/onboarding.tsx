@@ -181,6 +181,8 @@ export default function OnboardingScreen() {
   // diet-phase failure doesn't needlessly regenerate (and re-charge rate limit
   // for) the workout plan.
   const workoutPhaseDone = useRef(false)
+  // Saved once per onboarding run; Try Again used to add a duplicate baseline.
+  const baselineSaved = useRef(false)
   const [scanningInbody, setScanningInbody] = useState(false)
   const [inbodyDone, setInbodyDone] = useState(false)
   const [strength, setStrength] = useState<Record<string, string>>({})
@@ -296,7 +298,7 @@ export default function OnboardingScreen() {
             const n = parseFloat(String(raw).trim())
             if (Number.isFinite(n) && n > 0) cleaned[k] = n
           }
-          if (Object.keys(cleaned).length) {
+          if (Object.keys(cleaned).length && !baselineSaved.current) {
             try {
               await createMeasurement({
                 date: localDateKey(),
@@ -304,6 +306,7 @@ export default function OnboardingScreen() {
                 ...cleaned,
                 notes: 'Onboarding baseline',
               } as any)
+              baselineSaved.current = true
             } catch { /* non-fatal */ }
           }
           // Workout is written in two halves so each request stays under the 60s

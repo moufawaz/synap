@@ -10,7 +10,8 @@ import { Screen } from '@/components/Screen'
 import { useAuth } from '@/auth/AuthProvider'
 import { deleteAccount } from '@/features/account'
 import { HealthSummary, requestHealthAccessAndRead, setHealthConnected } from '@/features/health'
-import { createMeasurement } from '@/features/measurements'
+import { createMeasurement, getMeasurements } from '@/features/measurements'
+import { clearDashboardCache } from '@/hooks/useAsyncData'
 import { useLanguage } from '@/i18n/LanguageProvider'
 import { openExternalLink } from '@/lib/links'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -58,19 +59,26 @@ export default function MoreScreen() {
       } else {
         // Remember the connection so the dashboard can silently re-read on launch
         await setHealthConnected(true)
-        // Auto-sync today's weight to SYNAP measurements if Apple Health has one
-        if (summary.latestWeightKg) {
+        // Sync Health weight into this account only when it was weighed TODAY
+        // and nothing is logged for today yet. Health weight is device-level
+        // (shared by every account on the phone) and can be months old; the
+        // old code saved it as today's weigh-in on every Connect tap.
+        const today = localDateKey()
+        let weightSynced = false
+        if (summary.latestWeightKg && summary.latestWeightDate === today) {
           try {
-            await createMeasurement({
-              date: localDateKey(),
-              weight_kg: summary.latestWeightKg,
-            })
-          } catch { /* non-fatal — maybe already logged today */ }
+            const existing = await getMeasurements()
+            const loggedToday = (existing.measurements ?? []).some(m => String(m.date).slice(0, 10) === today && m.weight_kg != null)
+            if (!loggedToday) {
+              await createMeasurement({ date: today, weight_kg: summary.latestWeightKg })
+              weightSynced = true
+            }
+          } catch { /* non-fatal */ }
         }
         const lines: string[] = []
         if (summary.stepsToday != null) lines.push(`Steps today: ${summary.stepsToday.toLocaleString()}`)
         if (summary.activeEnergyToday != null) lines.push(`Active calories: ${summary.activeEnergyToday} kcal`)
-        if (summary.latestWeightKg != null) lines.push(`Weight: ${summary.latestWeightKg.toFixed(1)} kg${summary.latestWeightKg ? ' (synced to progress)' : ''}`)
+        if (summary.latestWeightKg != null) lines.push(`Weight: ${summary.latestWeightKg.toFixed(1)} kg${weightSynced ? ' (synced to progress)' : ''}`)
         if (summary.restingHeartRate != null) lines.push(`Resting HR: ${Math.round(summary.restingHeartRate)} bpm`)
         Alert.alert('Apple Health connected ✓', lines.length ? lines.join('\n') : 'Ion now has access to your health data.')
       }
@@ -92,6 +100,7 @@ export default function MoreScreen() {
           try {
             await deleteAccount()
             await signOut()
+            await clearDashboardCache()
             router.replace('/(auth)/login')
           } catch (error) {
             Alert.alert(text.deleteAccount, error instanceof Error ? error.message : text.deleteAccountFailed)
@@ -141,9 +150,7 @@ export default function MoreScreen() {
           onPress={async () => {
             await signOut()
             // Clear dashboard cache so next user doesn't see stale data
-            const keys = await AsyncStorage.getAllKeys()
-            const dashKeys = keys.filter(k => k.startsWith('@sdc:'))
-            if (dashKeys.length) await AsyncStorage.multiRemove(dashKeys)
+            await clearDashboardCache()
             router.replace('/(auth)/login')
           }}
           rowDir={rowDir}

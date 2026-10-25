@@ -5,6 +5,7 @@ import ThemeToggle from '@/components/ui/ThemeToggle'
 import SessionPersistenceGate from '@/components/auth/SessionPersistenceGate'
 import InstallPrompt from '@/components/ui/InstallPrompt'
 import SplashHider from '@/components/SplashHider'
+import TimezoneCookie from '@/components/TimezoneCookie'
 
 // ─── SYNAP — Brand Typography System ─────────────────
 //  • Exo 2  → headings, display, UI labels
@@ -99,6 +100,7 @@ try {
       <body className="font-body antialiased min-h-screen overflow-x-hidden">
         <SessionPersistenceGate />
         <SplashHider />
+        <TimezoneCookie />
         {children}
         <InstallPrompt />
         <ThemeToggle />

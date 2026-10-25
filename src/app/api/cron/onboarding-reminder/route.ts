@@ -44,8 +44,15 @@ export async function GET(req: Request) {
   const windowEnd   = new Date(now.getTime() - MAX_AGE_DAYS * 86400 * 1000).toISOString()
 
   // ── 1. Fetch all auth users in the nudge window ───────────────
-  const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 })
-  const windowUsers = (authData?.users || []).filter(u =>
+  const allUsers: Array<{ id: string; created_at: string; email?: string; [k: string]: any }> = []
+  for (let page = 1; page <= 50; page++) {
+    const { data: authData, error: listErr } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+    if (listErr) { console.error('[onboarding-reminder] listUsers', listErr); break }
+    const batch = authData?.users || []
+    allUsers.push(...batch)
+    if (batch.length < 1000) break
+  }
+  const windowUsers = allUsers.filter(u =>
     u.created_at < windowStart &&  // older than 24h
     u.created_at > windowEnd       // within 12 days
   )

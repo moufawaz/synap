@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createAdminClient, createRouteClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import Anthropic from '@anthropic-ai/sdk'
 import { pushToUser } from '@/lib/push'
@@ -47,8 +47,8 @@ export async function POST(req: Request) {
       admin.from('users').select('language').eq('id', user.id).maybeSingle(),
       supabase.from('measurements').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(10),
       fetchAdaptationWorkoutLogs(supabase, user.id),
-      supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
-      supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).maybeSingle(),
+      supabase.from('diet_plans').select('*').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('workout_plans').select('*').eq('user_id', user.id).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
 
     const profile = profileRes.data
