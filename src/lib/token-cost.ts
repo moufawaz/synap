@@ -16,14 +16,23 @@ export const TOKEN_PRICING = {
   opusOutputPerMTok: Number(process.env.ANTHROPIC_OPUS_OUTPUT_USD_PER_MTOK || 25),
 }
 
+// Per-model list prices ($/MTok) for models priced differently from the defaults above.
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'claude-opus-5-5': { input: 4, output: 20 },
+  'claude-sonnet-5-5': { input: 2, output: 10 },
+}
+
 export function estimateAnthropicCostUsd(usage?: TokenUsage | null, model = '') {
   if (!usage) return 0
 
-  const isOpus = model.toLowerCase().includes('opus')
-  const inputPrice = isOpus ? TOKEN_PRICING.opusInputPerMTok : TOKEN_PRICING.inputPerMTok
-  const outputPrice = isOpus ? TOKEN_PRICING.opusOutputPerMTok : TOKEN_PRICING.outputPerMTok
-  const cacheWritePrice = isOpus ? inputPrice * 1.25 : TOKEN_PRICING.cacheWritePerMTok
-  const cacheReadPrice = isOpus ? inputPrice * 0.1 : TOKEN_PRICING.cacheReadPerMTok
+  const modelKey = model.toLowerCase()
+  const listed = Object.entries(MODEL_PRICING).find(([id]) => modelKey.startsWith(id))?.[1]
+  const isOpus = !listed && modelKey.includes('opus')
+  const inputPrice = listed?.input ?? (isOpus ? TOKEN_PRICING.opusInputPerMTok : TOKEN_PRICING.inputPerMTok)
+  const outputPrice = listed?.output ?? (isOpus ? TOKEN_PRICING.opusOutputPerMTok : TOKEN_PRICING.outputPerMTok)
+  const scaleCache = !!listed || isOpus
+  const cacheWritePrice = scaleCache ? inputPrice * 1.25 : TOKEN_PRICING.cacheWritePerMTok
+  const cacheReadPrice = scaleCache ? inputPrice * 0.1 : TOKEN_PRICING.cacheReadPerMTok
 
   const input = usage.input_tokens || 0
   const output = usage.output_tokens || 0
