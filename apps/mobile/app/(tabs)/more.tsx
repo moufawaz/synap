@@ -213,6 +213,7 @@ export default function MoreScreen() {
         <Text style={[styles.sectionTitle, { color: color.text, textAlign: align }]}>{text.support}</Text>
         <NavRowItem icon="shield" label={text.privacy} color={color} onPress={() => openExternalLink(`${webBaseUrl}/privacy`)} rowDir={rowDir} showDivider />
         <NavRowItem icon="file-text" label={text.terms} color={color} onPress={() => openExternalLink(`${webBaseUrl}/terms`)} rowDir={rowDir} showDivider />
+        <NavRowItem icon="alert-circle" label={isRtl ? 'الإبلاغ عن مشكلة' : 'Report a problem'} color={color} onPress={() => router.push('/report-bug' as Href)} rowDir={rowDir} showDivider />
         <NavRowItem icon="life-buoy" label={text.support} color={color} onPress={() => openExternalLink(`${webBaseUrl}/contact`)} rowDir={rowDir} />
       </Card>
 
