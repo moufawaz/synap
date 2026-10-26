@@ -446,6 +446,31 @@ Shows up in Sentry as `apiFetch 401 persisted after refresh: <path>`.
 **Cause**: `sourceTree = "<group>"` in pbxproj resolves relative to group, not project root.  
 **Fix**: Use `sourceTree = SOURCE_ROOT; path = App/FileName.swift`.
 
+### iOS Expo build fails at "Validate Expo SDK dependency alignment"
+**Symptom**: `iOS Expo Direct Build` fails ~1 min in; `expo-doctor` reports
+"Patch version mismatches" (e.g. `expo ~54.0.37` expected, `54.0.36` found).  
+**Cause**: Expo publishes SDK patch releases; the CI step runs the latest
+`expo-doctor`, which then expects newer pins than `apps/mobile/package.json`.  
+**Fix**: bump the listed packages to the expected versions in
+`apps/mobile/package.json`, run `npm install --package-lock-only` in
+`apps/mobile`, and confirm with `npx expo-doctor` before pushing. Has happened
+repeatedly (Aug and Oct 2026).
+
+### TestFlight upload: "A required agreement is missing or has expired"
+**Symptom**: the app builds and archives, then Fastlane fails at upload.  
+**Cause**: Apple published an updated agreement (Developer Program License or
+Paid Apps) that hasn't been accepted.  
+**Fix**: the Account Holder accepts it in App Store Connect → Business
+(Agreements, Tax, and Banking). No code change — re-run the failed job.
+
+### TestFlight upload: "Invalid Pre-Release Train … is closed" (90186)
+**Symptom**: build succeeds, altool rejects the upload for version `X.Y.Z`.  
+**Cause**: that marketing version is already approved/released, so App Store
+Connect accepts no new builds for it.  
+**Fix**: bump `version` in `apps/mobile/app.json` (and the fallback in
+`apps/mobile/app/(tabs)/more.tsx`), merge to `main`; the push triggers a new
+build. Bump right after each App Store approval to avoid this.
+
 ---
 
 ## 17. Keeping This File Updated
@@ -458,4 +483,4 @@ Update CLAUDE.md when:
 - The subscription model changes (update §11)
 - The iOS CI runner or Xcode version changes (update §7)
 
-Last updated: 2026-05-22 (build 57 — WebView overlay + retry, www URL, CLAUDE.md)
+Last updated: 2026-10-26 (Expo iOS CI failures: expo-doctor pins, App Store agreement, closed version train)
