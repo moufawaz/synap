@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient, getAuthenticatedUser } from '@/lib/supabase-server'
 import { searchYouTubeAPI, extractVideoId } from '@/lib/youtube-api'
 import { getYouTubeId } from '@/lib/exercises'
 import { primaryVideoSearchTarget } from '@/lib/exercise-video-targets'
@@ -23,6 +23,11 @@ async function isEmbeddable(videoId: string): Promise<boolean> {
 }
 
 export async function GET(req: Request) {
+  // Signed-in users only: each miss costs a YouTube/AI lookup and writes the
+  // shared cache, which used to be open to anyone.
+  const { user } = await getAuthenticatedUser(req)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const rawName = (searchParams.get('name') || '').trim()
   if (!rawName) return NextResponse.json({ videoId: null })
@@ -35,7 +40,8 @@ export async function GET(req: Request) {
 
   console.info(`[exercise-video] "${name}" | api_key=${hasApiKey}`)
 
-  const supabase = await createServerClient()
+  // Shared cache table: public read, server-only write (service role).
+  const supabase = createAdminClient()
 
   // 1. DB cache
   const { data: cached } = await supabase
