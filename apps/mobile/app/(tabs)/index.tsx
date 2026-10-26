@@ -54,6 +54,9 @@ export default function DashboardScreen() {
       streak.silentRefresh()
       sparks.silentRefresh()
       measurements.silentRefresh()
+      // Profile too: edits in Settings (name, goal) otherwise stay stale here
+      // until the 10-minute cache expires.
+      profile.silentRefresh()
       // Refresh the tier too: after an in-app purchase the paywall routes back
       // here, and the cached "Starter" status otherwise sticks until restart.
       subscription.silentRefresh()
