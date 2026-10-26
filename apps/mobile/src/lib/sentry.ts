@@ -62,6 +62,40 @@ export function identifySentryUser(userId: string | null | undefined) {
   } catch { /* ignore */ }
 }
 
+/**
+ * Send an in-app bug report to Sentry as user feedback. Sentry attaches the
+ * device, release, user id and recent breadcrumbs automatically. Returns the
+ * event id (to link the server-side copy), or null when Sentry is off.
+ */
+export function sendUserFeedback(
+  message: string,
+  options?: { screenshotBase64?: string | null; screenshotMime?: string; tags?: Record<string, string> },
+): string | null {
+  if (!initialized) return null
+  try {
+    const attachments = options?.screenshotBase64
+      ? [{
+          filename: options.screenshotMime === 'image/png' ? 'screenshot.png' : 'screenshot.jpg',
+          data: base64ToBytes(options.screenshotBase64),
+          contentType: options.screenshotMime || 'image/jpeg',
+        }]
+      : undefined
+    return Sentry.captureFeedback(
+      { message, source: 'in_app_report', tags: options?.tags },
+      attachments ? { attachments } : undefined,
+    )
+  } catch {
+    return null
+  }
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = globalThis.atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
 /** Manually report a caught error with extra context. */
 export function reportError(error: unknown, context?: Record<string, any>) {
   if (!initialized) {
