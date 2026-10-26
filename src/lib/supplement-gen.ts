@@ -2,6 +2,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getUserSubscription, effectivePlan, isLaunchMode } from '@/lib/subscription'
 import { recordAiUsage } from '@/lib/ai-usage'
 import { aiLanguageInstruction } from '@/lib/ai-language'
+import { createAdminClient } from '@/lib/supabase-server'
+import { messageText } from '@/lib/anthropic'
 
 /**
  * Generate supplement + vitamin recommendations for an Elite user.
@@ -152,15 +154,17 @@ Return ONLY valid JSON:
     usage: aiMsg.usage,
   })
 
-  const raw = aiMsg.content[0].type === 'text' ? aiMsg.content[0].text : ''
+  const raw = messageText(aiMsg)
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('[supplement-gen] Failed to parse JSON response')
   const recommendations = JSON.parse(match[0])
 
-  await supabase.from('supplement_recommendations').insert({
+  // Service-role write: users may only READ their own recommendations (RLS).
+  const { error: insertError } = await createAdminClient().from('supplement_recommendations').insert({
     user_id:         userId,
     cycle_number:    cycleNumber,
     recommendations: recommendations,
     generated_at:    new Date().toISOString(),
   })
+  if (insertError) throw new Error(`[supplement-gen] insert failed: ${insertError.message}`)
 }
